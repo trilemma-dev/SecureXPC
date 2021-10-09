@@ -120,10 +120,11 @@ public class XPCMachServer {
         if #available(macOS 11, *) { // publicly documented, but only available since macOS 11
             SecCodeCreateWithXPCMessage(message, SecCSFlags(), &code)
         } else { // private undocumented function: xpc_connection_get_audit_token, available on prior versions of macOS
-            var auditToken = xpc_connection_get_audit_token(client)
-            let tokenData = NSData(bytes: &auditToken, length: MemoryLayout.size(ofValue: auditToken))
-            let attributes = [kSecGuestAttributeAudit : tokenData] as NSDictionary
-            SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
+            if var auditToken = xpc_connection_get_audit_token(client) {
+                let tokenData = NSData(bytes: &auditToken, length: MemoryLayout.size(ofValue: auditToken))
+                let attributes = [kSecGuestAttributeAudit : tokenData] as NSDictionary
+                SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
+            }
         }
         
         // Accept message if code is valid and meets any of the client requirements
@@ -139,18 +140,35 @@ public class XPCMachServer {
         return accept
     }
     
-    /// Thin wrapper around the private undocumented function `xpc_connection_get_audit_token`
-    private func xpc_connection_get_audit_token(_ connection: xpc_connection_t) -> audit_token_t {
-        // Dynamically load the function
-        let handle = dlopen(nil, RTLD_LAZY)
-        defer { dlclose(handle) }
-        let sym = dlsym(handle, "xpc_connection_get_audit_token")
+    /// Wrapper around the private undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`
+    ///
+    /// - Parameters:
+    ///   - _:  the connection for which the audit token will be retrieved for
+    /// - Returns: the audit token or `nil` if the function could not be called
+    ///
+    /// The private undocumented function will attempt to be dynamically loaded and then invoked. If no function exists with this name `nil` will be returned. If
+    /// the function does exist, but does not match the expected signature, the process calling this function is expected to crash. However, because this is only
+    /// called on older versions of macOS which are expected to have a stable non-changing API this is very unlikely to occur.
+    private func xpc_connection_get_audit_token(_ connection: xpc_connection_t) -> audit_token_t? {
         typealias functionSignature = @convention(c) (xpc_connection_t, UnsafeMutablePointer<audit_token_t>) -> Void
-        let function = unsafeBitCast(sym, to: functionSignature.self)
+        let auditToken: audit_token_t?
         
-        // Call the function
-        var auditToken = audit_token_t()
-        function(connection, &auditToken)
+        // Attempt to dynamically load the function
+        if let handle = dlopen(nil, RTLD_LAZY) {
+            defer { dlclose(handle) }
+            if let sym = dlsym(handle, "xpc_connection_get_audit_token") {
+                let function = unsafeBitCast(sym, to: functionSignature.self)
+                
+                // Call the function
+                var token = audit_token_t()
+                function(connection, &token)
+                auditToken = token
+            } else {
+                auditToken = nil
+            }
+        } else {
+            auditToken = nil
+        }
         
         return auditToken
     }
