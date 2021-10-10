@@ -7,26 +7,38 @@
 
 import Foundation
 
+/// Errors that may be thrown when using ``XPCMachClient`` or ``XPCMachServer``
 public enum XPCError: Error {
-    /// `XPC_ERROR_CONNECTION_INVALID` - connection closed by peer
+    /// The connection was closed and can no longer be used; it may be possible to establish another connection
+    ///
+    /// Corresponds to `XPC_ERROR_CONNECTION_INVALID`
     case connectionInvalid
-    /// `XPC_ERROR_CONNECTION_INTERRUPTED` - re-sync state to other end if needed
+    /// The connection experienced an interruption, but is still valid
+    ///
+    /// Corresponds to `XPC_ERROR_CONNECTION_INTERRUPTED`
     case connectionInterrupted
-    /// `XPC_ERROR_TERMINATION_IMMINENT` - prepare to exit cleanly
+    /// This XPC service will be terminated imminently; be prepated to exit cleanly
+    ///
+    /// Corresponds to `XPC_ERROR_TERMINATION_IMMINENT`
     case terminationImminent
-    /// Message not accepted because it did not meet the server's security requirements
+    /// A message was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
+    /// client
     case insecure
-    /// An error occurred on the server, the associated value textually describes what went wrong to aid in debugging
+    /// An error occurred on the server, the associated value textually describes what went wrong
+    ///
+    /// The underlying error intentionally is an associated value as it may not exist within the client process
     case remote(String)
-    /// If an `xpc_object_t` instance was encountered that is not an XPC dictionary, but was required to be
-    case notXPCDictionary
-    /// Failed to encode an XPC type
+    /// Failed to encode an XPC type in order to send it across the XPC connection
+    ///
+    /// The associated value describes this encoding error
     case encodingError(EncodingError)
-    /// Failed to decode an XPC type
+    /// Failed to decode an XPC type once it was received via the XPC connection
+    ///
+    /// The associated value describes this decoding error
     case decodingError(DecodingError)
-    /// Route associated with the incoming XPC message is not registed with the server
+    /// The route associated with the incoming XPC message is not registed with the server
     case routeNotRegistered(String)
-    /// An underlying error occurred which was not anticipated
+    /// An underlying error occurred which was not anticipated, the associated value is this error
     case other(Error)
     /// Unknown error occurred
     case unknown
@@ -41,9 +53,9 @@ enum XPCCoderConstants {
 struct XPCRoute: Codable, Hashable {
     let pathComponents: [String]
     let messageType: String?
-    let responseType: String?
+    let replyType: String?
     
-    init(pathComponents: [String], messageType: Any.Type?, responseType: Any.Type?) {
+    init(pathComponents: [String], messageType: Any.Type?, replyType: Any.Type?) {
         self.pathComponents = pathComponents
         
         if let messageType = messageType {
@@ -52,42 +64,66 @@ struct XPCRoute: Codable, Hashable {
             self.messageType = nil
         }
         
-        if let responseType = responseType {
-            self.responseType = String(describing: responseType)
+        if let replyType = replyType {
+            self.replyType = String(describing: replyType)
         } else {
-            self.responseType = nil
+            self.replyType = nil
         }
     }
 }
 
+/// A route that can't receive a message and is expected to reply
 public struct XPCRouteWithoutMessageWithReply<R: Codable> {
     let route: XPCRoute
     
-    public init(_ pathComponents: String..., responseType: R.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, responseType: responseType)
+    /// Initializes the immutable route
+    ///
+    /// - Parameters:
+    ///   - _: zero or more `String`s naming the route
+    ///   - replyType: the expected type the server will respond with if successful
+    public init(_ pathComponents: String..., replyType: R.Type) {
+        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, replyType: replyType)
     }
 }
 
+/// A route that receives a message and is expected to reply
 public struct XPCRouteWithMessageWithReply<M: Codable, R: Codable> {
     let route: XPCRoute
     
-    public init(_ pathComponents: String..., messageType: M.Type, responseType: R.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, responseType: responseType)
+    /// Initializes the immutable route
+    ///
+    /// - Parameters:
+    ///   - _: zero or more `String`s naming the route
+    ///   - messageType: the expected type the client will be passed when sending a message to this route
+    ///   - replyType: the expected type the server will respond with if successful
+    public init(_ pathComponents: String..., messageType: M.Type, replyType: R.Type) {
+        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, replyType: replyType)
     }
 }
 
+/// A route that can't receive a message and will not reply
 public struct XPCRouteWithoutMessageWithoutReply {
     let route: XPCRoute
     
+    /// Initializes the immutable route
+    ///
+    /// - Parameters:
+    ///   - _: zero or more `String`s naming the route
     public init(_ pathComponents: String...) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, responseType: nil)
+        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, replyType: nil)
     }
 }
 
+/// A route that receives a message and will not reply
 public struct XPCRouteWithMessageWithoutReply<M: Codable> {
     let route: XPCRoute
     
+    /// Initializes the immutable route
+    ///
+    /// - Parameters:
+    ///   - _: zero or more `String`s naming the route
+    ///   - messageType: the expected type the client will be passed when sending a message to this route
     public init(_ pathComponents: String..., messageType: M.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, responseType: nil)
+        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, replyType: nil)
     }
 }

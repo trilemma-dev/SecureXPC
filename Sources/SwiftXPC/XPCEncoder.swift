@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// Package internal entry point to encoding payloads, routes, and errors to XPC dictionaries
 enum XPCEncoder {
     
     /// Encodes just a route with no payload into a newly created XPC dictionary

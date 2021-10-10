@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// Package internal entry point to decoding payloads, routes, and errors to Decodable types as well as checking for their presence in an XPC dictionary
 enum XPCDecoder {
     
     /// Whether the provided value contains a payload
@@ -21,7 +22,7 @@ enum XPCDecoder {
                 return xpc_dictionary_get_value(value, stringPointer.baseAddress!) != nil
             }
         } else {
-            throw XPCError.notXPCDictionary
+            throw notXPCDictionary()
         }
     }
     
@@ -37,7 +38,7 @@ enum XPCDecoder {
                 return xpc_dictionary_get_value(value, stringPointer.baseAddress!) != nil
             }
         } else {
-            throw XPCError.notXPCDictionary
+            throw notXPCDictionary()
         }
     }
     
@@ -101,8 +102,15 @@ enum XPCDecoder {
                 }
            }
         } else {
-            throw XPCError.notXPCDictionary
+            throw notXPCDictionary()
         }
+    }
+    
+    private static func notXPCDictionary() -> DecodingError {
+        let context = DecodingError.Context(codingPath: [CodingKey](),
+                                            debugDescription: "Value must be an XPC dictionary, but was not",
+                                            underlyingError: nil)
+        return DecodingError.typeMismatch(Dictionary<AnyHashable, Any>.self, context)
     }
 }
 

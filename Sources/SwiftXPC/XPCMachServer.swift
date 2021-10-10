@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Wrapper around the XPC C API to conveniently receive XPC calls and send responses
+/// An XPC mach services server to receive calls from and send responses to ``XPCMachClient``
 public class XPCMachServer {
     
     /// If set, errors encountered will be sent to this handler
@@ -22,39 +22,54 @@ public class XPCMachServer {
     private var routesWithoutMessageWithoutReply = [XPCRoute : XPCHandlerWithoutMessageWithoutReply]()
     private var routesWithMessageWithoutReply = [XPCRoute : XPCHandlerWithMessageWithoutReply]()
     
-    
+    /// Creates a server that only processes messages from clients meeting the provided security requirements
+    ///
+    /// - Parameters:
+    ///   - machServiceName: the name of the mach service this server is bound to. This name must be present in the `launchd.plist`
+    ///                      `MachServices` entry.
+    ///   - clientRequirements: if a message is received from a client, it will only be processed if it meets one (or more) of these security requirements.
+    ///
+    /// No messages will be processed until ``processMessages()`` is called
     public init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.clientRequirements = clientRequirements
         
-        machService = machServiceName.withCString { serviceNamePointer in
+        self.machService = machServiceName.withCString { serviceNamePointer in
             return xpc_connection_create_mach_service(serviceNamePointer,
                                                       nil,
                                                       UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
     }
     
-    /// Registers a route that has no message and no reply
+    /// Registers a route that has no message and can't receive a reply
+    ///
+    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
                               handler: @escaping () throws -> Void) {
         let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithoutReply(handler: handler)
         self.routesWithoutMessageWithoutReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has a message and no reply
+    /// Registers a route that has a message and can't receive a reply
+    ///
+    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
                                             handler: @escaping (M) throws -> Void) {
         let handlerWrapper = ConstrainedXPCHandlerWithMessageWithoutReply(handler: handler)
         self.routesWithMessageWithoutReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has no message and requires a reply
+    /// Registers a route that has no message and expects a reply
+    ///
+    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
                                             handler: @escaping () throws -> R) {
         let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithReply(handler: handler)
         self.routesWithoutMessageWithReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has no message and requires a reply
+    /// Registers a route that has no message and expects a reply
+    ///
+    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
                                                           handler: @escaping (M) throws -> R) {
         let handlerWrapper = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
@@ -63,17 +78,17 @@ public class XPCMachServer {
     
     /// Begins processing messages sent to this XPC server.
     ///
-    /// This function replicates `xpc_main()` behavior by never returning.
+    /// This function replicates `xpc_main()` behavior by never returning. 
     public func processMessages() -> Never {
         // Start listener for the mach service, all received events should be for incoming client connections
-        xpc_connection_set_event_handler(machService, { client in
+        xpc_connection_set_event_handler(self.machService, { client in
             // Listen for events (messages or errors) coming from this client connection
             xpc_connection_set_event_handler(client, { event in
                 self.handleEvent(client: client, event: event)
             })
             xpc_connection_resume(client)
         })
-        xpc_connection_resume(machService)
+        xpc_connection_resume(self.machService)
         
         dispatchMain()
     }
