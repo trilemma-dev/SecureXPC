@@ -1,10 +1,10 @@
-# ``SwiftXPC``
+# ``SecureXPC``
 
 A **secure** high-level framework designed specifically for XPC Mach Services.
 
 ## Overview
 
-SwiftXPC provides an easy way to perform secure XPC Mach Services communication. 
+SecureXPC provides an easy way to perform secure XPC Mach Services communication. 
 [Codable](https://developer.apple.com/documentation/swift/codable) conforming types are used to send messages and
 receive replies. This framework is ideal for communicating with privileged executables installed via 
 [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
