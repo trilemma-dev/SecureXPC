@@ -7,10 +7,73 @@
 
 import Foundation
 
-/// An XPC mach services server to receive calls from and send responses to ``XPCMachClient``
+/// An XPC Mach Services server to receive calls from and send responses to ``XPCMachClient``.
+///
+/// ### Creating a Server
+/// Because many processes on the system can talk to an XPC Mach Service, when creating a server it is required that you specificy the
+/// security requirements of any connecting clients:
+/// ```swift
+/// let requirementString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.CN] = "Apple Development: Johnny Appleseed (4L0ZG128MM)" /* exists */"""
+/// var requirement: SecRequirement?
+/// if SecRequirementCreateWithString(requirementString as CFString,
+///                                   SecCSFlags(),
+///                                   &requirement) == errSecSuccess,
+///   let requirement = requirement {
+///    let server = XPCMachClient(machServiceName: "com.example.service",
+///                               clientRequirements: [requirement])
+///
+///    <# configure and start server #>
+/// }
+/// ```
+///
+/// While in this example the requirement was shown as hardcoded, in practice if the server is running as part of an
+/// executable installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) then
+/// use the array of client requirements specified by the
+/// [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
+/// in the privileged executable's Info property list.
+///
+/// Incoming requests will be accepted from clients that meet _any_ of the specified requirements. If an empty array of
+/// requirements is passed to the server, no requests will be accepted.
+///
+/// **Requirement checking**
+///
+/// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
+/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used; if for some reason the function is unavailable
+/// then no messages will be accepted. When messages are not accepted, if the ``XPCMachServer/errorHandler`` is set then it is called
+/// with ``XPCError/insecure``.
+///
+/// ### Registering & Handling Routes
+/// Once a server instance has been created, one or more routes should be registered with it. This is done by calling one
+/// of the `registerRoute` functions and providing a route and a compatible closure or function. For example:
+/// ```swift
+///     ...
+///     let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
+///                                                          messageType:Config.self,
+///                                                          replyType: Config.self)
+///     server.registerRoute(updateConfigRoute, handler: updateConfig)
+/// }
+///
+/// private func updateConfig(_ config: Config) throws -> Config {
+///     <# implementation here #>
+/// }
+/// ```
+///
+/// If the function or closure provided as the `handler` parameter throws an error and the route expects a return, then
+/// ``XPCError/remote(_:)`` will be returned to the client with the `String` associated type describing the thrown error. It
+/// is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
+///
+/// ### Starting a Server
+/// Once all of the routes are registered, the server must be told to start processing messages:
+/// ```swift
+/// server.processMessages()
+/// ```
+///
+/// This function replicates default [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main)
+/// behavior by calling [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
+/// never returning.
 public class XPCMachServer {
     
-    /// If set, errors encountered will be sent to this handler
+    /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
     
     private let machService: xpc_connection_t
@@ -22,14 +85,14 @@ public class XPCMachServer {
     private var routesWithoutMessageWithoutReply = [XPCRoute : XPCHandlerWithoutMessageWithoutReply]()
     private var routesWithMessageWithoutReply = [XPCRoute : XPCHandlerWithMessageWithoutReply]()
     
-    /// Creates a server that only processes messages from clients meeting the provided security requirements
+    /// Creates a server that only processes messages from clients meeting the provided security requirements.
+    ///
+    /// No messages will be processed until ``processMessages()`` is called.
     ///
     /// - Parameters:
-    ///   - machServiceName: the name of the mach service this server is bound to. This name must be present in the `launchd.plist`
-    ///                      `MachServices` entry.
-    ///   - clientRequirements: if a message is received from a client, it will only be processed if it meets one (or more) of these security requirements.
-    ///
-    /// No messages will be processed until ``processMessages()`` is called
+    ///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this executable's (or app's)
+    ///                      `launchd.plist` `MachServices` entry.
+    ///   - clientRequirements: If a message is received from a client, it will only be processed if it meets one (or more) of these security requirements.
     public init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.clientRequirements = clientRequirements
         
@@ -40,36 +103,52 @@ public class XPCMachServer {
         }
     }
     
-    /// Registers a route that has no message and can't receive a reply
+    /// Registers a route that has no message and can't receive a reply.
     ///
     /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has no message and can't receive a reply.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
                               handler: @escaping () throws -> Void) {
         let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithoutReply(handler: handler)
         self.routesWithoutMessageWithoutReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has a message and can't receive a reply
+    /// Registers a route that has a message and can't receive a reply.
     ///
     /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has a message and can't receive a reply.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
                                             handler: @escaping (M) throws -> Void) {
         let handlerWrapper = ConstrainedXPCHandlerWithMessageWithoutReply(handler: handler)
         self.routesWithMessageWithoutReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has no message and expects a reply
+    /// Registers a route that has no message and expects a reply.
     ///
     /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has no message and expects a reply.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
                                             handler: @escaping () throws -> R) {
         let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithReply(handler: handler)
         self.routesWithoutMessageWithReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has no message and expects a reply
+    /// Registers a route that has no message and expects a reply.
     ///
     /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has no message and expects a reply.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
                                                           handler: @escaping (M) throws -> R) {
         let handlerWrapper = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
@@ -78,7 +157,8 @@ public class XPCMachServer {
     
     /// Begins processing messages sent to this XPC server.
     ///
-    /// This function replicates `xpc_main()` behavior by never returning. 
+    /// This function replicates [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main) behavior by never
+    /// returning.
     public func processMessages() -> Never {
         // Start listener for the mach service, all received events should be for incoming client connections
         xpc_connection_set_event_handler(self.machService, { client in
@@ -126,9 +206,13 @@ public class XPCMachServer {
         }
     }
     
-    /// Determines whether the message should be accepted
+    /// Determines whether the message should be accepted.
     ///
-    /// This is determined using the client requirements provided to this server upon initialization
+    /// This is determined using the client requirements provided to this server upon initialization.
+    /// - Parameters:
+    ///   - client: The client which sent the message.
+    ///   - message: The message.
+    /// - Returns: whether the message can be accepted
     private func acceptMessage(client: xpc_connection_t, message: xpc_object_t) -> Bool {
         // Get the code representing the client
         var code: SecCode?
@@ -155,7 +239,7 @@ public class XPCMachServer {
         return accept
     }
     
-    /// Wrapper around the private undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`
+    /// Wrapper around the private undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`.
     ///
     /// - Parameters:
     ///   - _:  the connection for which the audit token will be retrieved for
