@@ -1,6 +1,6 @@
 //
 //  XPCDecoder.swift
-//  SwiftXPC
+//  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
 //

@@ -1,6 +1,6 @@
 //
 //  XPCMachClient.swift
-//  SwiftXPC
+//  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
 //
@@ -52,6 +52,18 @@ import Foundation
 ///
 /// In this example a custom `Config` type that conforms to `Codable` was used as both the message and reply types. A hypothetical implementation could
 /// consist of the desired configuration update being sent as a message and the server replying with the actual configuration after attempting to apply the changes.
+///
+/// ## Topics
+/// ### Creating a Client
+/// - ``init(machServiceName:)``
+/// ### Calling Routes
+/// - ``send(route:)``
+/// - ``send(route:withReply:)``
+/// - ``sendMessage(_:route:)``
+/// - ``sendMessage(_:route:withReply:)``
+/// 
+/// ### Receiving Replies
+/// - ``XPCReplyHandler``
 public class XPCMachClient {
     
     // This client implementation intentionally does not store a reference to the xpc_connection_t as it can become
@@ -96,7 +108,7 @@ public class XPCMachClient {
     ///
     /// - Parameters:
     ///   - route: The server route which will handle this.
-    ///   - withReply: A function to receive the reply.
+    ///   - withReply: A function or closure to receive the reply.
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withReply reply: @escaping XPCReplyHandler<R>) throws {
@@ -109,7 +121,7 @@ public class XPCMachClient {
     /// - Parameters:
     ///    - message: Message to be sent.
     ///    - route: The server route which should handle this message.
-    ///    - withReply: A function to receive the message's reply.
+    ///    - withReply: A function or closure to receive the message's reply.
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,

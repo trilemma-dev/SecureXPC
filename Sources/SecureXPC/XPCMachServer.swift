@@ -1,41 +1,30 @@
 //
 //  XPCMachServer.swift
-//  SwiftXPC
+//  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
 //
 
 import Foundation
+import EmbeddedPropertyList
 
 /// An XPC Mach Services server to receive calls from and send responses to ``XPCMachClient``.
 ///
 /// ### Creating a Server
-/// Because many processes on the system can talk to an XPC Mach Service, when creating a server it is required that you specificy the
-/// security requirements of any connecting clients:
+/// If the program creating this server is an executable which meets
+/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements then in most
+/// cases creating a server is as easy as
 /// ```swift
-/// let requirementString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.CN] = "Apple Development: Johnny Appleseed (4L0ZG128MM)" /* exists */"""
-/// var requirement: SecRequirement?
-/// if SecRequirementCreateWithString(requirementString as CFString,
-///                                   SecCSFlags(),
-///                                   &requirement) == errSecSuccess,
-///   let requirement = requirement {
-///    let server = XPCMachClient(machServiceName: "com.example.service",
-///                               clientRequirements: [requirement])
-///
-///    <# configure and start server #>
-/// }
+/// let server = try XPCMachServer.forBlessedExecutable()
 /// ```
+/// See ``forBlessedExecutable()`` for the exact requirements which need to be met.
 ///
-/// While in this example the requirement was shown as hardcoded, in practice if the server is running as part of an
-/// executable installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) then
-/// use the array of client requirements specified by the
-/// [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
-/// in the privileged executable's Info property list.
+/// **Other Cases**
 ///
-/// Incoming requests will be accepted from clients that meet _any_ of the specified requirements. If an empty array of
-/// requirements is passed to the server, no requests will be accepted.
+/// Otherwise you'll need to manually initialize a server by specifying the name of the XPC Mach Service and providing the security requirements for connecting
+/// clients. See ``init(machServiceName:clientRequirements:)`` for an example and details.
 ///
-/// **Requirement checking**
+/// **Requirement Checking**
 ///
 /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
 /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used; if for some reason the function is unavailable
@@ -71,6 +60,23 @@ import Foundation
 /// This function replicates default [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main)
 /// behavior by calling [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
 /// never returning.
+///
+/// ## Topics
+/// ### Creating a Server
+///   - ``forBlessedExecutable()``
+///  - ``init(machServiceName:clientRequirements:)``
+///
+/// ### Registering Routes
+/// - ``registerRoute(_:handler:)-8ydqa``
+/// - ``registerRoute(_:handler:)-76t5b``
+/// - ``registerRoute(_:handler:)-39dgn``
+/// - ``registerRoute(_:handler:)-1rnkw``
+///
+/// ### Starting a Server
+/// - ``processMessages()``
+///
+/// ### Error Handling
+/// - ``errorHandler``
 public class XPCMachServer {
     
     /// If set, errors encountered will be sent to this handler.
@@ -85,14 +91,30 @@ public class XPCMachServer {
     private var routesWithoutMessageWithoutReply = [XPCRoute : XPCHandlerWithoutMessageWithoutReply]()
     private var routesWithMessageWithoutReply = [XPCRoute : XPCHandlerWithMessageWithoutReply]()
     
-    /// Creates a server that only processes messages from clients meeting the provided security requirements.
+    /// Creates a server that accepts requests from clients which meet the security requirements.
     ///
-    /// No messages will be processed until ``processMessages()`` is called.
+    /// Because many processes on the system can talk to an XPC Mach Service, when creating a server it is required that you specifiy the security requirements
+    /// of any connecting clients:
+    /// ```swift
+    /// let requirementString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.CN] = "Apple Development: Johnny Appleseed (4L0ZG128MM)" /* exists */"""
+    /// var requirement: SecRequirement?
+    /// if SecRequirementCreateWithString(requirementString as CFString,
+    ///                                   SecCSFlags(),
+    ///                                   &requirement) == errSecSuccess,
+    ///   let requirement = requirement {
+    ///    let server = XPCMachClient(machServiceName: "com.example.service",
+    ///                               clientRequirements: [requirement])
+    ///
+    ///    <# configure and start server #>
+    /// }
+    /// ```
+    ///
+    /// > Important: No messages will be processed until ``processMessages()`` is called.
     ///
     /// - Parameters:
-    ///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this executable's (or app's)
-    ///                      `launchd.plist` `MachServices` entry.
-    ///   - clientRequirements: If a message is received from a client, it will only be processed if it meets one (or more) of these security requirements.
+    ///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this program's launchd property list's
+    ///                      `MachServices` entry.
+    ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these security requirements.
     public init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.clientRequirements = clientRequirements
         
@@ -101,6 +123,66 @@ public class XPCMachServer {
                                                       nil,
                                                       UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
+    }
+    
+    /// Initializes a server for an executable that meets
+    /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements.
+    ///
+    /// To successfully call this function the following requirements must be met:
+    ///   - The launchd property list embedded in this executable must have exactly one entry for its `MachServices` dictionary
+    ///   - The info property list embedded in this executable must have at least one element in its
+    ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
+    ///   array
+    ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
+    ///     - To be valid, it must be creatable by
+    ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
+    ///
+    /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
+    ///
+    /// > Important: No messages will be processed until ``processMessages()`` is called.
+    ///
+    /// - Returns: A server instance initialized with the embedded property list entries.
+    public static func forBlessedExecutable() throws -> XPCMachServer {
+        // Determine mach service name launchd property list's MachServices
+        var machServiceName: String
+        let launchdData = try EmbeddedPropertyListReader.launchd.readInternal()
+        let launchdPropertyList = try PropertyListSerialization.propertyList(from: launchdData,
+                                                                             options: .mutableContainersAndLeaves,
+                                                                             format: nil) as? NSDictionary
+        if let machServices = launchdPropertyList?["MachServices"] as? [String : Any] {
+            if machServices.count == 1, let name = machServices.first?.key {
+                machServiceName = name
+            } else {
+                throw XPCError.misconfiguredBlessedExecutable("MachServices dictionary does not have exactly one entry")
+            }
+        } else {
+            throw XPCError.misconfiguredBlessedExecutable("launchd property list missing MachServices key")
+        }
+        
+        // Generate client requirements from info property list's SMAuthorizedClients
+        var clientRequirements = [SecRequirement]()
+        let infoData = try EmbeddedPropertyListReader.info.readInternal()
+        let infoPropertyList = try PropertyListSerialization.propertyList(from: infoData,
+                                                                          options: .mutableContainersAndLeaves,
+                                                                          format: nil) as? NSDictionary
+        if let authorizedClients = infoPropertyList?["SMAuthorizedClients"] as? [String] {
+            for client in authorizedClients {
+                var requirement: SecRequirement?
+                if SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+                   let requirement = requirement {
+                    clientRequirements.append(requirement)
+                } else {
+                    throw XPCError.misconfiguredBlessedExecutable("Invalid SMAuthorizedClients requirement: \(client)")
+                }
+            }
+        } else {
+            throw XPCError.misconfiguredBlessedExecutable("Info property list missing SMAuthorizedClients key")
+        }
+        if clientRequirements.isEmpty {
+            throw XPCError.misconfiguredBlessedExecutable("No requirements were generated from SMAuthorizedClients")
+        }
+        
+        return XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
     }
     
     /// Registers a route that has no message and can't receive a reply.
@@ -142,12 +224,12 @@ public class XPCMachServer {
         self.routesWithoutMessageWithReply[route.route] = handlerWrapper
     }
     
-    /// Registers a route that has no message and expects a reply.
+    /// Registers a route that has a message and expects a reply.
     ///
     /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     ///
     /// - Parameters:
-    ///   - route: A route that has no message and expects a reply.
+    ///   - route: A route that has a message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
                                                           handler: @escaping (M) throws -> R) {
