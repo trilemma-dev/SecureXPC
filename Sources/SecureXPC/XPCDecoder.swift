@@ -617,7 +617,7 @@ private func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
                                                                 codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
     return { (object: xpc_object_t) in
         let value = xpc_int64_get_value(object)
-        if value > T.min && value < T.max {
+        if value >= T.min && value <= T.max {
             return T(value)
         } else {
             let description = "\(value) out of range for \(String(describing: T.self)). Min: \(T.min), max: \(T.max)."
@@ -633,7 +633,7 @@ private func uintTransform<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Typ
                                                                    codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
     return { (object: xpc_object_t) in
         let value = xpc_uint64_get_value(object)
-        if value < T.max {
+        if value <= T.max {
             return T(value)
         } else {
             let description = "\(value) out of range for \(String(describing: T.self)). Max: \(T.max)."
