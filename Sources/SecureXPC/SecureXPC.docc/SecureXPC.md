@@ -28,10 +28,10 @@ There are four different types of routes; learn more about <doc:/Routes>.
 In one executable (or app) create a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = XPCMachClient(machServiceName: "com.example.service",
+    let server = XPCMachServer(machServiceName: "com.example.service",
                                clientRequirements: requirements)
     server.registerRoute(route, handler: bedazzle)
-    server.processMessages()
+    server.start()
 }
 
 private func bedazzle(message: String) throws -> Bool {

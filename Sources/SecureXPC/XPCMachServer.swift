@@ -54,7 +54,7 @@ import EmbeddedPropertyList
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing messages:
 /// ```swift
-/// server.processMessages()
+/// server.start()
 /// ```
 ///
 /// This function replicates default [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main)
@@ -73,7 +73,7 @@ import EmbeddedPropertyList
 /// - ``registerRoute(_:handler:)-1rnkw``
 ///
 /// ### Starting a Server
-/// - ``processMessages()``
+/// - ``start()``
 ///
 /// ### Error Handling
 /// - ``errorHandler``
@@ -102,14 +102,14 @@ public class XPCMachServer {
     ///                                   SecCSFlags(),
     ///                                   &requirement) == errSecSuccess,
     ///   let requirement = requirement {
-    ///    let server = XPCMachClient(machServiceName: "com.example.service",
+    ///    let server = XPCMachServer(machServiceName: "com.example.service",
     ///                               clientRequirements: [requirement])
     ///
     ///    <# configure and start server #>
     /// }
     /// ```
     ///
-    /// > Important: No messages will be processed until ``processMessages()`` is called.
+    /// > Important: No messages will be processed until ``start()`` is called.
     ///
     /// - Parameters:
     ///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this program's launchd property list's
@@ -139,7 +139,7 @@ public class XPCMachServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No messages will be processed until ``processMessages()`` is called.
+    /// > Important: No messages will be processed until ``start()`` is called.
     ///
     /// - Returns: A server instance initialized with the embedded property list entries.
     public static func forBlessedExecutable() throws -> XPCMachServer {
@@ -237,11 +237,11 @@ public class XPCMachServer {
         self.routesWithMessageWithReply[route.route] = handlerWrapper
     }
     
-    /// Begins processing messages sent to this XPC server.
+    /// Begins processing requests received by this XPC server.
     ///
     /// This function replicates [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main) behavior by never
     /// returning.
-    public func processMessages() -> Never {
+    public func start() -> Never {
         // Start listener for the mach service, all received events should be for incoming client connections
         xpc_connection_set_event_handler(self.machService, { client in
             // Listen for events (messages or errors) coming from this client connection
