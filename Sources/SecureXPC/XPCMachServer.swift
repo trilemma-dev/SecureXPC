@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import EmbeddedPropertyList
 
 /// An XPC Mach Services server to receive calls from and send responses to ``XPCMachClient``.
 ///
@@ -145,7 +144,7 @@ public class XPCMachServer {
     public static func forBlessedExecutable() throws -> XPCMachServer {
         // Determine mach service name launchd property list's MachServices
         var machServiceName: String
-        let launchdData = try EmbeddedPropertyListReader.launchd.readInternal()
+        let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
         let launchdPropertyList = try PropertyListSerialization.propertyList(from: launchdData,
                                                                              options: .mutableContainersAndLeaves,
                                                                              format: nil) as? NSDictionary
@@ -161,7 +160,7 @@ public class XPCMachServer {
         
         // Generate client requirements from info property list's SMAuthorizedClients
         var clientRequirements = [SecRequirement]()
-        let infoData = try EmbeddedPropertyListReader.info.readInternal()
+        let infoData = try readEmbeddedPropertyList(sectionName: "__info_plist")
         let infoPropertyList = try PropertyListSerialization.propertyList(from: infoData,
                                                                           options: .mutableContainersAndLeaves,
                                                                           format: nil) as? NSDictionary
@@ -183,6 +182,31 @@ public class XPCMachServer {
         }
         
         return XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
+    }
+    
+    /// Read the property list embedded within this executable.
+    ///
+    /// - Returns: The property list as data.
+    private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
+        // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this executable
+        if let handle = dlopen(nil, RTLD_LAZY) {
+            defer { dlclose(handle) }
+
+            if let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) {
+                let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
+
+                var size = UInt(0)
+                if let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) {
+                    return Data(bytes: section, count: Int(size))
+                } else { // No section found with the name corresponding to the property list
+                    throw XPCError.misconfiguredBlessedExecutable("Missing property list section \(sectionName)")
+                }
+            } else { // Can't get pointer to MH_EXECUTE_SYM
+                throw XPCError.misconfiguredBlessedExecutable("Could not read property list (nil symbol pointer)")
+            }
+        } else { // Can't open handle
+            throw XPCError.misconfiguredBlessedExecutable("Could not read property list (handle not openable)")
+        }
     }
     
     /// Registers a route that has no message and can't receive a reply.
