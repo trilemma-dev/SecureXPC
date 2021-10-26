@@ -10,13 +10,13 @@ import Foundation
 /// An XPC Mach Services server to receive calls from and send responses to ``XPCMachClient``.
 ///
 /// ### Creating a Server
-/// If the program creating this server is an executable which meets
+/// If the program creating this server is a helper tool which meets
 /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements then in most
 /// cases creating a server is as easy as
 /// ```swift
-/// let server = try XPCMachServer.forBlessedExecutable()
+/// let server = try XPCMachServer.forBlessedHelperTool()
 /// ```
-/// See ``forBlessedExecutable()`` for the exact requirements which need to be met.
+/// See ``forBlessedHelperTool()`` for the exact requirements which need to be met.
 ///
 /// **Other Cases**
 ///
@@ -51,7 +51,7 @@ import Foundation
 /// is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
 ///
 /// ### Starting a Server
-/// Once all of the routes are registered, the server must be told to start processing messages:
+/// Once all of the routes are registered, the server must be told to start processing requests:
 /// ```swift
 /// server.start()
 /// ```
@@ -62,8 +62,8 @@ import Foundation
 ///
 /// ## Topics
 /// ### Creating a Server
-///   - ``forBlessedExecutable()``
-///  - ``init(machServiceName:clientRequirements:)``
+/// - ``forBlessedHelperTool()``
+/// - ``init(machServiceName:clientRequirements:)``
 ///
 /// ### Registering Routes
 /// - ``registerRoute(_:handler:)-8ydqa``
@@ -95,9 +95,9 @@ public class XPCMachServer {
     /// Because many processes on the system can talk to an XPC Mach Service, when creating a server it is required that you specifiy the security requirements
     /// of any connecting clients:
     /// ```swift
-    /// let requirementString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.CN] = "Apple Development: Johnny Appleseed (4L0ZG128MM)" /* exists */"""
+    /// let reqString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.OU] = "4L0ZG128MM" """
     /// var requirement: SecRequirement?
-    /// if SecRequirementCreateWithString(requirementString as CFString,
+    /// if SecRequirementCreateWithString(reqString as CFString,
     ///                                   SecCSFlags(),
     ///                                   &requirement) == errSecSuccess,
     ///   let requirement = requirement {
@@ -108,7 +108,7 @@ public class XPCMachServer {
     /// }
     /// ```
     ///
-    /// > Important: No messages will be processed until ``start()`` is called.
+    /// > Important: No requests will be processed until ``start()`` is called.
     ///
     /// - Parameters:
     ///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this program's launchd property list's
@@ -124,12 +124,12 @@ public class XPCMachServer {
         }
     }
     
-    /// Initializes a server for an executable that meets
+    /// Initializes a server for a helper tool that meets
     /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements.
     ///
     /// To successfully call this function the following requirements must be met:
-    ///   - The launchd property list embedded in this executable must have exactly one entry for its `MachServices` dictionary
-    ///   - The info property list embedded in this executable must have at least one element in its
+    ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
+    ///   - The info property list embedded in this helper tool must have at least one element in its
     ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
     ///   array
     ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
@@ -138,10 +138,10 @@ public class XPCMachServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No messages will be processed until ``start()`` is called.
+    /// > Important: No requests will be processed until ``start()`` is called.
     ///
     /// - Returns: A server instance initialized with the embedded property list entries.
-    public static func forBlessedExecutable() throws -> XPCMachServer {
+    public static func forBlessedHelperTool() throws -> XPCMachServer {
         // Determine mach service name launchd property list's MachServices
         var machServiceName: String
         let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
@@ -152,10 +152,10 @@ public class XPCMachServer {
             if machServices.count == 1, let name = machServices.first?.key {
                 machServiceName = name
             } else {
-                throw XPCError.misconfiguredBlessedExecutable("MachServices dictionary does not have exactly one entry")
+                throw XPCError.misconfiguredBlessedHelperTool("MachServices dictionary does not have exactly one entry")
             }
         } else {
-            throw XPCError.misconfiguredBlessedExecutable("launchd property list missing MachServices key")
+            throw XPCError.misconfiguredBlessedHelperTool("launchd property list missing MachServices key")
         }
         
         // Generate client requirements from info property list's SMAuthorizedClients
@@ -171,24 +171,24 @@ public class XPCMachServer {
                    let requirement = requirement {
                     clientRequirements.append(requirement)
                 } else {
-                    throw XPCError.misconfiguredBlessedExecutable("Invalid SMAuthorizedClients requirement: \(client)")
+                    throw XPCError.misconfiguredBlessedHelperTool("Invalid SMAuthorizedClients requirement: \(client)")
                 }
             }
         } else {
-            throw XPCError.misconfiguredBlessedExecutable("Info property list missing SMAuthorizedClients key")
+            throw XPCError.misconfiguredBlessedHelperTool("Info property list missing SMAuthorizedClients key")
         }
         if clientRequirements.isEmpty {
-            throw XPCError.misconfiguredBlessedExecutable("No requirements were generated from SMAuthorizedClients")
+            throw XPCError.misconfiguredBlessedHelperTool("No requirements were generated from SMAuthorizedClients")
         }
         
         return XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
     }
     
-    /// Read the property list embedded within this executable.
+    /// Read the property list embedded within this helper tool.
     ///
     /// - Returns: The property list as data.
     private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
-        // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this executable
+        // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this helper tool
         if let handle = dlopen(nil, RTLD_LAZY) {
             defer { dlclose(handle) }
 
@@ -199,13 +199,13 @@ public class XPCMachServer {
                 if let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) {
                     return Data(bytes: section, count: Int(size))
                 } else { // No section found with the name corresponding to the property list
-                    throw XPCError.misconfiguredBlessedExecutable("Missing property list section \(sectionName)")
+                    throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
                 }
             } else { // Can't get pointer to MH_EXECUTE_SYM
-                throw XPCError.misconfiguredBlessedExecutable("Could not read property list (nil symbol pointer)")
+                throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
             }
         } else { // Can't open handle
-            throw XPCError.misconfiguredBlessedExecutable("Could not read property list (handle not openable)")
+            throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
         }
     }
     
@@ -266,37 +266,37 @@ public class XPCMachServer {
     /// This function replicates [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main) behavior by never
     /// returning.
     public func start() -> Never {
-        // Start listener for the mach service, all received events should be for incoming client connections
-        xpc_connection_set_event_handler(self.machService, { client in
-            // Listen for events (messages or errors) coming from this client connection
-            xpc_connection_set_event_handler(client, { event in
-                self.handleEvent(client: client, event: event)
+        // Start listener for the mach service, all received events should be for incoming connections
+        xpc_connection_set_event_handler(self.machService, { connection in
+            // Listen for events (messages or errors) coming from this connection
+            xpc_connection_set_event_handler(connection, { event in
+                self.handleEvent(connection: connection, event: event)
             })
-            xpc_connection_resume(client)
+            xpc_connection_resume(connection)
         })
         xpc_connection_resume(self.machService)
         
         dispatchMain()
     }
     
-    private func handleEvent(client: xpc_connection_t, event: xpc_object_t) {
+    private func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
-            if self.acceptMessage(client: client, message: event) {
+            if self.acceptMessage(connection: connection, message: event) {
                 var reply = xpc_dictionary_create_reply(event)
                 do {
-                    try handleMessage(client: client, message: event, reply: &reply)
+                    try handleMessage(connection: connection, message: event, reply: &reply)
                 } catch let error as XPCError {
                     self.errorHandler?(error)
-                    self.replyWithErrorIfPossible(error, client: client, reply: &reply)
+                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
                 } catch let error as DecodingError {
                     self.errorHandler?(XPCError.decodingError(error))
-                    self.replyWithErrorIfPossible(error, client: client, reply: &reply)
+                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
                 }  catch let error as EncodingError {
                     self.errorHandler?(XPCError.encodingError(error))
-                    self.replyWithErrorIfPossible(error, client: client, reply: &reply)
+                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
                 } catch {
                     self.errorHandler?(XPCError.other(error))
-                    self.replyWithErrorIfPossible(error, client: client, reply: &reply)
+                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
                 }
             } else {
                 self.errorHandler?(XPCError.insecure)
@@ -316,16 +316,16 @@ public class XPCMachServer {
     ///
     /// This is determined using the client requirements provided to this server upon initialization.
     /// - Parameters:
-    ///   - client: The client which sent the message.
+    ///   - connection: The connection the message was sent over.
     ///   - message: The message.
     /// - Returns: whether the message can be accepted
-    private func acceptMessage(client: xpc_connection_t, message: xpc_object_t) -> Bool {
+    private func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         // Get the code representing the client
         var code: SecCode?
         if #available(macOS 11, *) { // publicly documented, but only available since macOS 11
             SecCodeCreateWithXPCMessage(message, SecCSFlags(), &code)
         } else { // private undocumented function: xpc_connection_get_audit_token, available on prior versions of macOS
-            if var auditToken = xpc_connection_get_audit_token(client) {
+            if var auditToken = xpc_connection_get_audit_token(connection) {
                 let tokenData = NSData(bytes: &auditToken, length: MemoryLayout.size(ofValue: auditToken))
                 let attributes = [kSecGuestAttributeAudit : tokenData] as NSDictionary
                 SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
@@ -347,13 +347,13 @@ public class XPCMachServer {
     
     /// Wrapper around the private undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`.
     ///
-    /// - Parameters:
-    ///   - _:  the connection for which the audit token will be retrieved for
-    /// - Returns: the audit token or `nil` if the function could not be called
-    ///
     /// The private undocumented function will attempt to be dynamically loaded and then invoked. If no function exists with this name `nil` will be returned. If
     /// the function does exist, but does not match the expected signature, the process calling this function is expected to crash. However, because this is only
     /// called on older versions of macOS which are expected to have a stable non-changing API this is very unlikely to occur.
+    ///
+    /// - Parameters:
+    ///   - _:  The connection for which the audit token will be retrieved for.
+    /// - Returns: The audit token or `nil` if the function could not be called.
     private func xpc_connection_get_audit_token(_ connection: xpc_connection_t) -> audit_token_t? {
         typealias functionSignature = @convention(c) (xpc_connection_t, UnsafeMutablePointer<audit_token_t>) -> Void
         let auditToken: audit_token_t?
@@ -378,7 +378,7 @@ public class XPCMachServer {
         return auditToken
     }
     
-    private func handleMessage(client: xpc_connection_t, message: xpc_object_t, reply: inout xpc_object_t?) throws {
+    private func handleMessage(connection: xpc_connection_t, message: xpc_object_t, reply: inout xpc_object_t?) throws {
         let route = try XPCDecoder.decodeRoute(message)
         let containsPayload = try XPCDecoder.containsPayload(message)
         
@@ -387,14 +387,14 @@ public class XPCMachServer {
             if containsPayload {
                 if let handler = self.routesWithMessageWithReply[route] {
                     try handler.handle(message: message, reply: &reply)
-                    xpc_connection_send_message(client, reply)
+                    xpc_connection_send_message(connection, reply)
                 } else {
                     throw XPCError.routeNotRegistered(String(describing: route))
                 }
             } else {
                 if let handler = self.routesWithoutMessageWithReply[route] {
                     try handler.handle(reply: &reply)
-                    xpc_connection_send_message(client, reply)
+                    xpc_connection_send_message(connection, reply)
                 } else {
                     throw XPCError.routeNotRegistered(String(describing: route))
                 }
@@ -416,11 +416,11 @@ public class XPCMachServer {
         }
     }
     
-    private func replyWithErrorIfPossible(_ error: Error, client: xpc_connection_t, reply: inout xpc_object_t?) {
+    private func replyWithErrorIfPossible(_ error: Error, connection: xpc_connection_t, reply: inout xpc_object_t?) {
         if var reply = reply {
             do {
                 try XPCEncoder.encodeError(error, forReply: &reply)
-                xpc_connection_send_message(client, reply)
+                xpc_connection_send_message(connection, reply)
             } catch {
                 // If encoding the error fails, then there's no way to proceed
             }

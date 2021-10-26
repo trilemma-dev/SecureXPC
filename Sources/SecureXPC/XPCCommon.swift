@@ -44,8 +44,8 @@ public enum XPCError: Error {
     case decodingError(DecodingError)
     /// The route associated with the incoming XPC message is not registed with the server.
     case routeNotRegistered(String)
-    /// The calling program's property list configuration is  not compatible with ``XPCMachServer/forBlessedExecutable()``.
-    case misconfiguredBlessedExecutable(String)
+    /// The calling program's property list configuration is  not compatible with ``XPCMachServer/forBlessedHelperTool()``.
+    case misconfiguredBlessedHelperTool(String)
     /// An underlying error occurred which was not anticipated; the associated value is this error.
     case other(Error)
     /// Unknown error occurred.

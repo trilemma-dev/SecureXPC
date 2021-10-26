@@ -42,7 +42,7 @@ import Foundation
 /// ```swift
 /// let client = XPCMachClient(machServiceName: "com.example.service")
 /// let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
-///                                                      messageType:Config.self,
+///                                                      messageType: Config.self,
 ///                                                      replyType: Config.self)
 /// let config = <# create Config instance #>
 /// client.sendMessage(config, route: updateConfigRoute, withReply: {
@@ -61,7 +61,6 @@ import Foundation
 /// - ``send(route:withReply:)``
 /// - ``sendMessage(_:route:)``
 /// - ``sendMessage(_:route:withReply:)``
-/// 
 /// ### Receiving Replies
 /// - ``XPCReplyHandler``
 public class XPCMachClient {
