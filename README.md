@@ -3,6 +3,9 @@ SecureXPC provides an easy way to perform secure XPC Mach Services communication
 receive replies. This framework is ideal for communicating with helper tools installed via 
 [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
 
+To see a runnable sample app using this framework, check out
+[SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample).
+
 # Usage
 The envisioned pattern when using this framework is to define routes in a shared file, create a server in one program
 (such as a helper tool) and register these routes, then from another program (such as an app) create a client and call
