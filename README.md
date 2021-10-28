@@ -6,6 +6,8 @@ receive replies. This framework is ideal for communicating with helper tools ins
 To see a runnable sample app using this framework, check out
 [SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample).
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
+
 # Usage
 The envisioned pattern when using this framework is to define routes in a shared file, create a server in one program
 (such as a helper tool) and register these routes, then from another program (such as an app) create a client and call
