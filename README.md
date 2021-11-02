@@ -71,5 +71,5 @@ substitution. In contrast, an `NSSecureCoding` conforming type may use
 [`awakeAfter(using:)`](https://developer.apple.com/documentation/objectivec/nsobject/1417074-awakeafter) to
 substitute in an already initialized instance.
 
-While `Codable` can be implemented by any type, in practice it is best suited by Swift value types such as
-`struct` and `enum`.
+While `Codable` can be implemented by any type, in practice value types such as `struct` and `enum` are the
+most natural fit. The aforementioned deserialization behavior is by definition not applicable to value types.
