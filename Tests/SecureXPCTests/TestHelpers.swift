@@ -41,3 +41,22 @@ fileprivate func assertEqual(
 		XCTFail("\(actual) is not equal to \(expected).", file: file, line: line)
 	}
 }
+
+// MARK: XPC object factories
+
+/// Converts the provided `sourceArray` into an XPC array, by transforming its non-nil elements by the provided `transformIntoXPCObject` closure,
+/// and replacing `nil` values with the proper XPC null object.
+/// - Parameters:
+///   - sourceArray: The values to transform and pack into the XPC array
+///   - transformIntoXPCObject: The closures used to transform the non-nil source elements into XPC objects
+/// - Returns: an XPC array containing the transformed XPC objects
+func createXPCArray<T>(from sourceArray: [T?], using transformIntoXPCObject: (T) -> xpc_object_t) -> xpc_object_t {
+	let xpcArray = xpc_array_create(nil, 0)
+	
+	for element in sourceArray {
+		let xpcObject = element.map { transformIntoXPCObject($0) } ?? xpc_null_create()
+		xpc_array_append_value(xpcArray, xpcObject)
+	}
+	
+	return xpcArray
+}
