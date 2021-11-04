@@ -39,8 +39,12 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 			-Float.infinity,
 			-Float.greatestFiniteMagnitude,
 			-123,
+			-Float.leastNormalMagnitude,
+			-Float.leastNonzeroMagnitude,
 			-0.0,
 			 0.0,
+			 Float.leastNonzeroMagnitude,
+			 Float.leastNormalMagnitude,
 			 123,
 			 Float.greatestFiniteMagnitude,
 			 Float.infinity
@@ -59,10 +63,14 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 		let doubles: [Double] = [
 			-Double.infinity,
 			-Double.greatestFiniteMagnitude,
+			-Double.leastNormalMagnitude,
+			-Double.leastNonzeroMagnitude,
 			-123,
 			-0.0,
 			 0.0,
 			 123,
+			 Double.leastNonzeroMagnitude,
+			 Double.leastNormalMagnitude,
 			 Double.greatestFiniteMagnitude,
 			 Double.infinity
 		]
@@ -80,7 +88,7 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 	
 	func testEncodes_arrayOf_Bools_asArrayOf_XPCBools() throws {
 		let bools = [false, true]
-		try assert(bools, encodesEqualTo: createXPCArray(from: bools, using: { xpc_bool_create($0) }))
+		try assert(bools, encodesEqualTo: createXPCArray(from: bools, using: xpc_bool_create))
 	}
 	
 	func testEncodes_arrayOf_Strings_asArrayOf_XPCStrings() throws {
