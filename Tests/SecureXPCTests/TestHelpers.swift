@@ -8,10 +8,16 @@
 import XCTest
 @testable import SecureXPC
 
-// MARK: Encoding entry point
+// MARK: Encoding/Decoding
 
 func encode<T: Encodable>(_ input: T) throws -> xpc_object_t {
 	try XPCEncoder.encode(input)
+}
+
+func decode<T: Decodable>(_ input: xpc_object_t) throws -> T {
+	let dummyDict = xpc_dictionary_create(nil, nil, 0)
+	xpc_dictionary_set_value(dummyDict, "key", input)
+	return try XPCDecoder.decode(T.self, from: dummyDict, forKey: "key")
 }
 
 // MARK: Assertions
@@ -26,6 +32,17 @@ func assert<T: Encodable>(
 ) throws {
 	let actual = try encode(input)
 	assertEqual(actual, expected, file: file, line: line)
+}
+
+/// Assert that the provided `input`, when decoded using an XPCDecoder, is equal to the `expected` XPC Object
+func assert<T: Decodable & Equatable>(
+	_ input: xpc_object_t,
+	decodesEqualTo expected: T,
+	file: StaticString = #file,
+	line: UInt = #line
+) throws {
+	let actual = try decode(input) as T
+	XCTAssertEqual(actual, expected, file: file, line: line)
 }
 
 /// Asserts that `actual` and `expected` are value-equal, according to `xpc_equal`
