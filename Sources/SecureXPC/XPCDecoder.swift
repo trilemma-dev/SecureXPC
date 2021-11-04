@@ -7,85 +7,37 @@
 
 import Foundation
 
-/// Package internal entry point to decoding payloads, routes, and errors to Decodable types as well as checking for their presence in an XPC dictionary
+/// Package internal entry point to decoding as well as checking for the presence of keys in an XPC dictionary.
 enum XPCDecoder {
     
-    /// Whether the provided value contains a payload
+    /// Whether the provided XPC dictionary contains the key.
     ///
     /// - Parameters:
-    ///   - _: the outermost XPC object; this must be an XPC dictionary
-    /// - Throws: if the value provided was not an XPC dictionary
-    /// - Returns: whether a payload is contained in the provided value
-    static func containsPayload(_ value: xpc_object_t) throws -> Bool {
-        if xpc_get_type(value) == XPC_TYPE_DICTIONARY {
-            return XPCCoderConstants.payload.utf8CString.withUnsafeBufferPointer { stringPointer in
-                return xpc_dictionary_get_value(value, stringPointer.baseAddress!) != nil
+    ///   - _:  The key to be checked.
+    ///   - dictionary: The XPC dictionary to check for the XPC key in.
+    /// - Throws: If the value provided was not an XPC dictionary.
+    /// - Returns: Whether the key is contained in the provided dictionary.
+    static func containsKey(_ key: String, inDictionary dictionary: xpc_object_t) throws -> Bool {
+        if xpc_get_type(dictionary) == XPC_TYPE_DICTIONARY {
+            return key.utf8CString.withUnsafeBufferPointer { stringPointer in
+                return xpc_dictionary_get_value(dictionary, stringPointer.baseAddress!) != nil
             }
         } else {
             throw notXPCDictionary()
         }
     }
     
-    /// Whether the provided value contains an error
+    /// Decodes the value corresponding to the key for the XPC dictionary.
     ///
     /// - Parameters:
-    ///   - _: the outermost XPC object; this must be an XPC dictionary
-    /// - Throws: if the value provided was not an XPC dictionary
-    /// - Returns: whether an error is contained in the provided value
-    static func containsError(_ value: xpc_object_t) throws -> Bool {
-        if xpc_get_type(value) == XPC_TYPE_DICTIONARY {
-            return XPCCoderConstants.error.utf8CString.withUnsafeBufferPointer { stringPointer in
-                return xpc_dictionary_get_value(value, stringPointer.baseAddress!) != nil
-            }
-        } else {
-            throw notXPCDictionary()
-        }
-    }
-    
-    /// Decodes the payload as the provided type
-    ///
-    /// - Parameters:
-    ///  - _: the outermost XPC object; this must be an XPC dictionary
-    ///  - asType: the type to decode the XPC representation to
-    /// - Throws: if the provided value does not contain a payload or the value could not be decoded as the specified type
-    /// - Returns: an instance of the provided type corresponding to the contents of the provided value
-    static func decodePayload<T>(_ value: xpc_object_t, asType type: T.Type) throws -> T where T : Decodable {
-        return try decode(type, from: value, forKey: XPCCoderConstants.payload)
-    }
-    
-    /// Decodes the error
-    ///
-    /// - Parameters:
-    ///  - _: the outermost XPC object; this ust be an XPC dictionary
-    /// - Throws: if the provided value does not contain an error or the error could not be decoded
-    /// - Returns: the error encoded in the value
-    static func decodeError(_ value: xpc_object_t) throws -> XPCError {
-        let errorMessage = try decode(String.self, from: value, forKey: XPCCoderConstants.error)
-        
-        return XPCError.remote(errorMessage)
-    }
-    
-    /// Decodes the route
-    ///
-    /// - Parameters:
-    ///  - _: the outermost XPC object; this ust be an XPC dictionary
-    /// - Throws: if the provided value does not contain a route or the route could not be decoded
-    /// - Returns: the route encoded in the value
-    static func decodeRoute(_ value: xpc_object_t) throws -> XPCRoute {
-        return try decode(XPCRoute.self, from: value, forKey: XPCCoderConstants.route)
-    }
-    
-    /// Decodes the value corresponding to the key for the dictionary
-    ///
-    /// - Parameters:
-    ///  - _: the type to decode the XPC representation to
-    ///  - from: the XPC dictionary containing the value to decode
-    ///  - forKey: the key of the value in the XPC dictionary
-    /// - Throws: if the `key` isn't present or the decoding fails
-    /// - Returns: an instance of the provided type corresponding to the contents of the value for the provided key
-    private static func decode<T>(_ type: T.Type,
-                                  from dictionary: xpc_object_t,
-                                  forKey key: String) throws -> T where T : Decodable {
+    ///  - _: The type to decode the XPC representation to.
+    ///  - from: The XPC dictionary containing the value to decode.
+    ///  - forKey: The key of the value in the XPC dictionary.
+    /// - Throws: If the `key` isn't present or the decoding fails.
+    /// - Returns: An instance of the provided type corresponding to the contents of the value for the provided key.
+    static func decode<T>(_ type: T.Type,
+                          from dictionary: xpc_object_t,
+                          forKey key: String) throws -> T where T : Decodable {
         // If value was a top-level object encoded by XPCEncoder, then the outermost object will be an
         // XPC_TYPE_DICTIONARY and the data we want to decode should have the specified key in that dictionary
         if xpc_get_type(dictionary) == XPC_TYPE_DICTIONARY {
@@ -96,7 +48,7 @@ enum XPCDecoder {
                     // Ideally this would throw DecodingError.keyNotFound(...) but that requires providing a CodingKey
                     // and there isn't one yet
                     let context = DecodingError.Context(codingPath: [CodingKey](),
-                                                        debugDescription: "Top level key not present: \(key)",
+                                                        debugDescription: "Key not present: \(key)",
                                                         underlyingError: nil)
                     throw DecodingError.valueNotFound(type, context)
                 }

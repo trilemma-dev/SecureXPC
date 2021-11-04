@@ -88,7 +88,7 @@ public class XPCMachClient {
     ///   - route: The server route which will handle this.
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
-        let encoded = try XPCEncoder.encode(route: route.route)
+        let encoded = try SendableRequest(route: route.route).encode()
         xpc_connection_send_message(createConnection(), encoded)
     }
     
@@ -99,8 +99,8 @@ public class XPCMachClient {
     ///    - route: The server route which should handle this message.
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
-        let encodedMessage = try XPCEncoder.encode(message, route: route.route)
-        xpc_connection_send_message(createConnection(), encodedMessage)
+        let encoded = try SendableRequestWithPayload(route: route.route, payload: message).encode()
+        xpc_connection_send_message(createConnection(), encoded)
     }
     
     /// Sends with no message and provides the reply as either a message on success or an error on failure.
@@ -111,7 +111,7 @@ public class XPCMachClient {
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encoded = try XPCEncoder.encode(route: route.route)
+        let encoded = try SendableRequest(route: route.route).encode()
         sendWithReply(encoded: encoded, withReply: reply)
     }
     
@@ -125,23 +125,22 @@ public class XPCMachClient {
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encodedMessage = try XPCEncoder.encode(message, route: route.route)
-        sendWithReply(encoded: encodedMessage, withReply: reply)
+        let encoded = try SendableRequestWithPayload(route: route.route, payload: message).encode()
+        sendWithReply(encoded: encoded, withReply: reply)
     }
     
     /// Does the actual work of sending an XPC message which receives a reply.
     private func sendWithReply<R: Decodable>(encoded: xpc_object_t,
                                              withReply reply: @escaping XPCReplyHandler<R>) {
-        xpc_connection_send_message_with_reply(createConnection(), encoded, nil, { response in
+        xpc_connection_send_message_with_reply(createConnection(), encoded, nil, { xpcResponse in
             let result: Result<R, XPCError>
-            if xpc_get_type(response) == XPC_TYPE_DICTIONARY {
+            if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
                 do {
-                    if try XPCDecoder.containsPayload(response) {
-                        let decodedResult = try XPCDecoder.decodePayload(response, asType: R.self)
-                        result = Result.success(decodedResult)
-                    } else if try XPCDecoder.containsError(response) {
-                        let decodedError = try XPCDecoder.decodeError(response)
-                        result = Result.failure(decodedError)
+                    let response = ReceivedResponse(dictionary: xpcResponse)
+                    if try response.containsPayload() {
+                        result = Result.success(try response.decodePayload(asType: R.self))
+                    } else if try response.containsError() {
+                        result = Result.failure(try response.decodeError())
                     } else {
                         result = Result.failure(.unknown)
                     }
@@ -150,11 +149,11 @@ public class XPCMachClient {
                 } catch {
                     result = Result.failure(.unknown)
                 }
-            } else if xpc_equal(response, XPC_ERROR_CONNECTION_INVALID) {
+            } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INVALID) {
                 result = Result.failure(.connectionInvalid)
-            } else if xpc_equal(response, XPC_ERROR_CONNECTION_INTERRUPTED) {
+            } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INTERRUPTED) {
                 result = Result.failure(.connectionInterrupted)
-            } else if xpc_equal(response, XPC_ERROR_TERMINATION_IMMINENT) {
+            } else if xpc_equal(xpcResponse, XPC_ERROR_TERMINATION_IMMINENT) {
                 result = Result.failure(.terminationImminent)
             } else { // Unexpected
                 result = Result.failure(.unknown)

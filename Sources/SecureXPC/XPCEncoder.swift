@@ -10,107 +10,24 @@ import Foundation
 /// Package internal entry point to encoding payloads, routes, and errors to XPC dictionaries
 enum XPCEncoder {
     
-    /// Encodes just a route with no payload into a newly created XPC dictionary
+    /// Encodes the value as an XPC dictionary.
     ///
     /// - Parameters:
-    ///  - route: the route to be encoded
-    /// - Throws: if an issue is encountered when encoding the route
-    /// - Returns: the route encoded as an `xpc_object_t`
-    static func encode(route: XPCRoute) throws -> xpc_object_t {
-        var dictionary = xpc_dictionary_create(nil, nil, 0)
-        let dummyDecodable: Int? = nil
-        try encode(dummyDecodable, forRoute: route, usingDictionary: &dictionary)
+    ///  - _: The value to be encoded
+    /// - Throws: If unable to encode the value.
+    /// - Returns: Value as an XPC dictionary.
+    static func encode<T: Encodable>(_ value: T) throws -> xpc_object_t {
+        let encoder = XPCEncoderImpl(codingPath: [CodingKey]())
+        try value.encode(to: encoder)
         
-        return dictionary
-    }
-    
-    /// Encodes the provided value and route into a newly created XPC dictionary
-    ///
-    /// - Parameters:
-    ///  - _: the value to be encoded
-    ///  - route: the route to be encoded
-    /// - Throws: if an issue is encountered when encoding the value or route
-    /// - Returns: the value and route encoded an `xpc_object_t`
-    static func encode<T: Encodable>(_ value: T, route: XPCRoute) throws -> xpc_object_t {
-        var dictionary = xpc_dictionary_create(nil, nil, 0)
-        try encode(value, forRoute: route, usingDictionary: &dictionary)
-        
-        return dictionary
-    }
-    
-    /// Directly encodes the value into the provided reply XPC dictionary, and therefore does not return a result
-    ///
-    /// - Parameters:
-    ///   - _: the reply to encode the value into
-    ///   - value: the value to be encoded
-    /// - Throws: if an issue is encountered when encoding the value into the provided reply
-    static func encodeReply<T: Encodable>(_ reply: inout xpc_object_t, value: T) throws {
-        if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
-            try encode(value, forRoute: nil, usingDictionary: &reply)
-        } else {
+        guard let encodedValue = try encoder.encodedValue() else {
             let context = EncodingError.Context(codingPath: [CodingKey](),
-                                                debugDescription: "Reply must be of XPC type dictionary",
+                                                debugDescription: "value failed to encode itself",
                                                 underlyingError: nil)
-            throw EncodingError.invalidValue(reply, context)
-        }
-    }
-    
-    /// Directly encodes the error into the provided reply XPC dictionary, and therefore does not return a result
-    ///
-    /// - Parameters:
-    ///  - _: error to encode
-    ///  - forReply: the reply to encode the error into
-    /// - Throws: if an issue is encountered when encoding the error into the provided reply
-    static func encodeError(_ error: Error, forReply reply: inout xpc_object_t) throws {
-        if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
-            XPCCoderConstants.error.utf8CString.withUnsafeBufferPointer { keyPointer in
-                String(describing: error).utf8CString.withUnsafeBufferPointer { errorDescriptionPointer in
-                    xpc_dictionary_set_string(reply, keyPointer.baseAddress!, errorDescriptionPointer.baseAddress!)
-                }
-            }
-        } else {
-            let context = EncodingError.Context(codingPath: [CodingKey](),
-                                                debugDescription: "Reply must be of XPC type dictionary",
-                                                underlyingError: nil)
-            throw EncodingError.invalidValue(reply, context)
-        }
-    }
-    
-    /// Internal function which starts the encoding process
-    private static func encode<T: Encodable>(_ value: T?,
-                                             forRoute route: XPCRoute?,
-                                             usingDictionary dictionary: inout xpc_object_t) throws {
-        if let value = value {
-            let encoder = XPCEncoderImpl(codingPath: [CodingKey]())
-            try value.encode(to: encoder)
-            guard let encodedValue = try encoder.encodedValue() else {
-                let context = EncodingError.Context(codingPath: [CodingKey](),
-                                                    debugDescription: "value failed to encode itself",
-                                                    underlyingError: nil)
-                throw EncodingError.invalidValue(value, context)
-            }
-            
-            // Wrap decoded value in the provided dictionary, which may be a reply dictionary - making this essential
-            XPCCoderConstants.payload.utf8CString.withUnsafeBufferPointer { keyPointer in
-                xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedValue)
-            }
+            throw EncodingError.invalidValue(value, context)
         }
         
-        if let route = route {
-            let encoder = XPCEncoderImpl(codingPath: [CodingKey]())
-            try route.encode(to: encoder)
-            
-            guard let encodedRoute = try encoder.encodedValue() else {
-                let context = EncodingError.Context(codingPath: [CodingKey](),
-                                                    debugDescription: "route failed to encode itself",
-                                                    underlyingError: nil)
-                throw EncodingError.invalidValue(route, context)
-            }
-            
-            XPCCoderConstants.route.utf8CString.withUnsafeBufferPointer { keyPointer in
-                xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedRoute)
-            }
-        }
+        return encodedValue
     }
 }
 
