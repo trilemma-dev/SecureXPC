@@ -46,8 +46,12 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 			"-infinity": -.infinity,
 			"-greatestFiniteMagnitude": -.greatestFiniteMagnitude,
 			"-123": -123,
+			"-leastNormalMagnitude": -.leastNormalMagnitude,
+			"-leastNonzeroMagnitude": -.leastNonzeroMagnitude,
 			"-0.0": -0.0,
 			"0.0": 0.0,
+			"leastNonzeroMagnitude": -.leastNonzeroMagnitude,
+			"leastNormalMagnitude": -.leastNormalMagnitude,
 			"123": 123,
 			"greatestFiniteMagnitude": .greatestFiniteMagnitude,
 			"infinity": .infinity,
@@ -67,8 +71,12 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 			"-infinity": -.infinity,
 			"-greatestFiniteMagnitude": -.greatestFiniteMagnitude,
 			"-123": -123,
+			"-leastNormalMagnitude": -.leastNormalMagnitude,
+			"-leastNonzeroMagnitude": -.leastNonzeroMagnitude,
 			"-0.0": -0.0,
 			"0.0": 0.0,
+			"leastNonzeroMagnitude": -.leastNonzeroMagnitude,
+			"leastNormalMagnitude": -.leastNormalMagnitude,
 			"123": 123,
 			"greatestFiniteMagnitude": .greatestFiniteMagnitude,
 			"infinity": .infinity,
@@ -87,7 +95,7 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 	
 	func testEncodes_dictOf_Bools_asDictOf_XPCBools() throws {
 		let bools: [String: Bool?] = ["false": false, "true": true, "nil": nil]
-		try assert(bools, encodesEqualTo: createXPCDict(from: bools, using: { xpc_bool_create($0) }))
+		try assert(bools, encodesEqualTo: createXPCDict(from: bools, using: xpc_bool_create))
 	}
 	
 	func testEncodes_dictOf_Strings_asDictOf_XPCStrings() throws {
@@ -132,7 +140,7 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 		// Misc. types
 		
 		let bools: [String: Bool?] = ["false": false, "true": true, "nil": nil]
-		try assert(bools, encodesEqualTo: createXPCDict(from: bools, using: { xpc_bool_create($0) }))
+		try assert(bools, encodesEqualTo: createXPCDict(from: bools, using: xpc_bool_create))
 		
 		let strings: [String: String?] = ["empty": "", "string": "Hello, world!", "nil": nil]
 		try assert(strings, encodesEqualTo: createXPCDict(from: strings, using: { str in
