@@ -145,4 +145,18 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 		
 		try assert(nestedArray, encodesEqualTo: expectedXPCArray)
 	}
+	
+	func testEncodeArrayOfDictionaries() throws {
+		// There's too many possible permutations, but it should be satisfactory to just test one kind of nesting.
+		let arrayOfDicts: [[String: Int64]] = [
+			["a": 1, "b": 2, "c": 3],
+			["e": 4, "f": 5, "g": 6],
+		]
+		
+		let expectedXPCArray = createXPCArray(from: arrayOfDicts, using: { subDict in
+			createXPCDict(from: subDict, using: xpc_int64_create)
+		})
+		
+		try assert(arrayOfDicts, encodesEqualTo: expectedXPCArray)
+	}
 }

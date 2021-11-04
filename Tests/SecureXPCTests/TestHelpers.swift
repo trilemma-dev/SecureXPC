@@ -60,3 +60,23 @@ func createXPCArray<T>(from sourceArray: [T?], using transformIntoXPCObject: (T)
 	
 	return xpcArray
 }
+
+/// Converts the provided `sourceDict` into an XPC dictionary, by transforming its non-nil values by the provided `transformIntoXPCObject` closure,
+/// and replacing `nil` values with the proper XPC null object.
+/// - Parameters:
+///   - sourceDict: The values to transform and pack into the XPC dictionary
+///   - transformIntoXPCObject: The closures used to transform the non-nil source elements into XPC objects
+/// - Returns: an XPC dictionary containing the transformed XPC objects
+func createXPCDict<V>(from sourceDict: [String: V?], using wrapIntoXPCObject: (V) -> xpc_object_t) -> xpc_object_t {
+	let xpcDict = xpc_dictionary_create(nil, nil, 0)
+	
+	for (key, value) in sourceDict {
+		let xpcValue = value.map(wrapIntoXPCObject) ?? xpc_null_create()
+		
+		key.withCString { keyP in
+			xpc_dictionary_set_value(xpcDict, keyP, xpcValue)
+		}
+	}
+	
+	return xpcDict
+}
