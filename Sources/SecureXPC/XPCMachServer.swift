@@ -379,11 +379,11 @@ public class XPCMachServer {
     }
     
     private func handleMessage(connection: xpc_connection_t, message: xpc_object_t, reply: inout xpc_object_t?) throws {
-        let request = try ReceivedRequest(dictionary: message)
+        let request = try Request(dictionary: message)
 
         // If a dictionary reply exists, then the message expects a reply
         if var reply = reply {
-            if try request.containsPayload() {
+            if request.containsPayload {
                 if let handler = self.routesWithMessageWithReply[request.route] {
                     try handler.handle(request: request, reply: &reply)
                     xpc_connection_send_message(connection, reply)
@@ -399,7 +399,7 @@ public class XPCMachServer {
                 }
             }
         } else { // Otherwise the message can't receive a reply
-            if try request.containsPayload() {
+            if request.containsPayload {
                 if let handler = self.routesWithMessageWithoutReply[request.route] {
                     try handler.handle(request: request)
                 } else {
@@ -418,7 +418,7 @@ public class XPCMachServer {
     private func replyWithErrorIfPossible(_ error: Error, connection: xpc_connection_t, reply: inout xpc_object_t?) {
         if var reply = reply {
             do {
-                try SendableResponseWithError(error).encode(&reply)
+                try Response.encodeError(error, intoReply: &reply)
                 xpc_connection_send_message(connection, reply)
             } catch {
                 // If encoding the error fails, then there's no way to proceed
@@ -445,13 +445,13 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReply: XPCHandlerWi
 }
 
 fileprivate protocol XPCHandlerWithMessageWithoutReply {
-    func handle(request: ReceivedRequest) throws -> Void
+    func handle(request: Request) throws -> Void
 }
 
 fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReply<M: Decodable>: XPCHandlerWithMessageWithoutReply {
     let handler: (M) throws -> Void
     
-    func handle(request: ReceivedRequest) throws {
+    func handle(request: Request) throws {
         let decodedMessage = try request.decodePayload(asType: M.self)
         try self.handler(decodedMessage)
     }
@@ -466,20 +466,20 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReply<R: Encodable>: X
     
     func handle(reply: inout xpc_object_t) throws {
         let payload = try self.handler()
-        try SendableResponseWithPayload(payload).encode(&reply)
+        try Response.encodePayload(payload, intoReply: &reply)
     }
 }
 
 fileprivate protocol XPCHandlerWithMessageWithReply {
-    func handle(request: ReceivedRequest, reply: inout xpc_object_t) throws
+    func handle(request: Request, reply: inout xpc_object_t) throws
 }
 
 fileprivate struct ConstrainedXPCHandlerWithMessageWithReply<M: Decodable, R: Encodable>: XPCHandlerWithMessageWithReply {
     let handler: (M) throws -> R
     
-    func handle(request: ReceivedRequest, reply: inout xpc_object_t) throws {
+    func handle(request: Request, reply: inout xpc_object_t) throws {
         let decodedMessage = try request.decodePayload(asType: M.self)
         let payload = try self.handler(decodedMessage)
-        try SendableResponseWithPayload(payload).encode(&reply)
+        try Response.encodePayload(payload, intoReply: &reply)
     }
 }

@@ -7,61 +7,61 @@
 
 import Foundation
 
-private enum RequestKeys {
-    static let route = "__route"
-    static let payload = "__payload"
-}
-
-/// A request sent by the client not containing a payload.
-struct SendableRequest {
-    let route: XPCRoute
+/// A request sent across an XPC connection.
+///
+/// A request always contains a route and optionally contains a payload.
+struct Request {
     
-    func encode() throws -> xpc_object_t {
-        let dictionary = xpc_dictionary_create(nil, nil, 0)
-        let encodedRoute = try XPCEncoder.encode(self.route)
-        RequestKeys.route.utf8CString.withUnsafeBufferPointer { keyPointer in
-            xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedRoute)
-        }
-        
-        return dictionary
+    private enum RequestKeys {
+        static let route: XPCDictionaryKey = strdup("__route")!
+        static let payload: XPCDictionaryKey = strdup("__payload")!
     }
-}
-
-/// A request sent by the client containing a payload.
-struct SendableRequestWithPayload<P: Encodable> {
-    let route: XPCRoute
-    let payload: P
     
-    func encode() throws -> xpc_object_t {
-        let dictionary = xpc_dictionary_create(nil, nil, 0)
-        let encodedRoute = try XPCEncoder.encode(self.route)
-        RequestKeys.route.utf8CString.withUnsafeBufferPointer { keyPointer in
-            xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedRoute)
-        }
-        let encodedPayload = try XPCEncoder.encode(payload)
-        RequestKeys.payload.utf8CString.withUnsafeBufferPointer { keyPointer in
-            xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedPayload)
-        }
-        
-        return dictionary
-    }
-}
-
-/// A representation of a request received by the server.
-struct ReceivedRequest {
+    /// The route represented by this request.
     let route: XPCRoute
-    private let dictionary: xpc_object_t
+    /// Whether this request contains a payload.
+    let containsPayload: Bool
+    /// This request encoded as an XPC dictionary.
+    ///
+    /// If  `containsPayload` is `true` then `decodePayload` can be called to decode it; otherwise calling this function will result an error being thrown.
+    let dictionary: xpc_object_t
     
+    /// Represents a request that's already been encoded into an XPC dictionary.
+    ///
+    /// This initializer is expected to be used by the server when receiving a request which it now needs to decode.
     init(dictionary: xpc_object_t) throws {
         self.dictionary = dictionary
         self.route = try XPCDecoder.decode(XPCRoute.self, from: dictionary, forKey: RequestKeys.route)
+        self.containsPayload = try XPCDecoder.containsKey(RequestKeys.payload, inDictionary: self.dictionary)
     }
     
-    func containsPayload() throws -> Bool {
-        return try XPCDecoder.containsKey(RequestKeys.payload, inDictionary: self.dictionary)
+    /// Represents a request without a payload which has yet to be encoded into an XPC dictionary.
+    ///
+    /// This initializer is expected to be used by the client in order to send a request across the XPC connection.
+    init(route: XPCRoute) throws {
+        self.route = route
+        self.containsPayload = false
+        
+        self.dictionary = xpc_dictionary_create(nil, nil, 0)
+        xpc_dictionary_set_value(self.dictionary, RequestKeys.route, try XPCEncoder.encode(route))
     }
     
-    func decodePayload<T>(asType type: T.Type) throws -> T where T : Decodable {
+    /// Represents a request with a payload which has yet to be encoded into an XPC dictionary.
+    ///
+    /// This initializer is expected to be used by the client in order to send a request across the XPC connection.
+    init<P: Encodable>(route: XPCRoute, payload: P) throws {
+        self.route = route
+        self.containsPayload = true
+        
+        self.dictionary = xpc_dictionary_create(nil, nil, 0)
+        xpc_dictionary_set_value(self.dictionary, RequestKeys.route, try XPCEncoder.encode(self.route))
+        xpc_dictionary_set_value(dictionary, RequestKeys.payload, try XPCEncoder.encode(payload))
+    }
+    
+    /// Decodes the payload as the provided type.
+    ///
+    /// This is expected to be called from the server.
+    func decodePayload<T: Decodable>(asType type: T.Type) throws -> T {
         return try XPCDecoder.decode(type, from: self.dictionary, forKey: RequestKeys.payload)
     }
 }

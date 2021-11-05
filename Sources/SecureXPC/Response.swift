@@ -6,65 +6,61 @@
 //
 
 import Foundation
-import CryptoKit
 
-private enum ResponseKeys {
-    static let error = "__error"
-    static let payload = "__payload"
-}
-
-/// A reply sendable by the server.
-struct SendableResponseWithPayload<P: Encodable> {
-    private let payload: P
+/// A response which is sent to the client for requests which require one.
+///
+/// Due to how the XPC C API works, instances of this struct can only be created to represent an already received reply (which is expected to be done by the client).
+/// The server must instead use the `encodePayload` and `encodedError` static functions.
+struct Response {
     
-    init(_ payload: P) {
-        self.payload = payload
+    private enum ResponseKeys {
+        static let error: XPCDictionaryKey = strdup("__error")!
+        static let payload: XPCDictionaryKey = strdup("__payload")!
     }
     
-    func encode(_ reply: inout xpc_object_t) throws {
-        let encodedPayload = try XPCEncoder.encode(self.payload)
-        ResponseKeys.payload.utf8CString.withUnsafeBufferPointer { keyPointer in
-            xpc_dictionary_set_value(reply, keyPointer.baseAddress!, encodedPayload)
-        }
-    }
-}
-
-/// An error sendable by the server.
-struct SendableResponseWithError {
-    private let error: Error
+    /// The response encoded as an XPC dictionary.
+    let dictionary: xpc_object_t
+    /// Whether this response contains a payload.
+    let containsPayload: Bool
+    /// Whether this response contains an error.
+    let containsError: Bool
     
-    init(_ error: Error) {
-        self.error = error
-    }
-    
-    func encode(_ reply: inout xpc_object_t) throws {
-        let encodedError = try XPCEncoder.encode(String(describing: error))
-        ResponseKeys.payload.utf8CString.withUnsafeBufferPointer { keyPointer in
-            xpc_dictionary_set_value(reply, keyPointer.baseAddress!, encodedError)
-        }
-    }
-}
-
-/// A response containing either an error or a reply received by the client.
-struct ReceivedResponse {
-    private let dictionary: xpc_object_t
-    
-    init(dictionary: xpc_object_t) {
+    /// Represents a reply that's already been encoded into an XPC dictionary.
+    ///
+    /// This initializer is expected to be used by the client when receiving a reply which it now needs to decode.
+    init(dictionary: xpc_object_t) throws {
         self.dictionary = dictionary
+        self.containsPayload = try XPCDecoder.containsKey(ResponseKeys.payload, inDictionary: dictionary)
+        self.containsError = try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: dictionary)
     }
     
-    func containsPayload() throws -> Bool {
-        return try XPCDecoder.containsKey(ResponseKeys.payload, inDictionary: self.dictionary)
+    /// Create a response by directly encloding the payload into the provided XPC reply dictionary.
+    ///
+    /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
+    /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
+    static func encodePayload<P: Encodable>(_ payload: P, intoReply reply: inout xpc_object_t) throws {
+        xpc_dictionary_set_value(reply, ResponseKeys.payload, try XPCEncoder.encode(payload))
     }
     
+    /// Create a response by directly encloding the error into the provided XPC reply dictionary.
+    ///
+    /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
+    /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
+    static func encodeError(_ error: Error, intoReply reply: inout xpc_object_t) throws {
+        let encodedError = try XPCEncoder.encode(String(describing: error))
+        xpc_dictionary_set_value(reply, ResponseKeys.payload, encodedError)
+    }
+    
+    /// Decodes the reply as the provided type.
+    ///
+    /// This is expected to be called from the client.
     func decodePayload<T>(asType type: T.Type) throws -> T where T : Decodable {
         return try XPCDecoder.decode(type, from: self.dictionary, forKey: ResponseKeys.payload)
     }
     
-    func containsError() throws -> Bool {
-        return try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: self.dictionary)
-    }
-    
+    /// Decodes the reply as an ``XPCError/remote(_:)`` instance which textually describes the error which occurred in the server.
+    ///
+    /// This is expected to be called from the client.
     func decodeError() throws -> XPCError {
         let errorMessage = try XPCDecoder.decode(String.self, from: self.dictionary, forKey: ResponseKeys.error)
             

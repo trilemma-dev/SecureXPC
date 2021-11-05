@@ -88,7 +88,7 @@ public class XPCMachClient {
     ///   - route: The server route which will handle this.
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
-        let encoded = try SendableRequest(route: route.route).encode()
+        let encoded = try Request(route: route.route).dictionary
         xpc_connection_send_message(createConnection(), encoded)
     }
     
@@ -99,7 +99,7 @@ public class XPCMachClient {
     ///    - route: The server route which should handle this message.
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
-        let encoded = try SendableRequestWithPayload(route: route.route, payload: message).encode()
+        let encoded = try Request(route: route.route, payload: message).dictionary
         xpc_connection_send_message(createConnection(), encoded)
     }
     
@@ -111,7 +111,7 @@ public class XPCMachClient {
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encoded = try SendableRequest(route: route.route).encode()
+        let encoded = try Request(route: route.route).dictionary
         sendWithReply(encoded: encoded, withReply: reply)
     }
     
@@ -125,7 +125,7 @@ public class XPCMachClient {
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encoded = try SendableRequestWithPayload(route: route.route, payload: message).encode()
+        let encoded = try Request(route: route.route, payload: message).dictionary
         sendWithReply(encoded: encoded, withReply: reply)
     }
     
@@ -136,10 +136,10 @@ public class XPCMachClient {
             let result: Result<R, XPCError>
             if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
                 do {
-                    let response = ReceivedResponse(dictionary: xpcResponse)
-                    if try response.containsPayload() {
+                    let response = try Response(dictionary: xpcResponse)
+                    if response.containsPayload {
                         result = Result.success(try response.decodePayload(asType: R.self))
-                    } else if try response.containsError() {
+                    } else if response.containsError {
                         result = Result.failure(try response.decodeError())
                     } else {
                         result = Result.failure(.unknown)

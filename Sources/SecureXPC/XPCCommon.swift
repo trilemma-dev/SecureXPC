@@ -52,11 +52,10 @@ public enum XPCError: Error {
     case unknown
 }
 
-enum XPCCoderConstants {
-    static let payload = "__payload"
-    static let route = "__route"
-    static let error = "__error"
-}
+/// A key into the XPC dictionary.
+///
+/// Instances of this type are part of the "packaging" format used by `Request` and `Response`.
+typealias XPCDictionaryKey = UnsafeMutablePointer<CChar>
 
 /// Consistent implementation of routes that can be sent over XPC and used as a dictionary key
 struct XPCRoute: Codable, Hashable {

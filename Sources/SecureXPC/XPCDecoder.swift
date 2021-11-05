@@ -17,14 +17,10 @@ enum XPCDecoder {
     ///   - dictionary: The XPC dictionary to check for the XPC key in.
     /// - Throws: If the value provided was not an XPC dictionary.
     /// - Returns: Whether the key is contained in the provided dictionary.
-    static func containsKey(_ key: String, inDictionary dictionary: xpc_object_t) throws -> Bool {
-        if xpc_get_type(dictionary) == XPC_TYPE_DICTIONARY {
-            return key.utf8CString.withUnsafeBufferPointer { stringPointer in
-                return xpc_dictionary_get_value(dictionary, stringPointer.baseAddress!) != nil
-            }
-        } else {
-            throw notXPCDictionary()
-        }
+    static func containsKey(_ key: XPCDictionaryKey, inDictionary dictionary: xpc_object_t) throws -> Bool {
+        try checkXPCDictionary(object: dictionary)
+        
+        return xpc_dictionary_get_value(dictionary, key) != nil
     }
     
     /// Decodes the value corresponding to the key for the XPC dictionary.
@@ -33,36 +29,32 @@ enum XPCDecoder {
     ///  - _: The type to decode the XPC representation to.
     ///  - from: The XPC dictionary containing the value to decode.
     ///  - forKey: The key of the value in the XPC dictionary.
-    /// - Throws: If the `key` isn't present or the decoding fails.
+    /// - Throws: If `from` isn't a dictionary, the `key` isn't present in the dictionary, or the decoding fails.
     /// - Returns: An instance of the provided type corresponding to the contents of the value for the provided key.
     static func decode<T>(_ type: T.Type,
                           from dictionary: xpc_object_t,
-                          forKey key: String) throws -> T where T : Decodable {
-        // If value was a top-level object encoded by XPCEncoder, then the outermost object will be an
-        // XPC_TYPE_DICTIONARY and the data we want to decode should have the specified key in that dictionary
-        if xpc_get_type(dictionary) == XPC_TYPE_DICTIONARY {
-            return try key.utf8CString.withUnsafeBufferPointer { stringPointer in
-                if let value = xpc_dictionary_get_value(dictionary, stringPointer.baseAddress!) {
-                    return try T(from: XPCDecoderImpl(value: value, codingPath: [CodingKey]()))
-                } else {
-                    // Ideally this would throw DecodingError.keyNotFound(...) but that requires providing a CodingKey
-                    // and there isn't one yet
-                    let context = DecodingError.Context(codingPath: [CodingKey](),
-                                                        debugDescription: "Key not present: \(key)",
-                                                        underlyingError: nil)
-                    throw DecodingError.valueNotFound(type, context)
-                }
-           }
+                          forKey key: XPCDictionaryKey) throws -> T where T : Decodable {
+        try checkXPCDictionary(object: dictionary)
+        
+        if let value = xpc_dictionary_get_value(dictionary, key) {
+            return try T(from: XPCDecoderImpl(value: value, codingPath: [CodingKey]()))
         } else {
-            throw notXPCDictionary()
+            // Ideally this would throw DecodingError.keyNotFound(...) but that requires providing a CodingKey
+            // and there isn't one yet
+            let context = DecodingError.Context(codingPath: [CodingKey](),
+                                                debugDescription: "Key not present: \(key)",
+                                                underlyingError: nil)
+            throw DecodingError.valueNotFound(type, context)
         }
     }
     
-    private static func notXPCDictionary() -> DecodingError {
-        let context = DecodingError.Context(codingPath: [CodingKey](),
-                                            debugDescription: "Value must be an XPC dictionary, but was not",
-                                            underlyingError: nil)
-        return DecodingError.typeMismatch(Dictionary<AnyHashable, Any>.self, context)
+    private static func checkXPCDictionary(object: xpc_object_t) throws {
+        if xpc_get_type(object) != XPC_TYPE_DICTIONARY {
+            let context = DecodingError.Context(codingPath: [CodingKey](),
+                                                debugDescription: "Value must be an XPC dictionary, but was not",
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(Dictionary<AnyHashable, Any>.self, context)
+        }
     }
 }
 
