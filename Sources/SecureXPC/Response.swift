@@ -1,6 +1,6 @@
 //
 //  Response.swift
-//  
+//  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-11-05
 //
@@ -34,7 +34,7 @@ struct Response {
         self.containsError = try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: dictionary)
     }
     
-    /// Create a response by directly encloding the payload into the provided XPC reply dictionary.
+    /// Create a response by directly encoding the payload into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
     /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
@@ -42,7 +42,7 @@ struct Response {
         xpc_dictionary_set_value(reply, ResponseKeys.payload, try XPCEncoder.encode(payload))
     }
     
-    /// Create a response by directly encloding the error into the provided XPC reply dictionary.
+    /// Create a response by directly encoding the error into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
     /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.

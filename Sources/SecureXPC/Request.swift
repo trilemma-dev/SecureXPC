@@ -1,6 +1,6 @@
 //
 //  Request.swift
-//  
+//  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-11-05
 //
