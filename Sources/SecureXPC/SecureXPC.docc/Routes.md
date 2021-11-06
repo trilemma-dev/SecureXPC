@@ -39,7 +39,7 @@ distinct because the penultimate one does not have a reply type while the last o
 To ensure consistency, ideally routes are only defined once in code that is shared by both your client and server.
 
 #### Updating Routes
-Take care when updating existing routes because over time you may end up with an older versions of your server installed
+Take care when updating existing routes because over time you may end up with an older version of your server installed
 on a computer with a newer client.
 
 #### Registering Routes
