@@ -2,7 +2,7 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_ArrayDecodingTests: XCTestCase {
-	// MARK: Signed Integers
+	// MARK: Integers
 
 	func testDecodes_arrayOf_SignedIntegers_asArrayOf_XPCInts() throws {
 		let   ints: [Int  ] = [.min, -123, 0, 123, .max]
