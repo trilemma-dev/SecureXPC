@@ -14,8 +14,8 @@ import Foundation
 struct Response {
     
     private enum ResponseKeys {
-        static let error: XPCDictionaryKey = strdup("__error")!
-        static let payload: XPCDictionaryKey = strdup("__payload")!
+        static let error: XPCDictionaryKey = const("__error")
+        static let payload: XPCDictionaryKey = const("__payload")
     }
     
     /// The response encoded as an XPC dictionary.
