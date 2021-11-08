@@ -1,5 +1,5 @@
 //
-//  XPCMachServer.swift
+//  XPCServer.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
@@ -75,7 +75,7 @@ import Foundation
 ///
 /// ### Error Handling
 /// - ``errorHandler``
-public class XPCMachServer {
+public class XPCBaseServer {
     
     /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
