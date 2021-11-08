@@ -289,14 +289,17 @@ public class XPCMachServer {
                     self.errorHandler?(error)
                     self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
                 } catch let error as DecodingError {
-                    self.errorHandler?(XPCError.decodingError(error))
-                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
+                    let wrappedError = XPCError.decodingError(String(describing: error))
+                    self.errorHandler?(wrappedError)
+                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
                 }  catch let error as EncodingError {
-                    self.errorHandler?(XPCError.encodingError(error))
-                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
+                    let wrappedError = XPCError.encodingError(String(describing: error))
+                    self.errorHandler?(wrappedError)
+                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
                 } catch {
-                    self.errorHandler?(XPCError.other(error))
-                    self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
+                    let wrappedError = XPCError.other(String(describing: error))
+                    self.errorHandler?(wrappedError)
+                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
                 }
             } else {
                 self.errorHandler?(XPCError.insecure)
@@ -415,7 +418,7 @@ public class XPCMachServer {
         }
     }
     
-    private func replyWithErrorIfPossible(_ error: Error, connection: xpc_connection_t, reply: inout xpc_object_t?) {
+    private func replyWithErrorIfPossible(_ error: XPCError, connection: xpc_connection_t, reply: inout xpc_object_t?) {
         if var reply = reply {
             do {
                 try Response.encodeError(error, intoReply: &reply)
