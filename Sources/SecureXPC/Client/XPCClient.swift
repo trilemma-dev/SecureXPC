@@ -1,5 +1,5 @@
 //
-//  XPCMachClient.swift
+//  XPCClient.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
@@ -62,7 +62,7 @@ import Foundation
 /// - ``sendMessage(_:route:withReply:)``
 /// ### Receiving Replies
 /// - ``XPCReplyHandler``
-public class XPCMachClient {
+public class XPCClient {
     
     // This client implementation intentionally does not store a reference to the xpc_connection_t as it can become
     // invalid for numerous reasons. Since it's expected relatively few messages will be sent and the lowest possible
