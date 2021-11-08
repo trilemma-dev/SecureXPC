@@ -63,19 +63,22 @@ import Foundation
 /// ### Receiving Replies
 /// - ``XPCReplyHandler``
 public class XPCClient {
-    
-    // This client implementation intentionally does not store a reference to the xpc_connection_t as it can become
-    // invalid for numerous reasons. Since it's expected relatively few messages will be sent and the lowest possible
-    // latency isn't needed, it's simpler to always create the connection on demand each time a message is to be sent.
-    
-    private let machServiceName: String
+	// MARK: Public factories
+
+	public static func forMachService(named machServiceName: String) -> XPCClient {
+		XPCMachClient(serviceName: machServiceName)
+	}
+
+	// MARK: Implementation
+
+    internal let serviceName: String
     
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
     /// - Parameters:
     ///   - machServiceName: The name of the XPC mach service; no validation is performed on this.
-    public init(machServiceName: String) {
-        self.machServiceName = machServiceName
+    internal init(serviceName: String) {
+        self.serviceName = serviceName
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
@@ -160,16 +163,11 @@ public class XPCClient {
             reply(result)
         })
     }
-    
+
+	// MARK: Abstract methods
+	
     /// Creates and returns connection for the mach service stored by this instance of the client.
-    private func createConnection() -> xpc_connection_t {
-        let connection = xpc_connection_create_mach_service(self.machServiceName, nil, 0)
-        xpc_connection_set_event_handler(connection, { (event: xpc_object_t) in
-            // A block *must* be set as the handler, even though this block does nothing.
-            // If it were not set, a crash would occur upon calling xpc_connection_resume.
-        })
-        xpc_connection_resume(connection)
-        
-        return connection
+    internal func createConnection() -> xpc_connection_t {
+        fatalError("Abstract Method")
     }
 }
