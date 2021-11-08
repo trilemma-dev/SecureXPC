@@ -131,6 +131,10 @@ public class XPCServer {
 		try XPCMachServer._forThisBlessedHelperTool()
 	}
 
+	public static func forThisXPCService() -> XPCServer {
+		XPCServiceServer.service
+	}
+
 	// MARK: Implementation
 
     /// If set, errors encountered will be sent to this handler.

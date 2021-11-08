@@ -69,6 +69,10 @@ public class XPCClient {
 		XPCMachClient(serviceName: machServiceName)
 	}
 
+	public static func forXPCService(named xpcServiceName: String) -> XPCClient {
+		XPCServiceClient(serviceName: xpcServiceName)
+	}
+
 	// MARK: Implementation
 
     internal let serviceName: String
