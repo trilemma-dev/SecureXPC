@@ -76,7 +76,63 @@ import Foundation
 /// ### Error Handling
 /// - ``errorHandler``
 public class XPCServer {
-    
+
+	// MARK: Public factories
+
+	/// Creates a server that accepts requests from clients which meet the security requirements.
+	///
+	/// Because many processes on the system can talk to an XPC Mach Service, when creating a server it is required that you specifiy the security requirements
+	/// of any connecting clients:
+	/// ```swift
+	/// let reqString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.OU] = "4L0ZG128MM" """
+	/// var requirement: SecRequirement?
+	/// if SecRequirementCreateWithString(reqString as CFString,
+	///                                   SecCSFlags(),
+	///                                   &requirement) == errSecSuccess,
+	///   let requirement = requirement {
+	///    let server = XPCMachServer(machServiceName: "com.example.service",
+	///                               clientRequirements: [requirement])
+	///
+	///    <# configure and start server #>
+	/// }
+	/// ```
+	///
+	/// > Important: No requests will be processed until ``start()`` is called.
+	///
+	/// - Parameters:
+	///   - machServiceName: The name of the mach service this server should bind to. This name must be present in this program's launchd property list's
+	///                      `MachServices` entry.
+	///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these security requirements.
+	public static func forMachService(
+		named machServiceName: String,
+		clientRequirements: [SecRequirement]
+	) -> XPCServer {
+		XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
+	}
+
+	/// Initializes a server for a helper tool that meets
+	/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements.
+	///
+	/// To successfully call this function the following requirements must be met:
+	///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
+	///   - The info property list embedded in this helper tool must have at least one element in its
+	///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
+	///   array
+	///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
+	///     - To be valid, it must be creatable by
+	///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
+	///
+	/// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
+	///
+	/// > Important: No requests will be processed until ``start()`` is called.
+	///
+	/// - Returns: A server instance initialized with the embedded property list entries.
+	public static func forThisBlessedHelperTool() throws -> XPCServer {
+		try XPCMachServer._forThisBlessedHelperTool()
+	}
+
+	// MARK: Implementation
+
     /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
     
