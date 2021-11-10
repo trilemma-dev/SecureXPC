@@ -13,8 +13,8 @@ import Foundation
 struct Request {
     
     private enum RequestKeys {
-        static let route: XPCDictionaryKey = strdup("__route")!
-        static let payload: XPCDictionaryKey = strdup("__payload")!
+        static let route: XPCDictionaryKey = const("__route")
+        static let payload: XPCDictionaryKey = const("__payload")
     }
     
     /// The route represented by this request.
