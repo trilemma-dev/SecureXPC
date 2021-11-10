@@ -615,6 +615,11 @@ private func stringTransform(codingPath: [CodingKey]) -> ((xpc_object_t) throws 
     }
 }
 
-private let floatTransform = { object in
-    return Float(xpc_double_get_value(object))
+private let floatTransform = { (object: xpc_object_t) -> Float in
+    // Double.signalingNaN is not converted to Float.signalingNaN when calling Float(...) with a Double so this needs
+    // to be done manually
+    let doubleValue = xpc_double_get_value(object)
+    let floatValue = doubleValue.isSignalingNaN ? Float.signalingNaN : Float(doubleValue)
+    
+    return floatValue
 }

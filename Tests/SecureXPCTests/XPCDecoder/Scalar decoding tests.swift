@@ -104,11 +104,11 @@ final class XPCDecoder_ScalarDecodingTests: XCTestCase {
 		XCTAssert(result.isNaN)
 	}
 
-	func testDecodes_XPCDouble_SignalingNaN_as_Float_QuietNaN() throws {
-		let result = try decode(xpc_double_create(Double(Float.signalingNaN))) as Float
-		XCTAssert(result.isNaN)
-		// IDK if this is intended or acceptable, but `Double(Float.signalingNaN).isSignalingNaN` returns `false`
-		XCTAssertFalse(result.isSignalingNaN)
+	func testDecodes_XPCDouble_SignalingNaN_as_Float_SignalingNaN() throws {
+        // Need to use Double.signalingNan directly as `Double(Float.signalingNaN).isSignalingNaN` returns `false`
+        let result = try decode(xpc_double_create(Double.signalingNaN)) as Float
+        XCTAssert(result.isNaN)
+        XCTAssertTrue(result.isSignalingNaN)
 	}
 
 	func testDecodes_XPCDouble_as_Double() throws {

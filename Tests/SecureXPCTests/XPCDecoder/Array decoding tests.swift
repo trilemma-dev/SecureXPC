@@ -37,7 +37,9 @@ final class XPCDecoder_ArrayDecodingTests: XCTestCase {
 
 	func testDecodes_arrayOf_Floats_asArrayOf_XPCDoubles() throws {
 		func floatToXPCDouble(_ input: Float) -> xpc_object_t {
-			xpc_double_create(Double(input))
+            // Float.signalingNaN is not converted to Double.signalingNaN when calling Double(...) with a Float so this
+            // needs to be done manually
+            xpc_double_create(input.isSignalingNaN ? Double.signalingNaN : Double(input))
 		}
 
 		let floats: [Float] = [
@@ -63,6 +65,7 @@ final class XPCDecoder_ArrayDecodingTests: XCTestCase {
 		XCTAssertEqual(nans.count, 2)
 		XCTAssert(nans[0].isNaN)
 		XCTAssert(nans[1].isNaN)
+        XCTAssert(nans[1].isSignalingNaN)
 	}
 
 	func testDecodes_arrayOf_Doubles_asArrayOf_XPCDoubles() throws {
@@ -88,6 +91,7 @@ final class XPCDecoder_ArrayDecodingTests: XCTestCase {
 		XCTAssertEqual(nans.count, 2)
 		XCTAssert(nans[0].isNaN)
 		XCTAssert(nans[1].isNaN)
+        XCTAssert(nans[1].isSignalingNaN)
 	}
 
 	// MARK: Misc. types

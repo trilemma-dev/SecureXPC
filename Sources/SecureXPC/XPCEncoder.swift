@@ -121,7 +121,10 @@ fileprivate class XPCSingleValueEncodingContainer: SingleValueEncodingContainer,
     }
     
     func encode(_ value: Float) {
-        self.setValue(xpc_double_create(Double(value)))
+        // Float.signalingNaN is not converted to Double.signalingNaN when calling Double(...) with a Float so this
+        // needs to be done manually
+        let doubleValue = value.isSignalingNaN ? Double.signalingNaN : Double(value)
+        self.setValue(xpc_double_create(doubleValue))
     }
     
     func encode(_ value: Int) {
@@ -230,7 +233,10 @@ fileprivate class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCCon
     }
     
     func encode(_ value: Float) {
-        self.append(xpc_double_create(Double(value)))
+        // Float.signalingNaN is not converted to Double.signalingNaN when calling Double(...) with a Float so this
+        // needs to be done manually
+        let doubleValue = value.isSignalingNaN ? Double.signalingNaN : Double(value)
+        self.append(xpc_double_create(doubleValue))
     }
     
     func encode(_ value: Int) {
@@ -362,7 +368,10 @@ fileprivate class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, 
     }
     
     func encode(_ value: Float, forKey key: K) throws {
-        self.setValue(xpc_double_create(Double(value)), forKey: key)
+        // Float.signalingNaN is not converted to Double.signalingNaN when calling Double(...) with a Float so this
+        // needs to be done manually
+        let doubleValue = value.isSignalingNaN ? Double.signalingNaN : Double(value)
+        self.setValue(xpc_double_create(doubleValue), forKey: key)
     }
     
     func encode(_ value: Int, forKey key: K) throws {

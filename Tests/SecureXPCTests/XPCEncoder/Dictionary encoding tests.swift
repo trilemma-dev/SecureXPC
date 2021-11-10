@@ -1,5 +1,5 @@
 //
-//  Dictinary encoding tests.swift
+//  Dictionary encoding tests.swift
 //
 //
 //  Created by Alexander Momchilov on 2021-11-03.
@@ -64,6 +64,7 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 		XCTAssertEqual(xpc_dictionary_get_count(nans), 2)
 		XCTAssert(xpc_dictionary_get_double(nans, "nan").isNaN)
 		XCTAssert(xpc_dictionary_get_double(nans, "signalingNaN").isNaN)
+        XCTAssert(xpc_dictionary_get_double(nans, "signalingNaN").isSignalingNaN)
 	}
 	
 	func testEncodes_dictOf_Doubles_asDictOf_XPCDoubles() throws {
@@ -89,6 +90,7 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 		XCTAssertEqual(xpc_dictionary_get_count(nans), 2)
 		XCTAssert(xpc_dictionary_get_double(nans, "nan").isNaN)
 		XCTAssert(xpc_dictionary_get_double(nans, "signalingNaN").isNaN)
+        XCTAssert(xpc_dictionary_get_double(nans, "signalingNaN").isSignalingNaN)
 	}
 	
 	// MARK: Misc. types

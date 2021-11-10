@@ -57,6 +57,7 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 		XCTAssertEqual(xpc_array_get_count(nans), 2)
 		XCTAssert(xpc_array_get_double(nans, 0).isNaN)
 		XCTAssert(xpc_array_get_double(nans, 1).isNaN)
+        XCTAssert(xpc_array_get_double(nans, 1).isSignalingNaN)
 	}
 	
 	func testEncodes_arrayOf_Doubles_asArrayOf_XPCDoubles() throws {
@@ -82,6 +83,7 @@ final class XPCEncoder_ArrayEncodingTests: XCTestCase {
 		XCTAssertEqual(xpc_array_get_count(nans), 2)
 		XCTAssert(xpc_array_get_double(nans, 0).isNaN)
 		XCTAssert(xpc_array_get_double(nans, 1).isNaN)
+        XCTAssert(xpc_array_get_double(nans, 1).isSignalingNaN)
 	}
 	
 	// MARK: Misc. types

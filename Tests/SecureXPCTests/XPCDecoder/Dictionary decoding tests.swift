@@ -1,5 +1,5 @@
 //
-//  Dictinary encoding tests.swift
+//  Dictionary decoding tests.swift
 //
 //
 //  Created by Alexander Momchilov on 2021-11-03.
@@ -44,7 +44,9 @@ final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
 	
 	func testDecodes_dictOf_Floats_asDictOf_XPCDoubles() throws {
 		func floatToXPCDouble(_ input: Float) -> xpc_object_t {
-			xpc_double_create(Double(input))
+            // Float.signalingNaN is not converted to Double.signalingNaN when calling Double(...) with a Float so this
+            // needs to be done manually
+            xpc_double_create(input.isSignalingNaN ? Double.signalingNaN : Double(input))
 		}
 
 		let dictOfFloats: [String: Float] = [
@@ -72,6 +74,7 @@ final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
 		XCTAssertEqual(nans.count, 2)
 		XCTAssert(nans["nan"]!.isNaN)
 		XCTAssert(nans["signalingNaN"]!.isNaN)
+        XCTAssert(nans["signalingNaN"]!.isSignalingNaN)
 	}
 
 	func testDecodes_dictOf_Doubles_asDictOf_XPCDoubles() throws {
@@ -100,6 +103,7 @@ final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
 		XCTAssertEqual(nans.count, 2)
 		XCTAssert(nans["nan"]!.isNaN)
 		XCTAssert(nans["signalingNaN"]!.isNaN)
+        XCTAssert(nans["signalingNaN"]!.isSignalingNaN)
 	}
 
 	// MARK: Misc. types
