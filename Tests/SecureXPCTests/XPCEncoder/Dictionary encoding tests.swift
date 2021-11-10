@@ -9,7 +9,7 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
-	// MARK: Signed Integers
+	// MARK: Integers
 	
 	func testEncodes_dictOf_SignedIntegers_asDictOf_XPCInts() throws {
 		let dictOfInt:   [String: Int  ] = ["int"  : 123]

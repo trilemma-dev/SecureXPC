@@ -9,6 +9,7 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
+
 	// MARK: Signed Integers
 	
 	func testDecodes_dictOf_SignedIntegers_asDictOf_XPCInts() throws {

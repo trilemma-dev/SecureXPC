@@ -2,6 +2,7 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_ArrayDecodingTests: XCTestCase {
+
 	// MARK: Signed Integers
 
 	func testDecodes_arrayOf_SignedIntegers_asArrayOf_XPCInts() throws {
