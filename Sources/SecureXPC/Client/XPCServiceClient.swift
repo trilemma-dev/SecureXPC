@@ -8,7 +8,7 @@
 import Foundation
 
 internal class XPCServiceClient: XPCClient {
-	/// Creates and returns connection for the mach service stored by this instance of the client.
+	/// Creates and returns a connection for the XPC service represented by this client.
 	///
 	/// - Note: This client implementation intentionally does not store a reference to the ``xpc_connection_t`` as it can become
 	/// invalid for numerous reasons. Since it's expected relatively few messages will be sent and the lowest possible

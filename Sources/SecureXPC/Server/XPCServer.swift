@@ -7,28 +7,32 @@
 
 import Foundation
 
-/// An XPC Mach Services server to receive calls from and send responses to ``XPCMachClient``.
+/// An XPC server to receive calls from and send responses to an ``XPCClient``.
 ///
 /// ### Creating a Server
 /// If the program creating this server is a helper tool which meets
 /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) requirements then in most
 /// cases creating a server is as easy as
 /// ```swift
-/// let server = try XPCMachServer.forBlessedHelperTool()
+/// let server = try XPCServer.forThisBlessedHelperTool()
 /// ```
-/// See ``forBlessedHelperTool()`` for the exact requirements which need to be met.
+/// See ``XPCServer/forThisBlessedHelperTool()`` for the exact requirements which need to be met.
 ///
-/// **Other Cases**
+/// #### Other Mach Services
 ///
 /// Otherwise you'll need to manually initialize a server by specifying the name of the XPC Mach Service and providing the security requirements for connecting
-/// clients. See ``init(machServiceName:clientRequirements:)`` for an example and details.
+/// clients. See ``forMachService(named:clientRequirements:)`` for an example and details.
 ///
 /// **Requirement Checking**
 ///
 /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
 /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used; if for some reason the function is unavailable
-/// then no messages will be accepted. When messages are not accepted, if the ``XPCMachServer/errorHandler`` is set then it is called
+/// then no messages will be accepted. When messages are not accepted, if the ``XPCServer/errorHandler`` is set then it is called
 /// with ``XPCError/insecure``.
+///
+/// #### XPC Services
+///
+/// TODO
 ///
 /// ### Registering & Handling Routes
 /// Once a server instance has been created, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
@@ -61,14 +65,15 @@ import Foundation
 ///
 /// ## Topics
 /// ### Creating a Server
-/// - ``forBlessedHelperTool()``
-/// - ``init(machServiceName:clientRequirements:)``
+/// - ``forThisBlessedHelperTool()``
+/// - ``forMachService(named:clientRequirements:)``
+/// - ``forThisXPCService()``
 ///
 /// ### Registering Routes
-/// - ``registerRoute(_:handler:)-8ydqa``
-/// - ``registerRoute(_:handler:)-76t5b``
-/// - ``registerRoute(_:handler:)-39dgn``
-/// - ``registerRoute(_:handler:)-1rnkw``
+/// - ``registerRoute(_:handler:)-1jw9d``
+/// - ``registerRoute(_:handler:)-4fxv0``
+/// - ``registerRoute(_:handler:)-4ttqe``
+/// - ``registerRoute(_:handler:)-9a0x9``
 ///
 /// ### Starting a Server
 /// - ``start()``

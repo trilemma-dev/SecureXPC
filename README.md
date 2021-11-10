@@ -38,7 +38,7 @@ private func bedazzle(message: String) throws -> Bool {
 
 If this program is a helper tool installed by `SMJobBless`, then in many cases it can be initialized automatically:
 ```swift
-let server = XPCMachServer.forBlessedHelperTool()
+let server = XPCMachServer.forThisBlessedHelperTool()
 ```
 
 ## Client
