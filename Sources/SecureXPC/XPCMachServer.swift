@@ -31,8 +31,8 @@ import Foundation
 /// with ``XPCError/insecure``.
 ///
 /// ### Registering & Handling Routes
-/// Once a server instance has been created, one or more routes should be registered with it. This is done by calling one
-/// of the `registerRoute` functions and providing a route and a compatible closure or function. For example:
+/// Once a server instance has been created, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
+/// providing a route and a compatible closure or function. For example:
 /// ```swift
 ///     ...
 ///     let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
@@ -46,9 +46,9 @@ import Foundation
 /// }
 /// ```
 ///
-/// If the function or closure provided as the `handler` parameter throws an error and the route expects a return, then
-/// ``XPCError/remote(_:)`` will be returned to the client with the `String` associated type describing the thrown error. It
-/// is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
+/// If the function or closure provided as the `handler` parameter throws an error and the route expects a return, then ``XPCError/other(_:)`` will be
+/// returned to the client with the `String` associated type describing the thrown error. It is intentional the thrown error is not marshalled as that type may not be
+/// `Codable` and may not exist in the client.
 ///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests:
@@ -56,9 +56,8 @@ import Foundation
 /// server.start()
 /// ```
 ///
-/// This function replicates default [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main)
-/// behavior by calling [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
-/// never returning.
+/// This function replicates default [`xpc_main()`](https://developer.apple.com/documentation/xpc/1505740-xpc_main) behavior by calling
+/// [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and never returning.
 ///
 /// ## Topics
 /// ### Creating a Server
