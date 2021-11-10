@@ -15,9 +15,7 @@ func encode<T: Encodable>(_ input: T) throws -> xpc_object_t {
 }
 
 func decode<T: Decodable>(_ input: xpc_object_t) throws -> T {
-	let dummyDict = xpc_dictionary_create(nil, nil, 0)
-	xpc_dictionary_set_value(dummyDict, "key", input)
-	return try XPCDecoder.decode(T.self, from: dummyDict, forKey: "key")
+	try XPCDecoder.decode(T.self, object: input)
 }
 
 // MARK: Assertions
@@ -34,7 +32,7 @@ func assert<T: Encodable>(
 	assertEqual(actual, expected, file: file, line: line)
 }
 
-/// Assert that the provided `input`, when decoded using an XPCDecoder, is equal to the `expected` XPC Object
+/// Assert that the provided `input`, when decoded using an XPCDecoder, is equal to the `expected` Swift value
 func assert<T: Decodable & Equatable>(
 	_ input: xpc_object_t,
 	decodesEqualTo expected: T,

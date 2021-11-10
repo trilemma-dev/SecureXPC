@@ -9,7 +9,8 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
-	// MARK: Integers
+
+	// MARK: Signed Integers
 	
 	func testDecodes_dictOf_SignedIntegers_asDictOf_XPCInts() throws {
 		let dictOfInt:   [String: Int  ] = ["int"  : 123]
@@ -104,7 +105,7 @@ final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
 	// MARK: Misc. types
 
 	func testDecodes_dictOf_Bools_asDictOf_XPCBools() throws {
-		let bools: [String: Bool?] = ["false": false, "true": true]
+		let bools: [String: Bool] = ["false": false, "true": true]
 		try assert(createXPCDict(from: bools, using: xpc_bool_create), decodesEqualTo: bools)
 	}
 
@@ -161,31 +162,6 @@ final class XPCDecoder_DictionaryEncodingTests: XCTestCase {
 	}
 
 	// MARK: Dictionaries of aggregates
-
-//	func testDecode_arrayOf_Arrays() throws {
-//		// There's too many possible permutations, but it should be satisfactory to just test one kind of nesting.
-//		let expectedResultNestedArray: [[Int64]] = [[1, 2], [3, 4]]
-//
-//		let inputXPCNestedArray = createXPCArray(from: expectedResultNestedArray, using: { row in
-//			createXPCArray(from: row, using: xpc_int64_create)
-//		})
-//
-//		try assert(inputXPCNestedArray, decodesEqualTo: expectedResultNestedArray)
-//	}
-//
-//	func testDecodeArrayOfDictionaries() throws {
-//		// There's too many possible permutations, but it should be satisfactory to just test one kind of nesting.
-//		let expectedResultArrayOfDicts: [[String: Int64]] = [
-//			["a": 1, "b": 2, "c": 3],
-//			["e": 4, "f": 5, "g": 6],
-//		]
-//
-//		let inputXPCArrayOfDicts = createXPCArray(from: expectedResultArrayOfDicts, using: { subDict in
-//			createXPCDict(from: subDict, using: xpc_int64_create)
-//		})
-//
-//		try assert(inputXPCArrayOfDicts, decodesEqualTo: expectedResultArrayOfDicts)
-//	}
 
 	func testDecode_dictOf_Arrays() throws {
 		// There's too many possible permutations, but it should be satisfactory to just test one kind of nesting.

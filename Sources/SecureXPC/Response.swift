@@ -46,9 +46,9 @@ struct Response {
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
     /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
-    static func encodeError(_ error: Error, intoReply reply: inout xpc_object_t) throws {
-        let encodedError = try XPCEncoder.encode(String(describing: error))
-        xpc_dictionary_set_value(reply, ResponseKeys.payload, encodedError)
+    static func encodeError(_ error: XPCError, intoReply reply: inout xpc_object_t) throws {
+        let encodedError = try XPCEncoder.encode(error)
+        xpc_dictionary_set_value(reply, ResponseKeys.error, encodedError)
     }
     
     /// Decodes the reply as the provided type.
@@ -58,12 +58,10 @@ struct Response {
         return try XPCDecoder.decode(type, from: self.dictionary, forKey: ResponseKeys.payload)
     }
     
-    /// Decodes the reply as an ``XPCError/remote(_:)`` instance which textually describes the error which occurred in the server.
+    /// Decodes the reply as an ``XPCError``.
     ///
     /// This is expected to be called from the client.
     func decodeError() throws -> XPCError {
-        let errorMessage = try XPCDecoder.decode(String.self, from: self.dictionary, forKey: ResponseKeys.error)
-            
-        return XPCError.remote(errorMessage)
+        return try XPCDecoder.decode(XPCError.self, from: self.dictionary, forKey: ResponseKeys.error)
     }
 }

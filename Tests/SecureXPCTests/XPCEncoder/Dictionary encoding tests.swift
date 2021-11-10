@@ -94,7 +94,7 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 	// MARK: Misc. types
 	
 	func testEncodes_dictOf_Bools_asDictOf_XPCBools() throws {
-		let bools: [String: Bool?] = ["false": false, "true": true]
+		let bools: [String: Bool] = ["false": false, "true": true]
 		try assert(bools, encodesEqualTo: createXPCDict(from: bools, using: xpc_bool_create))
 	}
 	

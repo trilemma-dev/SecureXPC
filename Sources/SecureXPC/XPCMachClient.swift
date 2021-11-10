@@ -35,8 +35,7 @@ import Foundation
 ///
 /// The ``XPCMachClient/XPCReplyHandler`` provided to the `withReply` parameter is always passed a
 /// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` and a
-///  `Failure` of type ``XPCError``. If an error was thrown by the server function or closure handling the request, it will be marshalled back as
-///   ``XPCError/remote(_:)`` with the `String` associated type describing the remote error.
+///  `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an ``XPCError`` on failure.
 ///
 /// When calling a route, there is also the option to include a message:
 /// ```swift

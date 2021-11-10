@@ -2,13 +2,7 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_ScalarDecodingTests: XCTestCase {
-	// MARK: TODO:
-	// 1. file descriptors
-	// 2. shared memory regions
-	// 3. DispatchData
-	// 4. xpc_endpoint_t
-	// 5. xpc_activity_t?
-	
+
 	// MARK: Signed Integers
 	
 	func testDecodes_XPCInt64_as_Int() throws {

@@ -2,7 +2,8 @@ import XCTest
 @testable import SecureXPC
 
 final class XPCDecoder_ArrayDecodingTests: XCTestCase {
-	// MARK: Integers
+
+	// MARK: Signed Integers
 
 	func testDecodes_arrayOf_SignedIntegers_asArrayOf_XPCInts() throws {
 		let   ints: [Int  ] = [.min, -123, 0, 123, .max]
@@ -136,7 +137,7 @@ final class XPCDecoder_ArrayDecodingTests: XCTestCase {
 		let floats: [Float?] = [-123, 0, 123, nil]
 		try assert(createXPCArray(from: floats, using: { xpc_double_create(Double($0)) }), decodesEqualTo: floats)
 		let doubles: [Double?] = [-123, 0, 123, nil]
-		try assert(createXPCArray(from: doubles, using: { xpc_double_create(Double($0)) }), decodesEqualTo: floats)
+		try assert(createXPCArray(from: doubles, using: { xpc_double_create(Double($0)) }), decodesEqualTo: doubles)
 
 		// Misc. types
 		let bools: [Bool?] = [false, true, nil]

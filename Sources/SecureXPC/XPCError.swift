@@ -8,7 +8,7 @@
 import Foundation
 
 /// Errors that may be thrown when using ``XPCMachClient`` or ``XPCMachServer``.
-public enum XPCError: Error {
+public enum XPCError: Error, Codable {
     /// The connection was closed and can no longer be used; it may be possible to establish another connection.
     ///
     /// Corresponds to
@@ -24,30 +24,27 @@ public enum XPCError: Error {
     /// Corresponds to
     /// [`XPC_ERROR_TERMINATION_IMMINENT`](https://developer.apple.com/documentation/xpc/xpc_error_termination_imminent).
     ///
-    /// In practice this error is not expected to be encountered as this framework only supports XPC Mach Services, and this error applies to XPC Services which
-    /// use a different type of connection (peer connections).
+    /// In practice this error is not expected to be encountered as this framework only supports XPC Mach service connections; this error applies to XPC Services
+    /// which use a different type of connection.
     case terminationImminent
-    /// A message was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
+    /// A request was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
     /// client.
     case insecure
-    /// An error occurred on the server; the associated value textually describes what went wrong.
-    ///
-    /// The underlying error intentionally is an associated value as it may not exist within the client process.
-    case remote(String)
-    /// Failed to encode an XPC type in order to send it across the XPC connection.
+    /// Failed to encode a request or response in order to send it across the XPC connection.
     ///
     /// The associated value describes this encoding error.
-    case encodingError(EncodingError)
-    /// Failed to decode an XPC type once it was received via the XPC connection.
+    case encodingError(String)
+    /// Failed to decode a request or response once it was received via the XPC connection.
     ///
     /// The associated value describes this decoding error.
-    case decodingError(DecodingError)
-    /// The route associated with the incoming XPC message is not registed with the server.
+    case decodingError(String)
+    /// The route associated with the incoming XPC request is not registed with the server.
     case routeNotRegistered(String)
-    /// The calling program's property list configuration is  not compatible with ``XPCMachServer/forBlessedHelperTool()``.
+    /// The calling program's property list configuration is not compatible with ``XPCMachServer/forBlessedHelperTool()``.
     case misconfiguredBlessedHelperTool(String)
-    /// An underlying error occurred which was not anticipated; the associated value is this error.
-    case other(Error)
+    /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCMachServer`` route. The associated
+    /// value describes the error.
+    case other(String)
     /// Unknown error occurred.
     case unknown
 }

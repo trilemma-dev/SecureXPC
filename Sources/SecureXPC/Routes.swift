@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Consistent framework internal implementation of routes that can be sent over XPC (because its Codable0 and used as a dictionary key (because its Hashable).
+/// Consistent framework internal implementation of routes that can be sent over XPC (because its Codable) and used as a dictionary key (because its Hashable).
 struct XPCRoute: Codable, Hashable {
     let pathComponents: [String]
     let messageType: String?
