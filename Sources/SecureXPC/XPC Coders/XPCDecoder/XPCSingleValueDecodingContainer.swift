@@ -98,4 +98,12 @@ internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
 	func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
 		return try type.init(from: XPCDecoderImpl(value: self.value, codingPath: self.codingPath))
 	}
+
+	func decodeXPCConnection() throws -> xpc_connection_t {
+		return try decode(xpcType: XPC_TYPE_ENDPOINT, transform: { $0 })
+	}
+
+	func decodeXPCEndpoint() throws -> xpc_endpoint_t {
+		return try decode(xpcType: XPC_TYPE_ENDPOINT, transform: xpc_connection_create_from_endpoint)
+	}
 }

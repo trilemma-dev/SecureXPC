@@ -94,6 +94,14 @@ internal class XPCSingleValueEncodingContainer: SingleValueEncodingContainer, XP
 		self.setValue(xpc_uint64_create(value))
 	}
 
+	func encode(xpcConnection: xpc_connection_t) {
+		self.encode(xpcEndpoint: xpc_endpoint_create(xpcConnection))
+	}
+
+	func encode(xpcEndpoint: xpc_endpoint_t) {
+		self.setValue(xpcEndpoint)
+	}
+
 	func encode<T: Encodable>(_ value: T) throws {
 		let encoder = XPCEncoderImpl(codingPath: self.codingPath)
 		self.setValue(encoder)
