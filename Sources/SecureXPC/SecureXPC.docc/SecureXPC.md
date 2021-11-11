@@ -1,13 +1,14 @@
 # ``SecureXPC``
 
-A **secure** high-level framework designed specifically for XPC Mach service communication.
+A **secure** high-level XPC framework with [`Codable`](https://developer.apple.com/documentation/swift/codable)
+compatability.
 
 ## Overview
 
-SecureXPC provides an easy way to perform secure XPC Mach service communication. 
-[`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types are used to send messages and
-receive replies. This framework is ideal for communicating with helper tools installed via 
-[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+SecureXPC provides an easy way to perform secure XPC communication with pure Swift. `Codable` conforming types are used
+to make requests and receive responses. This framework can be used to communicate with any type of XPC Service or XPC
+Mach service. Customized support for communicating with helper tools installed via 
+[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) is also provided.
 
 ## Usage
 The envisioned pattern when using this framework is to define routes in a shared file, create a server in one program
@@ -29,8 +30,7 @@ There are four different types of routes; learn more about <doc:/Routes>.
 In one program create a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = XPCMachServer(machServiceName: "com.example.service",
-                               clientRequirements: requirements)
+    let server = <# server creation here #>
     server.registerRoute(route, handler: bedazzle)
     server.start()
 }
@@ -40,16 +40,13 @@ private func bedazzle(message: String) throws -> Bool {
 }
 ```
 
-If this program is a helper tool installed by `SMJobBless`, then in many cases it can be initialized automatically with
-``XPCServer/forThisBlessedHelperTool()``.
-
 See ``XPCServer`` for details on how to create, configure, and start a server.
 
 #### Client
 
 In another program create a client, then call one of those routes:
 ```swift
-let client = XPCMachClient(machServiceName: "com.example.service")
+let client = <# client creation here #>
 try client.sendMessage("Get Schwifty", route: route, withReply: { result in
     switch result {
         case let .success(reply):
@@ -59,7 +56,7 @@ try client.sendMessage("Get Schwifty", route: route, withReply: { result in
     }
 })
 ```
-See ``XPCClient`` for more on how to send with a client.
+See ``XPCClient`` for more on how to create and send with a client.
 
 ## Topics
 ### Client and Server

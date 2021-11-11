@@ -1,13 +1,17 @@
 //
 //  XPCMachServer.swift
-//  
+//  SecureXPC
 //
-//  Created by Alexander Momchilov on 2021-11-08.
+//  Created by Alexander Momchilov on 2021-11-08
 //
 
 import Foundation
 
+/// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
+///
+/// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
 internal class XPCMachServer: XPCServer {
+    
 	private let machService: xpc_connection_t
 	private let clientRequirements: [SecRequirement]
 
@@ -24,7 +28,7 @@ internal class XPCMachServer: XPCServer {
 
 	internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
 		// Determine mach service name launchd property list's MachServices
-		var machServiceName: String
+		let machServiceName: String
 		let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
 		let launchdPropertyList = try PropertyListSerialization.propertyList(
 			from: launchdData,

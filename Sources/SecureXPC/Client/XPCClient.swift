@@ -7,12 +7,40 @@
 
 import Foundation
 
-/// An XPC client to call and receive responses from an ``XPCServer``.
+/// An XPC client to make requests and receive responses from an ``XPCServer``.
 ///
-/// ### Calling Routes
-/// Calling a route is as simple creating a client and invoking `send` with a route:
+/// ### Creating a Client
+/// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
+/// type of service you're using, it's likely it's an XPC Service.
+///
+/// **XPC Services**
+///
+/// These are helper tools which ship as part of your app and only your app can communicate with.
+///
+/// The name of the service must be specified when creating a client to talk to your XPC Service; this is always the bundle identifier for the service:
+/// ```swift
+/// let client = XPCClient.forXPCService(named: "com.example.myapp.service")
+/// ```
+///
+/// The service itself must create and configure an ``XPCServer`` by calling ``XPCServer/forThisXPCService()`` in order for this client to be able to
+/// communicate with it.
+///
+/// **XPC Mach services**
+///
+/// Launch Agents, Launch Daemons, and helper tools installed with
+/// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
+/// over XPC by using Mach services.
+///
+/// The name of the service must be specified when creating a client; this must be a key in the `MachServices` entry of the tool's launchd property list:
 /// ```swift
 /// let client = XPCClient.forMachService(named: "com.example.service")
+/// ```
+/// The tool itself must create and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
+/// ``XPCServer/forThisBlessedHelperTool()`` in order for this client to be able to communicate with it.
+///
+/// ### Calling Routes
+/// Once a client has been created, calling a route is as simple as invoking `send` with a route:
+/// ```swift
 /// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
 /// try client.send(route: resetRoute)
 /// ```
@@ -21,7 +49,6 @@ import Foundation
 /// received by a server, no error will be raised due to how XPC is designed. If it is important for your code to have confirmation of receipt then a route with a reply
 /// should be used:
 /// ```swift
-/// let client = XPCClient.forMachService(named: "com.example.service")
 /// let resetRoute = XPCRouteWithoutMessageWithReply("reset", replyType: Bool.self)
 /// try client.send(route: resetRoute, withReply: { result in
 ///     switch result {
@@ -39,7 +66,6 @@ import Foundation
 ///
 /// When calling a route, there is also the option to include a message:
 /// ```swift
-/// let client = XPCClient.forMachService(named: "com.example.service")
 /// let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
 ///                                                      messageType: Config.self,
 ///                                                      replyType: Config.self)
@@ -54,8 +80,8 @@ import Foundation
 ///
 /// ## Topics
 /// ### Creating a Client
-/// - ``forMachService(named:)``
 /// - ``forXPCService(named:)``
+/// - ``forMachService(named:)``
 /// ### Calling Routes
 /// - ``send(route:)``
 /// - ``send(route:withReply:)``
@@ -64,15 +90,41 @@ import Foundation
 /// ### Receiving Replies
 /// - ``XPCReplyHandler``
 public class XPCClient {
-	// MARK: Public factories
-
-	public static func forMachService(named machServiceName: String) -> XPCClient {
-		XPCMachClient(serviceName: machServiceName)
-	}
-
-	public static func forXPCService(named xpcServiceName: String) -> XPCClient {
-		XPCServiceClient(serviceName: xpcServiceName)
-	}
+    
+    // MARK: Public factories
+    
+    /// Provides a client to communicate with an XPC Service.
+    ///
+    /// An XPC Service is a helper tool which ships as part of your app and only your app can communicate with.
+    ///
+    /// In order for this client to be able to communicate with the XPC Service, the service itself must create and configure an ``XPCServer`` by calling
+    /// ``XPCServer/forThisXPCService()``.
+    ///
+    /// > Note: Client creation always succeeds regardless of whether the XPC Service actually exists.
+    ///
+    /// - Parameters:
+    ///   - named: The bundle identifier of the XPC Service.
+    /// - Returns: A client configured to communicate with the named service.
+    public static func forXPCService(named xpcServiceName: String) -> XPCClient {
+        XPCServiceClient(serviceName: xpcServiceName)
+    }
+    
+    /// Provides a client to communicate with an XPC Mach service.
+    ///
+    /// XPC Mach services are often used by tools such as Launch Agents, Launch Daemons, and helper tools installed with
+    /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+    ///
+    /// In order for this client to be able to communicate with the tool, the tool itself must create and configure an ``XPCServer`` by calling
+    /// ``XPCServer/forThisMachService(named:clientRequirements:)`` or ``XPCServer/forThisBlessedHelperTool()``.
+    ///
+    /// > Note: Client creation always succeeds regardless of whether the XPC Mach service actually exists.
+    ///
+    /// - Parameters:
+    ///    - named: A key in the `MachServices` entry of the tool's launchd property list.
+    /// - Returns: A client configured to communicate with the named service.
+    public static func forMachService(named machServiceName: String) -> XPCClient {
+        XPCMachClient(serviceName: machServiceName)
+    }
 
 	// MARK: Implementation
 
@@ -115,7 +167,7 @@ public class XPCClient {
     /// - Parameters:
     ///   - route: The server route which will handle this.
     ///   - withReply: A function or closure to receive the reply.
-    /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
+    /// - Throws: If unable to encode the route or the server throws an error. No error will be thrown if communication with the server fails.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withReply reply: @escaping XPCReplyHandler<R>) throws {
         let encoded = try Request(route: route.route).dictionary
@@ -128,7 +180,7 @@ public class XPCClient {
     ///    - message: Message to be sent.
     ///    - route: The server route which should handle this message.
     ///    - withReply: A function or closure to receive the message's reply.
-    /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
+    /// - Throws: If unable to encode the message or route or the server throws an error. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withReply reply: @escaping XPCReplyHandler<R>) throws {

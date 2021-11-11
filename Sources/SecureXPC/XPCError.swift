@@ -38,7 +38,7 @@ public enum XPCError: Error, Codable {
     ///
     /// The associated value describes this decoding error.
     case decodingError(String)
-    /// The route associated with the incoming XPC request is not registed with the server.
+    /// The route associated with the incoming XPC request is not registed with the ``XPCServer``.
     case routeNotRegistered(String)
     /// The calling program's property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
     case misconfiguredBlessedHelperTool(String)

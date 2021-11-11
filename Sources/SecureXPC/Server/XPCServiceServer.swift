@@ -1,13 +1,17 @@
 //
 //  XPCServiceServer.swift
-//  
+//  SecureXPC
 //
-//  Created by Alexander Momchilov on 2021-11-07.
+//  Created by Alexander Momchilov on 2021-11-07
 //
 
 import XPC
 
+/// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Service.
+///
+/// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
+    
 	internal static let service = XPCServiceServer()
 
 	private override init() {}
