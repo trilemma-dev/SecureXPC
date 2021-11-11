@@ -41,9 +41,9 @@ private func bedazzle(message: String) throws -> Bool {
 ```
 
 If this program is a helper tool installed by `SMJobBless`, then in many cases it can be initialized automatically with
-``XPCMachServer/forBlessedHelperTool()``.
+``XPCServer/forThisBlessedHelperTool()``.
 
-See ``XPCMachServer`` for details on how to create, configure, and start a server.
+See ``XPCServer`` for details on how to create, configure, and start a server.
 
 #### Client
 
@@ -59,12 +59,12 @@ try client.sendMessage("Get Schwifty", route: route, withReply: { result in
     }
 })
 ```
-See ``XPCMachClient`` for more on how to send with a client.
+See ``XPCClient`` for more on how to send with a client.
 
 ## Topics
 ### Client and Server
-- ``XPCMachClient``
-- ``XPCMachServer``
+- ``XPCClient``
+- ``XPCServer``
 
 ### Routes
 - <doc:/Routes>

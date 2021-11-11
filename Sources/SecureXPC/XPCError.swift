@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Errors that may be thrown when using ``XPCMachClient`` or ``XPCMachServer``.
+/// Errors that may be thrown when using ``XPCClient`` or ``XPCServer``.
 public enum XPCError: Error, Codable {
     /// The connection was closed and can no longer be used; it may be possible to establish another connection.
     ///
@@ -40,9 +40,9 @@ public enum XPCError: Error, Codable {
     case decodingError(String)
     /// The route associated with the incoming XPC request is not registed with the server.
     case routeNotRegistered(String)
-    /// The calling program's property list configuration is not compatible with ``XPCMachServer/forBlessedHelperTool()``.
+    /// The calling program's property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
     case misconfiguredBlessedHelperTool(String)
-    /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCMachServer`` route. The associated
+    /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCServer`` route. The associated
     /// value describes the error.
     case other(String)
     /// Unknown error occurred.

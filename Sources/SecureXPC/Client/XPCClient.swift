@@ -1,5 +1,5 @@
 //
-//  XPCMachClient.swift
+//  XPCClient.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2021-10-09
@@ -7,12 +7,12 @@
 
 import Foundation
 
-/// An XPC Mach Services client to call and receive responses from ``XPCMachServer``.
+/// An XPC client to call and receive responses from an ``XPCServer``.
 ///
 /// ### Calling Routes
 /// Calling a route is as simple creating a client and invoking `send` with a route:
 /// ```swift
-/// let client = XPCMachClient(machServiceName: "com.example.service")
+/// let client = XPCClient.forMachService(named: "com.example.service")
 /// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
 /// try client.send(route: resetRoute)
 /// ```
@@ -21,7 +21,7 @@ import Foundation
 /// received by a server, no error will be raised due to how XPC is designed. If it is important for your code to have confirmation of receipt then a route with a reply
 /// should be used:
 /// ```swift
-/// let client = XPCMachClient(machServiceName: "com.example.service")
+/// let client = XPCClient.forMachService(named: "com.example.service")
 /// let resetRoute = XPCRouteWithoutMessageWithReply("reset", replyType: Bool.self)
 /// try client.send(route: resetRoute, withReply: { result in
 ///     switch result {
@@ -33,13 +33,13 @@ import Foundation
 /// })
 /// ```
 ///
-/// The ``XPCMachClient/XPCReplyHandler`` provided to the `withReply` parameter is always passed a
+/// The ``XPCClient/XPCReplyHandler`` provided to the `withReply` parameter is always passed a
 /// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` and a
 ///  `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an ``XPCError`` on failure.
 ///
 /// When calling a route, there is also the option to include a message:
 /// ```swift
-/// let client = XPCMachClient(machServiceName: "com.example.service")
+/// let client = XPCClient.forMachService(named: "com.example.service")
 /// let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
 ///                                                      messageType: Config.self,
 ///                                                      replyType: Config.self)
@@ -54,7 +54,8 @@ import Foundation
 ///
 /// ## Topics
 /// ### Creating a Client
-/// - ``init(machServiceName:)``
+/// - ``forMachService(named:)``
+/// - ``forXPCService(named:)``
 /// ### Calling Routes
 /// - ``send(route:)``
 /// - ``send(route:withReply:)``
@@ -62,20 +63,27 @@ import Foundation
 /// - ``sendMessage(_:route:withReply:)``
 /// ### Receiving Replies
 /// - ``XPCReplyHandler``
-public class XPCMachClient {
-    
-    // This client implementation intentionally does not store a reference to the xpc_connection_t as it can become
-    // invalid for numerous reasons. Since it's expected relatively few messages will be sent and the lowest possible
-    // latency isn't needed, it's simpler to always create the connection on demand each time a message is to be sent.
-    
-    private let machServiceName: String
+public class XPCClient {
+	// MARK: Public factories
+
+	public static func forMachService(named machServiceName: String) -> XPCClient {
+		XPCMachClient(serviceName: machServiceName)
+	}
+
+	public static func forXPCService(named xpcServiceName: String) -> XPCClient {
+		XPCServiceClient(serviceName: xpcServiceName)
+	}
+
+	// MARK: Implementation
+
+    internal let serviceName: String
     
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
     /// - Parameters:
-    ///   - machServiceName: The name of the XPC mach service; no validation is performed on this.
-    public init(machServiceName: String) {
-        self.machServiceName = machServiceName
+    ///   - serviceName: The name of the XPC service; no validation is performed on this.
+    internal init(serviceName: String) {
+        self.serviceName = serviceName
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
@@ -160,16 +168,11 @@ public class XPCMachClient {
             reply(result)
         })
     }
-    
-    /// Creates and returns connection for the mach service stored by this instance of the client.
-    private func createConnection() -> xpc_connection_t {
-        let connection = xpc_connection_create_mach_service(self.machServiceName, nil, 0)
-        xpc_connection_set_event_handler(connection, { (event: xpc_object_t) in
-            // A block *must* be set as the handler, even though this block does nothing.
-            // If it were not set, a crash would occur upon calling xpc_connection_resume.
-        })
-        xpc_connection_resume(connection)
-        
-        return connection
+
+	// MARK: Abstract methods
+
+	/// Creates and returns a connection for the service represented by this client.
+    internal func createConnection() -> xpc_connection_t {
+        fatalError("Abstract Method")
     }
 }

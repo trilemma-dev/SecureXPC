@@ -43,7 +43,7 @@ Take care when updating existing routes because over time you may end up with an
 on a computer with a newer client.
 
 #### Registering Routes
-See ``XPCMachServer``.
+See ``XPCServer``.
 
 #### Calling Routes
-See ``XPCMachClient``.
+See ``XPCClient``.
