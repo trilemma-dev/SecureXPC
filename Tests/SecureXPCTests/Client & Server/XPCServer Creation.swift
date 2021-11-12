@@ -53,9 +53,7 @@ final class XPCServerCreationTests: XCTestCase {
             XCTFail("No error was thrown. XPCError.conflictingClientRequirements should have been thrown.")
         } catch XPCError.conflictingClientRequirements {
             // Expected behavior
-            print("XPC error")
         } catch {
-            print("other error")
             XCTFail("Unexpected error thrown. XPCError.conflictingClientRequirements should have been thrown.")
         }
     }
