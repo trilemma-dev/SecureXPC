@@ -40,7 +40,7 @@ internal class XPCEncoderImpl: Encoder, XPCContainer {
 		return container
 	}
 
-	fileprivate func encodedValue() throws -> xpc_object_t? {
+	internal func encodedValue() throws -> xpc_object_t? {
 		return try container?.encodedValue()
 	}
 }

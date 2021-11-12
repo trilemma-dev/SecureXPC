@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContainer {
+internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContainer {
 	private var values: [XPCContainer]
 	var codingPath: [CodingKey]
 

@@ -8,11 +8,11 @@
 import Foundation
 
 
-fileprivate protocol XPCContainer {
+internal protocol XPCContainer {
 	func encodedValue() throws -> xpc_object_t?
 }
 
-fileprivate struct XPCObject: XPCContainer {
+internal struct XPCObject: XPCContainer {
 	let object: xpc_object_t
 
 	func encodedValue() throws -> xpc_object_t? {

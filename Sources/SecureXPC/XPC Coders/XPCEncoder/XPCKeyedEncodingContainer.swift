@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPCContainer where K: CodingKey {
+internal class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPCContainer where K: CodingKey {
 	typealias Key = K
 
 	var codingPath: [CodingKey]
@@ -18,7 +18,7 @@ fileprivate class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, 
 		self.values = [String : XPCContainer]()
 	}
 
-	fileprivate func encodedValue() throws -> xpc_object_t? {
+	internal func encodedValue() throws -> xpc_object_t? {
 		let dictionary = xpc_dictionary_create(nil, nil, 0)
 		for (key, value) in self.values {
 			try key.utf8CString.withUnsafeBufferPointer { keyPointer in
