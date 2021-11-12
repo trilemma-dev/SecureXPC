@@ -5,17 +5,44 @@
 //  Created by Alexander Momchilov on 2021-11-07
 //
 
-import XPC
+import Foundation
 
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
     
-	internal static let service = XPCServiceServer()
+	private static let service = XPCServiceServer()
 
-	private override init() {}
+    internal static func _forThisXPCService() throws -> XPCServiceServer {
+        // An XPC Service's package type must be equal to "XPC!", see Apple's documentation for details
+        // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
+        if mainBundlePackageInfo().packageType != "XPC!" {
+            throw XPCError.notXPCService
+        }
+        
+        return service
+    }
+    
+    /// Returns a bundle’s package type and creator.
+    private static func mainBundlePackageInfo() -> (packageType: String?, packageCreator: String?) {
+        var packageType = UInt32()
+        var packageCreator = UInt32()
+        CFBundleGetPackageInfo(CFBundleGetMainBundle(), &packageType, &packageCreator)
 
+        func uint32ToString(_ input: UInt32) -> String? {
+            var output: String?
+            if input != 0 {
+                var input = input
+                output = String(data: Data(bytes: &input, count: MemoryLayout<UInt32>.size), encoding: .utf8)
+            }
+            
+            return output
+        }
+
+        return (uint32ToString(packageType.bigEndian), uint32ToString(packageCreator.bigEndian))
+    }
+    
 	public override func start() -> Never {
 		xpc_main { connection in
 			// Listen for events (messages or errors) coming from this connection

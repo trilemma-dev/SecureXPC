@@ -11,6 +11,30 @@ import SecureXPC
 
 final class XPCServerCreationTests: XCTestCase {
     
+    // Expectation: will throw an error indicating this is not an XPC Service
+    func testFailToRetrieveServicesServer() {
+        do {
+            _ = try XPCServer.forThisXPCService()
+            XCTFail("No error was thrown. \(XPCError.notXPCService) should have been thrown.")
+        } catch XPCError.notXPCService {
+            // Expected behavior
+        } catch {
+            XCTFail("Unexpected error thrown. \(XPCError.notXPCService) should have been thrown.")
+        }
+    }
+    
+    // Expectation: will throw an error indicating this is a misconfigured blessed helper tool
+    func testFailtToRetrievedBlessedHelperToolServer() {
+        do {
+            _ = try XPCServer.forThisBlessedHelperTool()
+            XCTFail("No error was thrown. XPCError.misconfiguredBlessedHelperTool should have been thrown.")
+        } catch XPCError.misconfiguredBlessedHelperTool(_) {
+            // Expected behavior
+        } catch {
+            XCTFail("Unexpected error thrown. XPCError.misconfiguredBlessedHelperTool should have been thrown.")
+        }
+    }
+    
     // Expectation: server can be created without throwing
     func testRetrieveMachServerOnce() throws {
         _ = try XPCServer.forThisMachService(named: "com.example.foo", clientRequirements: [])
@@ -50,11 +74,11 @@ final class XPCServerCreationTests: XCTestCase {
         
         do {
             _ = try XPCServer.forThisMachService(named: "com.example.biz", clientRequirements: otherRequirements)
-            XCTFail("No error was thrown. XPCError.conflictingClientRequirements should have been thrown.")
+            XCTFail("No error was thrown. \(XPCError.conflictingClientRequirements) should have been thrown.")
         } catch XPCError.conflictingClientRequirements {
             // Expected behavior
         } catch {
-            XCTFail("Unexpected error thrown. XPCError.conflictingClientRequirements should have been thrown.")
+            XCTFail("Unexpected error thrown. \(XPCError.conflictingClientRequirements) should have been thrown.")
         }
     }
 }

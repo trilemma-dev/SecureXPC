@@ -11,14 +11,14 @@ import Foundation
 ///
 /// ### Retrieving a Server
 /// There are two different types of services you can retrieve a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're
-/// using, it's likely it's an XPC Service.
+/// using, it's likely an XPC Service.
 ///
 /// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
 /// To retrieve a server for an XPC Service:
 /// ```swift
-/// let server = XPCServer.forThisXPCService()
+/// let server = try XPCServer.forThisXPCService()
 /// ```
 ///
 /// #### XPC Mach services
@@ -103,9 +103,10 @@ public class XPCServer {
     ///
     /// > Important: No requests will be processed until ``start()`` is called.
     ///
+    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
     /// - Returns: A server instance configured for this XPC Service.
-    public static func forThisXPCService() -> XPCServer {
-        XPCServiceServer.service
+    public static func forThisXPCService() throws -> XPCServer {
+        try XPCServiceServer._forThisXPCService()
     }
     
     /// Provides a server for this helper tool if it was installed with

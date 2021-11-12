@@ -40,10 +40,15 @@ public enum XPCError: Error, Codable {
     case decodingError(String)
     /// The route associated with the incoming XPC request is not registed with the ``XPCServer``.
     case routeNotRegistered(String)
-    /// The calling program's property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
+    /// The caller is not a blessed helper tool or its property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
     case misconfiguredBlessedHelperTool(String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
+    /// The caller is not an XPC Service.
+    ///
+    /// This may mean there is a configuration issue. Alternatively it could be the caller is an XPC Mach service, in which case use
+    /// ``XPCServer/forThisMachService(named:clientRequirements:)`` instead.
+    case notXPCService
     /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCServer`` route. The associated
     /// value describes the error.
     case other(String)
