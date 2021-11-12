@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
+internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
 	var codingPath: [CodingKey] = []
 
 	private let value: xpc_object_t

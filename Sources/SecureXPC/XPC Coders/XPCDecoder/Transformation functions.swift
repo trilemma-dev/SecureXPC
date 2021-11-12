@@ -7,7 +7,7 @@
 
 import Foundation
 
-private func baseDecode<T>(value: xpc_object_t,
+internal func baseDecode<T>(value: xpc_object_t,
 						   xpcType: xpc_type_t,
 						   transform: (xpc_object_t) throws -> T,
 						   codingPath: [CodingKey]) throws -> T {
@@ -22,7 +22,7 @@ private func baseDecode<T>(value: xpc_object_t,
 	}
 }
 
-private func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
+internal func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
 																codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
 	return { (object: xpc_object_t) in
 		let value = xpc_int64_get_value(object)
@@ -38,7 +38,7 @@ private func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
 	}
 }
 
-private func uintTransform<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Type,
+internal func uintTransform<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Type,
 																   codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
 	return { (object: xpc_object_t) in
 		let value = xpc_uint64_get_value(object)
@@ -54,7 +54,7 @@ private func uintTransform<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Typ
 	}
 }
 
-private func stringTransform(codingPath: [CodingKey]) -> ((xpc_object_t) throws -> String) {
+internal func stringTransform(codingPath: [CodingKey]) -> ((xpc_object_t) throws -> String) {
 	return { (object: xpc_object_t) in
 		if let stringPointer = xpc_string_get_string_ptr(object) {
 			return String(cString: stringPointer)
@@ -67,7 +67,7 @@ private func stringTransform(codingPath: [CodingKey]) -> ((xpc_object_t) throws 
 	}
 }
 
-private let floatTransform = { (object: xpc_object_t) -> Float in
+internal let floatTransform = { (object: xpc_object_t) -> Float in
 	// Double.signalingNaN is not converted to Float.signalingNaN when calling Float(...) with a Double so this needs
 	// to be done manually
 	let doubleValue = xpc_double_get_value(object)

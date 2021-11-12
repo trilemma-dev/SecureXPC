@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerProtocol {
+internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerProtocol {
 	typealias Key = K
 
 	var codingPath = [CodingKey]()

@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCDecoderImpl: Decoder {
+internal class XPCDecoderImpl: Decoder {
 	var codingPath = [CodingKey]()
 
 	let userInfo = [CodingUserInfoKey : Any]()

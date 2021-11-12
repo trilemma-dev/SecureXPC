@@ -8,7 +8,7 @@
 import Foundation
 
 /// Convenience extension to improve quality of error descriptions
-fileprivate extension xpc_type_t {
+internal extension xpc_type_t {
 	var description: String {
 		switch self {
 			case XPC_TYPE_ARRAY:

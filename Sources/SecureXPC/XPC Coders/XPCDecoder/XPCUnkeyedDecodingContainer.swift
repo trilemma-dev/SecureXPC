@@ -7,7 +7,7 @@
 
 import Foundation
 
-fileprivate class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
+internal class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	private let array: [xpc_object_t]
 	var currentIndex: Int
 	var codingPath = [CodingKey]()
