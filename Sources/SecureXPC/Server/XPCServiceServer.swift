@@ -31,13 +31,11 @@ internal class XPCServiceServer: XPCServer {
         CFBundleGetPackageInfo(CFBundleGetMainBundle(), &packageType, &packageCreator)
 
         func uint32ToString(_ input: UInt32) -> String? {
-            var output: String?
-            if input != 0 {
-                var input = input
-                output = String(data: Data(bytes: &input, count: MemoryLayout<UInt32>.size), encoding: .utf8)
+            guard input == 0 else {
+                return nil
             }
-            
-            return output
+            var input = input
+            return String(data: Data(bytes: &input, count: MemoryLayout<UInt32>.size), encoding: .utf8)
         }
 
         return (uint32ToString(packageType.bigEndian), uint32ToString(packageCreator.bigEndian))

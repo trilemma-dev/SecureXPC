@@ -10,7 +10,7 @@ import Foundation
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
-internal class XPCMachServer: XPCServer, CustomDebugStringConvertible {
+internal class XPCMachServer: XPCServer {
     
     private let machServiceName: String
     private let clientRequirements: [SecRequirement]
@@ -54,11 +54,11 @@ internal class XPCMachServer: XPCServer, CustomDebugStringConvertible {
             // Turn into sets so they can be compared without taking into account the order of requirements
             let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
             let cachedRequirementsData = Set<Data>(try cachedServer.clientRequirements.map(requirementTransform))
-            if requirementsData == cachedRequirementsData {
-                server = cachedServer
-            } else {
+            guard requirementsData == cachedRequirementsData else {
                 throw XPCError.conflictingClientRequirements
             }
+            
+            server = cachedServer
         } else {
             server = XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
             machServerCache[machServiceName] = server
@@ -218,6 +218,9 @@ internal class XPCMachServer: XPCServer, CustomDebugStringConvertible {
 
 		return auditToken
 	}
+}
+
+extension XPCMachServer: CustomDebugStringConvertible {
     
     /// Description which includes the name of the service and its memory address (to help in debugging uniqueness bugs)
     var debugDescription: String {

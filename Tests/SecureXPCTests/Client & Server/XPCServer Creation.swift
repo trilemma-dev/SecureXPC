@@ -11,7 +11,6 @@ import SecureXPC
 
 final class XPCServerCreationTests: XCTestCase {
     
-    // Expectation: will throw an error indicating this is not an XPC Service
     func testFailToRetrieveServicesServer() {
         do {
             _ = try XPCServer.forThisXPCService()
@@ -23,8 +22,7 @@ final class XPCServerCreationTests: XCTestCase {
         }
     }
     
-    // Expectation: will throw an error indicating this is a misconfigured blessed helper tool
-    func testFailtToRetrievedBlessedHelperToolServer() {
+    func testFailToRetrievedBlessedHelperToolServer() {
         do {
             _ = try XPCServer.forThisBlessedHelperTool()
             XCTFail("No error was thrown. XPCError.misconfiguredBlessedHelperTool should have been thrown.")
@@ -54,10 +52,7 @@ final class XPCServerCreationTests: XCTestCase {
         // The same server instance should be returned each time
         let server1 = try XPCServer.forThisMachService(named: "com.example.bar", clientRequirements: requirements1)
         let server2 = try XPCServer.forThisMachService(named: "com.example.bar", clientRequirements: requirements2)
-        
-        let server1Pointer = Unmanaged.passUnretained(server1).toOpaque()
-        let server2Pointer = Unmanaged.passUnretained(server2).toOpaque()
-        XCTAssertEqual(server1Pointer, server2Pointer)
+        XCTAssertIdentical(server1, server2)
     }
     
     // Expectation: second attempt to get server with same but different requirements throws an error
