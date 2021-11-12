@@ -11,8 +11,8 @@ Mach service. Customized support for communicating with helper tools installed v
 [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) is also provided.
 
 ## Usage
-The envisioned pattern when using this framework is to define routes in a shared file, create a server in one program
-(such as a helper tool) and register these routes, then from another program (such as an app) create a client and call
+The envisioned pattern when using this framework is to define routes in a shared file, retrieve a server in one program
+(such as a helper tool) and register these routes, then from another program (such as an app) retrieve a client and call
 these routes.
 
 #### Routes
@@ -27,10 +27,10 @@ There are four different types of routes; learn more about <doc:/Routes>.
 
 #### Server
 
-In one program create a server, register those routes, and then start the server:
+In one program retrieve a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = <# server creation here #>
+    let server = <# server retrieval here #>
     server.registerRoute(route, handler: bedazzle)
     server.start()
 }
@@ -40,13 +40,13 @@ private func bedazzle(message: String) throws -> Bool {
 }
 ```
 
-See ``XPCServer`` for details on how to create, configure, and start a server.
+See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 
 #### Client
 
-In another program create a client, then call one of those routes:
+In another program retrieve a client, then call one of those routes:
 ```swift
-let client = <# client creation here #>
+let client = <# client retrieval here #>
 try client.sendMessage("Get Schwifty", route: route, withReply: { result in
     switch result {
         case let .success(reply):
@@ -56,7 +56,7 @@ try client.sendMessage("Get Schwifty", route: route, withReply: { result in
     }
 })
 ```
-See ``XPCClient`` for more on how to create and send with a client.
+See ``XPCClient`` for more on how to retrieve a client and send requests.
 
 ## Topics
 ### Client and Server

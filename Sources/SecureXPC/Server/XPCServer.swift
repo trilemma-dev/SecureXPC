@@ -9,14 +9,14 @@ import Foundation
 
 /// An XPC server to receive requests from and send responses to an ``XPCClient``.
 ///
-/// ### Creating a Server
-/// There are two different types of services you can create a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're using,
-/// it's likely it's an XPC Service.
+/// ### Retrieving a Server
+/// There are two different types of services you can retrieve a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're
+/// using, it's likely it's an XPC Service.
 ///
 /// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
-/// To create a server for an XPC Service:
+/// To retrieve a server for an XPC Service:
 /// ```swift
 /// let server = XPCServer.forThisXPCService()
 /// ```
@@ -48,7 +48,7 @@ import Foundation
 ///
 ///
 /// ### Registering & Handling Routes
-/// Once a server instance has been created, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
+/// Once a server instance has been retrieved, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
 /// providing a route and a compatible closure or function. For example:
 /// ```swift
 ///     ...
@@ -77,7 +77,7 @@ import Foundation
 /// returns.
 ///
 /// ## Topics
-/// ### Creating a Server
+/// ### Retrieving a Server
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
 /// - ``forThisMachService(named:clientRequirements:)``
@@ -134,7 +134,7 @@ public class XPCServer {
 	///
     /// For the provided server to function properly, the caller must be an XPC Mach service.
     ///
-	/// Because many processes on the system can talk to an XPC Mach service, when creating a server it is required that you specifiy the
+	/// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specifiy the
     /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
     /// of any connecting clients:
     /// ```swift
@@ -156,11 +156,13 @@ public class XPCServer {
     /// - Parameters:
     ///   - named: The name of the mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
+    /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
+    ///           requirements.
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) -> XPCServer {
-        XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
+    ) throws -> XPCServer {
+        try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 
     // MARK: Implementation

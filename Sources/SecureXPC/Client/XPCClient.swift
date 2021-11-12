@@ -9,7 +9,7 @@ import Foundation
 
 /// An XPC client to make requests and receive responses from an ``XPCServer``.
 ///
-/// ### Creating a Client
+/// ### Retrieving a Client
 /// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
 /// type of service you're using, it's likely it's an XPC Service.
 ///
@@ -17,7 +17,7 @@ import Foundation
 ///
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
-/// The name of the service must be specified when creating a client to talk to your XPC Service; this is always the bundle identifier for the service:
+/// The name of the service must be specified when retrieving a client to talk to your XPC Service; this is always the bundle identifier for the service:
 /// ```swift
 /// let client = XPCClient.forXPCService(named: "com.example.myapp.service")
 /// ```
@@ -31,15 +31,15 @@ import Foundation
 /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
 /// over XPC by using Mach services.
 ///
-/// The name of the service must be specified when creating a client; this must be a key in the `MachServices` entry of the tool's launchd property list:
+/// The name of the service must be specified when retrieving a client; this must be a key in the `MachServices` entry of the tool's launchd property list:
 /// ```swift
 /// let client = XPCClient.forMachService(named: "com.example.service")
 /// ```
-/// The tool itself must create and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
+/// The tool itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
 /// ``XPCServer/forThisBlessedHelperTool()`` in order for this client to be able to communicate with it.
 ///
 /// ### Calling Routes
-/// Once a client has been created, calling a route is as simple as invoking `send` with a route:
+/// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
 /// ```swift
 /// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
 /// try client.send(route: resetRoute)
@@ -79,7 +79,7 @@ import Foundation
 /// consist of the desired configuration update being sent as a message and the server replying with the actual configuration after attempting to apply the changes.
 ///
 /// ## Topics
-/// ### Creating a Client
+/// ### Retrieving a Client
 /// - ``forXPCService(named:)``
 /// - ``forMachService(named:)``
 /// ### Calling Routes
@@ -97,7 +97,7 @@ public class XPCClient {
     ///
     /// An XPC Service is a helper tool which ships as part of your app and only your app can communicate with.
     ///
-    /// In order for this client to be able to communicate with the XPC Service, the service itself must create and configure an ``XPCServer`` by calling
+    /// In order for this client to be able to communicate with the XPC Service, the service itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisXPCService()``.
     ///
     /// > Note: Client creation always succeeds regardless of whether the XPC Service actually exists.
@@ -114,7 +114,7 @@ public class XPCClient {
     /// XPC Mach services are often used by tools such as Launch Agents, Launch Daemons, and helper tools installed with
     /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
     ///
-    /// In order for this client to be able to communicate with the tool, the tool itself must create and configure an ``XPCServer`` by calling
+    /// In order for this client to be able to communicate with the tool, the tool itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisMachService(named:clientRequirements:)`` or ``XPCServer/forThisBlessedHelperTool()``.
     ///
     /// > Note: Client creation always succeeds regardless of whether the XPC Mach service actually exists.
