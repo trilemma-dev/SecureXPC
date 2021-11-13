@@ -1,5 +1,5 @@
 //
-//  XPC Codable round trip tests.swift
+//  Class round trip tests.swift
 //  
 //
 //  Created by Alexander Momchilov on 2021-11-07.

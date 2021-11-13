@@ -57,6 +57,14 @@ fileprivate func assertEqual(
 	}
 }
 
+/// Asserts that `value` is equal to the result of encoding and then decoding `value`
+func assertRoundTripEqual<T: Codable & Equatable>(_ value: T, file: StaticString = #file, line: UInt = #line) throws {
+    let encodedValue = try XPCEncoder.encode(value)
+    let decodedValue = try XPCDecoder.decode(T.self, object: encodedValue)
+    
+    XCTAssertEqual(value, decodedValue, file: file, line: line)
+}
+
 // MARK: XPC object factories
 
 /// Converts the provided `sourceArray` into an XPC array, by transforming its non-nil elements by the provided `transformIntoXPCObject` closure,
