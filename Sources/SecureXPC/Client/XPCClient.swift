@@ -131,6 +131,9 @@ public class XPCClient {
     internal let serviceName: String
     private var connection: xpc_connection_t? = nil
     
+    /// If set, errors encountered will be sent to this handler.
+    public var errorHandler: ((XPCError) -> Void)?
+
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
     /// - Parameters:
@@ -237,10 +240,13 @@ public class XPCClient {
     private func handle(connectionEvent: xpc_object_t) {
         if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INVALID) {
             self.connection = nil
+            errorHandler?(.connectionInvalid)
         } else if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INTERRUPTED) {
             self.connection = nil
+            errorHandler?(.connectionInterrupted)
         } else if xpc_equal(connectionEvent, XPC_ERROR_TERMINATION_IMMINENT) {
             self.connection = nil
+            errorHandler?(.terminationImminent)
         }
     }
 
