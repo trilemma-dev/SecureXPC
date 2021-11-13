@@ -27,6 +27,9 @@ internal class XPCMachServer: XPCServer {
     /// this invariant be upheld when returning `XPCServer` instances.
     private static var machServerCache = [String : XPCMachServer]()
     
+    /// Prevents race conditions for creating and retrieving cached Mach servers
+    private static let serialQueue = DispatchQueue(label: "XPC Mach Server Serial Queue")
+    
     /// Returns a server with the provided name and requirements OR throws an error if that's not possible.
     ///
     /// Decision tree:
@@ -38,33 +41,37 @@ internal class XPCMachServer: XPCServer {
     /// This behavior prevents ending up with two servers for the same named XPC Mach service.
     internal static func getXPCMachServer(named machServiceName: String,
                                           clientRequirements: [SecRequirement]) throws -> XPCMachServer {
-        let server: XPCMachServer
-        if let cachedServer = machServerCache[machServiceName] {
-            // Transform the requirements into Data form so that they can be compared
-            let requirementTransform = { (requirement: SecRequirement) throws -> Data in
-                var data: CFData?
-                if SecRequirementCopyData(requirement, [], &data) == errSecSuccess,
-                   let data = data as Data? {
-                    return data
-                } else {
-                    throw XPCError.unknown
+        // Force serial execution to prevent a race condition where multiple XPCMachServer instances for the same Mach
+        // service name are created and returned
+        try serialQueue.sync {
+            let server: XPCMachServer
+            if let cachedServer = machServerCache[machServiceName] {
+                // Transform the requirements into Data form so that they can be compared
+                let requirementTransform = { (requirement: SecRequirement) throws -> Data in
+                    var data: CFData?
+                    if SecRequirementCopyData(requirement, [], &data) == errSecSuccess,
+                       let data = data as Data? {
+                        return data
+                    } else {
+                        throw XPCError.unknown
+                    }
                 }
+                
+                // Turn into sets so they can be compared without taking into account the order of requirements
+                let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
+                let cachedRequirementsData = Set<Data>(try cachedServer.clientRequirements.map(requirementTransform))
+                guard requirementsData == cachedRequirementsData else {
+                    throw XPCError.conflictingClientRequirements
+                }
+                
+                server = cachedServer
+            } else {
+                server = XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
+                machServerCache[machServiceName] = server
             }
             
-            // Turn into sets so they can be compared without taking into account the order of requirements
-            let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
-            let cachedRequirementsData = Set<Data>(try cachedServer.clientRequirements.map(requirementTransform))
-            guard requirementsData == cachedRequirementsData else {
-                throw XPCError.conflictingClientRequirements
-            }
-            
-            server = cachedServer
-        } else {
-            server = XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
-            machServerCache[machServiceName] = server
+            return server
         }
-        
-        return server
     }
 
 	internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
