@@ -126,9 +126,10 @@ public class XPCClient {
         XPCMachClient(serviceName: machServiceName)
     }
 
-	// MARK: Implementation
+    // MARK: Implementation
 
     internal let serviceName: String
+    private var connection: xpc_connection_t? = nil
     
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
@@ -222,15 +223,25 @@ public class XPCClient {
     }
 
     private func getConnection() -> xpc_connection_t {
-        let newConnection = self.createConnection()
+        if let existingConnection = self.connection { return existingConnection }
 
-        xpc_connection_set_event_handler(newConnection, { (event: xpc_object_t) in
-            // A block *must* be set as the handler, even though this block does nothing.
-            // If it were not set, a crash would occur upon calling xpc_connection_resume.
-        })
+        let newConnection = self.createConnection()
+        self.connection = newConnection
+
+        xpc_connection_set_event_handler(newConnection, self.handle(connectionEvent:))
         xpc_connection_resume(newConnection)
 
         return newConnection
+    }
+
+    private func handle(connectionEvent: xpc_object_t) {
+        if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INVALID) {
+            self.connection = nil
+        } else if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INTERRUPTED) {
+            self.connection = nil
+        } else if xpc_equal(connectionEvent, XPC_ERROR_TERMINATION_IMMINENT) {
+            self.connection = nil
+        }
     }
 
     // MARK: Abstract methods
