@@ -148,7 +148,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
         let encoded = try Request(route: route.route).dictionary
-        xpc_connection_send_message(createConnection(), encoded)
+        xpc_connection_send_message(getConnection(), encoded)
     }
     
     /// Sends a message which will not receive a response.
@@ -159,7 +159,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
         let encoded = try Request(route: route.route, payload: message).dictionary
-        xpc_connection_send_message(createConnection(), encoded)
+        xpc_connection_send_message(getConnection(), encoded)
     }
     
     /// Sends with no message and provides the reply as either a message on success or an error on failure.
@@ -191,7 +191,7 @@ public class XPCClient {
     /// Does the actual work of sending an XPC message which receives a reply.
     private func sendWithReply<R: Decodable>(encoded: xpc_object_t,
                                              withReply reply: @escaping XPCReplyHandler<R>) {
-        xpc_connection_send_message_with_reply(createConnection(), encoded, nil, { xpcResponse in
+        xpc_connection_send_message_with_reply(getConnection(), encoded, nil, { xpcResponse in
             let result: Result<R, XPCError>
             if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
                 do {
@@ -221,9 +221,21 @@ public class XPCClient {
         })
     }
 
-	// MARK: Abstract methods
+    private func getConnection() -> xpc_connection_t {
+        let newConnection = self.createConnection()
 
-	/// Creates and returns a connection for the service represented by this client.
+        xpc_connection_set_event_handler(newConnection, { (event: xpc_object_t) in
+            // A block *must* be set as the handler, even though this block does nothing.
+            // If it were not set, a crash would occur upon calling xpc_connection_resume.
+        })
+        xpc_connection_resume(newConnection)
+
+        return newConnection
+    }
+
+    // MARK: Abstract methods
+
+    /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() -> xpc_connection_t {
         fatalError("Abstract Method")
     }
