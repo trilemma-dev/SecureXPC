@@ -25,7 +25,7 @@ internal class XPCDecoderImpl: Decoder {
 	}
 
 	func unkeyedContainer() throws -> UnkeyedDecodingContainer {
-		return try XPCUnkeyedDecodingContainer(value: self.value, codingPath: self.codingPath)
+        return try XPCUnkeyedDecodingContainer.containerFor(value: self.value, codingPath: self.codingPath)
 	}
 
 	func singleValueContainer() throws -> SingleValueDecodingContainer {

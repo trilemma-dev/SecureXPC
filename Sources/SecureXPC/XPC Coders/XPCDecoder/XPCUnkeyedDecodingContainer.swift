@@ -7,7 +7,27 @@
 
 import Foundation
 
-internal class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
+enum XPCUnkeyedDecodingContainer {
+    /// Returns a container to perform the decoding.
+    ///
+    /// Depending on how the container was encoded it may either return one that operates on an XPC array or an XPC data instance.
+    static func containerFor(value: xpc_object_t, codingPath: [CodingKey]) throws -> UnkeyedDecodingContainer {
+        let type = xpc_get_type(value)
+        if type == XPC_TYPE_ARRAY {
+            return try XPCArrayBackedUnkeyedDecodingContainer(value: value, codingPath: codingPath)
+        } else if type == XPC_TYPE_DATA {
+            return try XPCDataBackedUnkeyedDecodingContainer(value: value, codingPath: codingPath)
+        } else {
+            let context = DecodingError.Context(codingPath: codingPath,
+                                                debugDescription: "Expected array or data, was \(type.description)",
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(XPCUnkeyedDecodingContainer.self, context)
+        }
+    }
+}
+
+/// Decodes from an XPC array.
+private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	private let array: [xpc_object_t]
 	var currentIndex: Int
 	var codingPath = [CodingKey]()
@@ -22,8 +42,8 @@ internal class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 			self.array = array
 			self.currentIndex = 0
 			self.codingPath = codingPath
-		} else {
-			let context = DecodingError.Context(codingPath: [],
+        } else {
+			let context = DecodingError.Context(codingPath: codingPath,
 												debugDescription: "Not an array",
 												underlyingError: nil)
 			throw DecodingError.typeMismatch(XPCUnkeyedDecodingContainer.self, context)
@@ -155,8 +175,9 @@ internal class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	}
 
 	func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
-		let container = try XPCUnkeyedDecodingContainer(value: try nextElement(UnkeyedDecodingContainer.self),
-														codingPath: self.codingPath)
+        let container = try XPCUnkeyedDecodingContainer.containerFor(
+            value: try nextElement(UnkeyedDecodingContainer.self),
+            codingPath: self.codingPath)
 		currentIndex += 1
 
 		return container
@@ -168,4 +189,168 @@ internal class XPCUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 
 		return decoder
 	}
+}
+
+/// Decodes from an XPC data instance. As such, only certain value types are expected to be encoded and therefore supported when decoding.
+private class XPCDataBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
+    /// Contains the unkeyed elements to decode
+    private let data: Data
+    
+    /// Offset into data
+    private var currentOffset = 0
+    
+    /// The count is never known by this container
+    let count: Int? = nil
+    
+    let codingPath: [CodingKey]
+    var isAtEnd: Bool = false
+    var currentIndex = 0
+    
+    init(value: xpc_object_t, codingPath: [CodingKey]) throws {
+        self.codingPath = codingPath
+        
+        guard xpc_get_type(value) == XPC_TYPE_DATA else {
+            let context = DecodingError.Context(codingPath:codingPath,
+                                                debugDescription: "Not an data-backed array",
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(XPCUnkeyedDecodingContainer.self, context)
+        }
+        
+        guard let dataPointer = xpc_data_get_bytes_ptr(value) else {
+            let context = DecodingError.Context(codingPath: codingPath,
+                                                debugDescription: "Array, encoded as data, could not be read",
+                                                underlyingError: nil)
+            throw DecodingError.dataCorrupted(context)
+        }
+        let dataLength = xpc_data_get_length(value)
+        self.data = Data(bytes: dataPointer, count: dataLength)
+    }
+    
+    /// Reads a portion of data as the specified type or throws an error if that's not supported
+    ///
+    /// Updates `currentOffset`, `currentIndex`, and `isAtEnd`.
+    ///
+    /// - Parameters:
+    ///   - asType: The type to read the data as.
+    /// - Returns: The `data` as an instance of `asType`.
+    private func nextElement<T>(asType type: T.Type) throws -> T {
+        // No more elements
+        if isAtEnd {
+            let context = DecodingError.Context(codingPath: codingPath,
+                                                debugDescription: "Already at end, no remaining elements to decode",
+                                                underlyingError: nil)
+            throw DecodingError.dataCorrupted(context)
+        }
+        
+        // Can't decode this type
+        if !XPCUnkeyedEncodingContainer.supportedDataTypes.contains(where: { $0 == type }) {
+            let context = DecodingError.Context(codingPath: codingPath,
+                                                debugDescription: "Container can't decode \(type)",
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(type, context)
+        }
+        
+        // Decode the next element
+        let result: T = data.withUnsafeBytes { pointer in
+            // Directly loading using pointer.load(...) will not work in cases with mixed length types; it would
+            // result in misaligned raw pointer access (which Swift disallows and additionally ARM CPUs do not support)
+            // See https://forums.swift.org/t/accessing-a-misaligned-raw-pointer-safely/22743/2
+            
+            // Create a default value of the correct type (and therefore length) so that we can pass it to memcpy
+            var value = Data(count: MemoryLayout<T>.size).withUnsafeBytes { pointer in
+                pointer.load(as: type)
+            }
+            
+            // Populate the value with memcpy
+            memcpy(&value, pointer.baseAddress! + currentOffset, MemoryLayout<T>.size)
+            
+            return value
+        }
+        
+        // Update offset related variables
+        currentOffset += MemoryLayout<T>.size
+        currentIndex += 1
+        if currentOffset == data.count {
+            isAtEnd = true
+        }
+        
+        return result
+    }
+    
+    // This container can't decode nil values
+    func decodeNil() throws -> Bool {
+        return false
+    }
+    
+    func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
+        return try nextElement(asType: KeyedDecodingContainer<NestedKey>.self)
+    }
+    
+    func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
+        return try nextElement(asType: UnkeyedDecodingContainer.self)
+    }
+    
+    func superDecoder() throws -> Decoder {
+        return try nextElement(asType: Decoder.self)
+    }
+    
+    func decode(_ type: String.Type) throws -> String {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Bool.Type) throws -> Bool {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Double.Type) throws -> Double {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Float.Type) throws -> Float {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Int.Type) throws -> Int {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Int8.Type) throws -> Int8 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Int16.Type) throws -> Int16 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Int32.Type) throws -> Int32 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: Int64.Type) throws -> Int64 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: UInt.Type) throws -> UInt {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: UInt8.Type) throws -> UInt8 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: UInt16.Type) throws -> UInt16 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: UInt32.Type) throws -> UInt32 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode(_ type: UInt64.Type) throws -> UInt64 {
+        return try nextElement(asType: type)
+    }
+    
+    func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
+        return try nextElement(asType: type)
+    }
 }

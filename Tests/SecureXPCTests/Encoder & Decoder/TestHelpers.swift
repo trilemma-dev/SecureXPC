@@ -84,6 +84,26 @@ func createXPCArray<T>(from sourceArray: [T?], using transformIntoXPCObject: (T)
 	return xpcArray
 }
 
+/// Converts the provided `sourceArray` into an XPC data instance. This is only intended to work for fixed size types such as `Bool` or `UInt64`.
+///
+/// - Parameters:
+///   - sourceArray: The values to encode into an XPC data instance.
+/// - Returns: An XPC data instance containing the array.
+func createXPCData<T>(fromArray sourceArray: [T]) -> xpc_object_t {
+    var data = Data()
+    for var element in sourceArray {
+        //var value = value
+        let valueBytes: [UInt8] = withUnsafeBytes(of: &element) { Array($0) }
+        data.append(valueBytes, count: valueBytes.count)
+    }
+    
+    let xpcData = data.withUnsafeBytes { pointer in
+        xpc_data_create(pointer.baseAddress, data.count)
+    }
+    
+    return xpcData
+}
+
 /// Converts the provided `sourceDict` into an XPC dictionary, by transforming its non-nil values by the provided `transformIntoXPCObject` closure,
 /// and replacing `nil` values with the proper XPC null object.
 /// - Parameters:

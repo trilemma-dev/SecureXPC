@@ -143,8 +143,8 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 	}
 
 	func nestedUnkeyedContainer(forKey key: K) throws -> UnkeyedDecodingContainer {
-		return try XPCUnkeyedDecodingContainer(value: value(forKey: key),
-											   codingPath: self.codingPath + [key])
+        return try XPCUnkeyedDecodingContainer.containerFor(value: value(forKey: key),
+                                                            codingPath: self.codingPath + [key])
 	}
 
 	func superDecoder() throws -> Decoder {

@@ -154,13 +154,15 @@ final class XPCEncoder_DictionaryEncodingTests: XCTestCase {
 	
 	func testEncode_dictOf_Arrays() throws {
 		// There's too many possible permutations, but it should be satisfactory to just test one kind of nesting.
-		let dictOfArrays: [String: [Int64]] = [
-			"a1": [1, 2, 3],
-			"a2": [4, 5, 6],
+		let dictOfArrays: [String: [String]] = [
+			"a1": ["1", "2", "3"],
+			"a2": ["4", "5", "6"],
 		]
 		
 		let expectedXPCDict = createXPCDict(from: dictOfArrays, using: { array in
-			createXPCArray(from: array, using: xpc_int64_create)
+			createXPCArray(from: array, using: { str in
+                str.withCString(xpc_string_create)
+            })
 		})
 		
 		try assert(dictOfArrays, encodesEqualTo: expectedXPCDict)
