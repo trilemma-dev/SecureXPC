@@ -31,7 +31,7 @@ internal class XPCServiceServer: XPCServer {
         CFBundleGetPackageInfo(CFBundleGetMainBundle(), &packageType, &packageCreator)
 
         func uint32ToString(_ input: UInt32) -> String? {
-            guard input == 0 else {
+            if input == 0 {
                 return nil
             }
             var input = input
