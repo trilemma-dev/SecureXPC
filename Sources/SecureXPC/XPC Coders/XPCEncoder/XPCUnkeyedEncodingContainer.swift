@@ -75,16 +75,23 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
         
         if XPCUnkeyedEncodingContainer.supportedDataTypes.contains(where: { $0 == T.self }) {
             var value = value
-            let valueBytes: [UInt8] = withUnsafeBytes(of: &value) { Array($0) }
-            valuesAsData?.append(valueBytes, count: valueBytes.count)
+            withUnsafeBytes(of: &value) { pointer in
+                let reboundPointer = pointer.bindMemory(to: UInt8.self)
+                valuesAsData?.append(reboundPointer.baseAddress!, count: pointer.count)
+            }
         } else { // this value can't be encoded directly as data, so nil out valuesAsData
             valuesAsData = nil
         }
     }
+    
+    /// Call this function if an encoding request means that data backed encoding is no longer possible, such as trying to encode `String` or requesting a
+    /// container.
+    private func dataBackedEncodingNoLongerPossible() {
+        valuesAsData = nil
+    }
 
 	func encodeNil() {
-        // encoding nil means data-backed encoding can't happen
-        valuesAsData = nil
+        self.dataBackedEncodingNoLongerPossible()
 		self.append(xpc_null_create())
 	}
 
@@ -169,17 +176,14 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
 	func encode<T: Encodable>(_ value: T) throws {
         self.attemptDataBackedAppend(value)
         
-        // standard encoding
 		let encoder = XPCEncoderImpl(codingPath: self.codingPath)
 		self.append(encoder)
 		try value.encode(to: encoder)
 	}
 
 	func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
-        // requesting a container means data-backed encoding can't happen
-        valuesAsData = nil
+        self.dataBackedEncodingNoLongerPossible()
         
-        // standard encoding
 		let nestedContainer = XPCKeyedEncodingContainer<NestedKey>(codingPath: self.codingPath)
 		self.append(nestedContainer)
 
@@ -187,10 +191,8 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
 	}
 
 	func nestedUnkeyedContainer() -> UnkeyedEncodingContainer {
-        // requesting a container means data-backed encoding can't happen
-        valuesAsData = nil
+        self.dataBackedEncodingNoLongerPossible()
         
-        // standard encoding
 		let nestedUnkeyedContainer = XPCUnkeyedEncodingContainer(codingPath: self.codingPath)
 		self.append(nestedUnkeyedContainer)
 
@@ -198,10 +200,8 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
 	}
 
 	func superEncoder() -> Encoder {
-        // requesting a super encoder means data-backed encoding can't happen
-        valuesAsData = nil
+        self.dataBackedEncodingNoLongerPossible()
         
-        // standard encoding
 		let encoder = XPCEncoderImpl(codingPath: self.codingPath)
 		self.append(encoder)
 

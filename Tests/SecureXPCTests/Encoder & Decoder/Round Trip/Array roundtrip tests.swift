@@ -10,6 +10,11 @@ import XCTest
 
 final class XPCArrayRoundTripTests: XCTestCase {
 
+    // MARK: Empty array
+    func testRoundTrip_arrayOf_Nothing() throws {
+        try assertRoundTripEqual([Int]())
+    }
+    
     // MARK: Signed Integers
     
     func testRoundTrip_arrayOf_SignedIntegers() throws {

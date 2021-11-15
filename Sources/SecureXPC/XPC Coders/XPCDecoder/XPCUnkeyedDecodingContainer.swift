@@ -203,8 +203,11 @@ private class XPCDataBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
     let count: Int? = nil
     
     let codingPath: [CodingKey]
-    var isAtEnd: Bool = false
     var currentIndex = 0
+    
+    var isAtEnd: Bool {
+        currentOffset >= data.count
+    }
     
     init(value: xpc_object_t, codingPath: [CodingKey]) throws {
         self.codingPath = codingPath
@@ -216,14 +219,19 @@ private class XPCDataBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
             throw DecodingError.typeMismatch(XPCUnkeyedDecodingContainer.self, context)
         }
         
-        guard let dataPointer = xpc_data_get_bytes_ptr(value) else {
-            let context = DecodingError.Context(codingPath: codingPath,
-                                                debugDescription: "Array, encoded as data, could not be read",
-                                                underlyingError: nil)
-            throw DecodingError.dataCorrupted(context)
-        }
+        
         let dataLength = xpc_data_get_length(value)
-        self.data = Data(bytes: dataPointer, count: dataLength)
+        if dataLength > 0 {
+            guard let dataPointer = xpc_data_get_bytes_ptr(value) else {
+                let context = DecodingError.Context(codingPath: codingPath,
+                                                    debugDescription: "Array, encoded as data, could not be read",
+                                                    underlyingError: nil)
+                throw DecodingError.dataCorrupted(context)
+            }
+            self.data = Data(bytes: dataPointer, count: dataLength)
+        } else {
+            self.data = Data()
+        }
     }
     
     /// Reads a portion of data as the specified type or throws an error if that's not supported
@@ -240,6 +248,14 @@ private class XPCDataBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
                                                 debugDescription: "Already at end, no remaining elements to decode",
                                                 underlyingError: nil)
             throw DecodingError.dataCorrupted(context)
+        }
+        
+        // Reading this element would put us past the end, which means something has gone wrong with the decoding
+        if currentOffset + MemoryLayout<T>.size > data.count {
+            let context = DecodingError.Context(codingPath: codingPath,
+                                                debugDescription: "Decoding \(type) would read past end of container",
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(type, context)
         }
         
         // Can't decode this type
@@ -270,9 +286,6 @@ private class XPCDataBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
         // Update offset related variables
         currentOffset += MemoryLayout<T>.size
         currentIndex += 1
-        if currentOffset == data.count {
-            isAtEnd = true
-        }
         
         return result
     }

@@ -84,24 +84,31 @@ func createXPCArray<T>(from sourceArray: [T?], using transformIntoXPCObject: (T)
 	return xpcArray
 }
 
-/// Converts the provided `sourceArray` into an XPC data instance. This is only intended to work for fixed size types such as `Bool` or `UInt64`.
+protocol XPCCodableFixedSize {}
+extension Int: XPCCodableFixedSize {}
+extension Int8: XPCCodableFixedSize {}
+extension Int16: XPCCodableFixedSize {}
+extension Int32: XPCCodableFixedSize {}
+extension Int64: XPCCodableFixedSize {}
+extension UInt: XPCCodableFixedSize {}
+extension UInt8: XPCCodableFixedSize {}
+extension UInt16: XPCCodableFixedSize {}
+extension UInt32: XPCCodableFixedSize {}
+extension UInt64: XPCCodableFixedSize {}
+extension Float: XPCCodableFixedSize {}
+extension Double: XPCCodableFixedSize {}
+extension Bool: XPCCodableFixedSize {}
+
+/// Converts the provided `sourceArray` into an XPC data instance. This only works for fixed size types which conform to `XPCCodableFixedSize` (which
+/// is intentionally only a concept for test code and does not exist in the framework itself).
 ///
 /// - Parameters:
 ///   - sourceArray: The values to encode into an XPC data instance.
 /// - Returns: An XPC data instance containing the array.
-func createXPCData<T>(fromArray sourceArray: [T]) -> xpc_object_t {
-    var data = Data()
-    for var element in sourceArray {
-        //var value = value
-        let valueBytes: [UInt8] = withUnsafeBytes(of: &element) { Array($0) }
-        data.append(valueBytes, count: valueBytes.count)
+func createXPCData<T: XPCCodableFixedSize & Codable>(fromArray sourceArray: [T]) -> xpc_object_t {
+    return sourceArray.withUnsafeBytes { rawByteBuffer in
+        xpc_data_create(rawByteBuffer.baseAddress!, rawByteBuffer.count)
     }
-    
-    let xpcData = data.withUnsafeBytes { pointer in
-        xpc_data_create(pointer.baseAddress, data.count)
-    }
-    
-    return xpcData
 }
 
 /// Converts the provided `sourceDict` into an XPC dictionary, by transforming its non-nil values by the provided `transformIntoXPCObject` closure,
