@@ -8,6 +8,7 @@
 import Foundation
 
 internal enum XPCServiceDescriptor {
+    case anonymous
     case xpcService(name: String)
     case machService(name: String)
 }
