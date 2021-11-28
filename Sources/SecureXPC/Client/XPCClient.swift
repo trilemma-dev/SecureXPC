@@ -126,6 +126,20 @@ public class XPCClient {
         XPCMachClient(machServiceName: machServiceName)
     }
 
+	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
+        let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
+
+        xpc_connection_set_event_handler(connection, { (event: xpc_object_t) in
+            fatalError("It should be impossible for this connection to receive an event.")
+        })
+        xpc_connection_resume(connection)
+
+        switch endpoint.serviceDescriptor {
+        case .xpcService(name: let name): return XPCServiceClient(xpcServiceName: name, connection: connection)
+        case .machService(name: let name): return XPCMachClient(machServiceName: name, connection: connection)
+        }
+    }
+
     // MARK: Implementation
 
     private var connection: xpc_connection_t? = nil
@@ -134,7 +148,8 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///   - serviceName: The name of the XPC service; no validation is performed on this.
-    internal init() {
+    internal init(connection: xpc_connection_t? = nil) {
+        self.connection = connection
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.

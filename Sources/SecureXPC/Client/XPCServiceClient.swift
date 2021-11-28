@@ -15,8 +15,9 @@ internal class XPCServiceClient: XPCClient {
 
     override var serviceName: String? { xpcServiceName }
 
-    internal init(xpcServiceName: String) {
+    internal init(xpcServiceName: String, connection: xpc_connection_t? = nil) {
         self.xpcServiceName = xpcServiceName
+        super.init(connection: connection)
     }
     
     /// Creates and returns a connection for the XPC service represented by this client.
