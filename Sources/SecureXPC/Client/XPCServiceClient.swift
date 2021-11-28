@@ -11,6 +11,14 @@ import Foundation
 ///
 /// In the case of this framework, the XPC Service is expected to be represented by an `XPCServiceServer`.
 internal class XPCServiceClient: XPCClient {
+    private let xpcServiceName: String
+
+    override var serviceName: String? { xpcServiceName }
+
+    internal init(xpcServiceName: String) {
+        self.xpcServiceName = xpcServiceName
+    }
+    
     /// Creates and returns a connection for the XPC service represented by this client.
     internal override func createConnection() -> xpc_connection_t {
         xpc_connection_create(self.serviceName, nil)

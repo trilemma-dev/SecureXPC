@@ -106,7 +106,7 @@ public class XPCClient {
     ///   - named: The bundle identifier of the XPC Service.
     /// - Returns: A client configured to communicate with the named service.
     public static func forXPCService(named xpcServiceName: String) -> XPCClient {
-        XPCServiceClient(serviceName: xpcServiceName)
+        XPCServiceClient(xpcServiceName: xpcServiceName)
     }
     
     /// Provides a client to communicate with an XPC Mach service.
@@ -123,20 +123,18 @@ public class XPCClient {
     ///    - named: A key in the `MachServices` entry of the tool's launchd property list.
     /// - Returns: A client configured to communicate with the named service.
     public static func forMachService(named machServiceName: String) -> XPCClient {
-        XPCMachClient(serviceName: machServiceName)
+        XPCMachClient(machServiceName: machServiceName)
     }
 
     // MARK: Implementation
 
-    internal let serviceName: String
     private var connection: xpc_connection_t? = nil
     
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
     /// - Parameters:
     ///   - serviceName: The name of the XPC service; no validation is performed on this.
-    internal init(serviceName: String) {
-        self.serviceName = serviceName
+    internal init() {
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
@@ -248,6 +246,11 @@ public class XPCClient {
     }
 
     // MARK: Abstract methods
+
+
+    public var serviceName: String? {
+        fatalError("Abstract Property")
+    }
 
     /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() -> xpc_connection_t {
