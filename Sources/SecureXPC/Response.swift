@@ -37,7 +37,7 @@ struct Response {
     /// Create a response by directly encoding the payload into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
-    /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
+    /// it cannot be copied by value and therefore a `Response` instance can't be constructed.
     static func encodePayload<P: Encodable>(_ payload: P, intoReply reply: inout xpc_object_t) throws {
         xpc_dictionary_set_value(reply, ResponseKeys.payload, try XPCEncoder.encode(payload))
     }
@@ -45,7 +45,7 @@ struct Response {
     /// Create a response by directly encoding the error into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
-    /// it cannot be copied by value and therefore a `Reponse` instance can't be constructed.
+    /// it cannot be copied by value and therefore a `Response` instance can't be constructed.
     static func encodeError(_ error: XPCError, intoReply reply: inout xpc_object_t) throws {
         let encodedError = try XPCEncoder.encode(error)
         xpc_dictionary_set_value(reply, ResponseKeys.error, encodedError)
