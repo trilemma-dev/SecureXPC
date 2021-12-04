@@ -10,7 +10,7 @@ import Foundation
 /// A response which is sent to the client for requests which require one.
 ///
 /// Due to how the XPC C API works, instances of this struct can only be created to represent an already received reply (which is expected to be done by the client).
-/// The server must instead use the `encodePayload` and `encodedError` static functions.
+/// The server must instead use the `encodePayload` and `encodeError` static functions.
 struct Response {
     
     private enum ResponseKeys {
