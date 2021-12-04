@@ -126,9 +126,10 @@ public class XPCClient {
         XPCMachClient(serviceName: machServiceName)
     }
 
-	// MARK: Implementation
+    // MARK: Implementation
 
     internal let serviceName: String
+    private var connection: xpc_connection_t? = nil
     
     /// Creates a client which will attempt to send messages to the specified mach service.
     ///
@@ -148,7 +149,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
         let encoded = try Request(route: route.route).dictionary
-        xpc_connection_send_message(createConnection(), encoded)
+        xpc_connection_send_message(getConnection(), encoded)
     }
     
     /// Sends a message which will not receive a response.
@@ -159,7 +160,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
         let encoded = try Request(route: route.route, payload: message).dictionary
-        xpc_connection_send_message(createConnection(), encoded)
+        xpc_connection_send_message(getConnection(), encoded)
     }
     
     /// Sends with no message and provides the reply as either a message on success or an error on failure.
@@ -191,7 +192,7 @@ public class XPCClient {
     /// Does the actual work of sending an XPC message which receives a reply.
     private func sendWithReply<R: Decodable>(encoded: xpc_object_t,
                                              withReply reply: @escaping XPCReplyHandler<R>) {
-        xpc_connection_send_message_with_reply(createConnection(), encoded, nil, { xpcResponse in
+        xpc_connection_send_message_with_reply(getConnection(), encoded, nil, { xpcResponse in
             let result: Result<R, XPCError>
             if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
                 do {
@@ -209,10 +210,13 @@ public class XPCClient {
                     result = Result.failure(.unknown)
                 }
             } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INVALID) {
+                self.connection = nil
                 result = Result.failure(.connectionInvalid)
             } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INTERRUPTED) {
+                self.connection = nil
                 result = Result.failure(.connectionInterrupted)
             } else if xpc_equal(xpcResponse, XPC_ERROR_TERMINATION_IMMINENT) {
+                self.connection = nil
                 result = Result.failure(.terminationImminent)
             } else { // Unexpected
                 result = Result.failure(.unknown)
@@ -221,9 +225,31 @@ public class XPCClient {
         })
     }
 
-	// MARK: Abstract methods
+    private func getConnection() -> xpc_connection_t {
+        if let existingConnection = self.connection { return existingConnection }
 
-	/// Creates and returns a connection for the service represented by this client.
+        let newConnection = self.createConnection()
+        self.connection = newConnection
+
+        xpc_connection_set_event_handler(newConnection, self.handle(connectionEvent:))
+        xpc_connection_resume(newConnection)
+
+        return newConnection
+    }
+
+    private func handle(connectionEvent: xpc_object_t) {
+        if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INVALID) {
+            self.connection = nil
+        } else if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INTERRUPTED) {
+            self.connection = nil
+        } else if xpc_equal(connectionEvent, XPC_ERROR_TERMINATION_IMMINENT) {
+            self.connection = nil
+        }
+    }
+
+    // MARK: Abstract methods
+
+    /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() -> xpc_connection_t {
         fatalError("Abstract Method")
     }
