@@ -358,8 +358,8 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReply<R: Encodable>: X
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         if request.containsPayload {
-            throw XPCError.routeMismatch("Incoming request for route \(request.route.pathComponents) contained a" +
-                                         "message of type \(String(describing: request.route.messageType)), but the" +
+            throw XPCError.routeMismatch("Incoming request for route \(request.route.pathComponents) contained a " +
+                                         "message of type \(String(describing: request.route.messageType)), but the " +
                                          "handler registered with the server does not have a message parameter.")
         }
         
