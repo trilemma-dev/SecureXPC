@@ -41,10 +41,12 @@ public enum XPCError: Error, Codable {
     /// The route can't be registered because a route with this path already exists.
     case routeAlreadyRegistered([String])
     /// The route associated with the incoming XPC request is not registered with the ``XPCServer``.
-    case routeNotRegistered(String)
-    /// While the route associated with the incoming XPC request is registered with the ``XPCServer``, the message and/or reply does not match what the
-    /// server expects.
-    case routeMismatch(String)
+    case routeNotRegistered([String])
+    /// While the route associated with the incoming XPC request is registered with the ``XPCServer``, the message and/or reply does not match the handler
+    /// registered with the server.
+    ///
+    /// The first associated value is the route's path components. The second is a descriptive error message.
+    case routeMismatch([String], String)
     /// The caller is not a blessed helper tool or its property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
     case misconfiguredBlessedHelperTool(String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
