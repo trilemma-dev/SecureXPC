@@ -24,7 +24,7 @@ import Foundation
 /// #### XPC Mach services
 ///
 /// Launch Agents, Launch Daemons, and helper tools installed with
-/// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
+/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
 /// over XPC by using Mach services.
 ///
 /// In most cases, a server can be auto-configured for a helper tool installed with `SMJobBless`:
@@ -172,61 +172,66 @@ public class XPCServer {
     public var errorHandler: ((XPCError) -> Void)?
     
     // Routes
-    private var routesWithoutMessageWithReply = [XPCRoute : XPCHandlerWithoutMessageWithReply]()
-    private var routesWithMessageWithReply = [XPCRoute : XPCHandlerWithMessageWithReply]()
-    private var routesWithoutMessageWithoutReply = [XPCRoute : XPCHandlerWithoutMessageWithoutReply]()
-    private var routesWithMessageWithoutReply = [XPCRoute : XPCHandlerWithMessageWithoutReply]()
+    private var routes = [XPCRoute : XPCHandler]()
     
     /// Registers a route that has no message and can't receive a reply.
-    ///
-    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
     ///
     /// - Parameters:
     ///   - route: A route that has no message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    /// - Throws: If this route has already been registered.
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
-                              handler: @escaping () throws -> Void) {
-        let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithoutReply(handler: handler)
-        self.routesWithoutMessageWithoutReply[route.route] = handlerWrapper
+                              handler: @escaping () throws -> Void) throws {
+        if self.routes.keys.contains(route.route) {
+            throw XPCError.routeAlreadyRegistered(route.route.pathComponents)
+        }
+        
+        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithoutReply(handler: handler)
     }
     
     /// Registers a route that has a message and can't receive a reply.
     ///
-    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
-    ///
     /// - Parameters:
     ///   - route: A route that has a message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    /// - Throws: If this route has already been registered.
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
-                                            handler: @escaping (M) throws -> Void) {
-        let handlerWrapper = ConstrainedXPCHandlerWithMessageWithoutReply(handler: handler)
-        self.routesWithMessageWithoutReply[route.route] = handlerWrapper
+                                            handler: @escaping (M) throws -> Void) throws {
+        if self.routes.keys.contains(route.route) {
+            throw XPCError.routeAlreadyRegistered(route.route.pathComponents)
+        }
+        
+        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithoutReply(handler: handler)
     }
     
     /// Registers a route that has no message and expects a reply.
     ///
-    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
-    ///
     /// - Parameters:
     ///   - route: A route that has no message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    /// - Throws: If this route has already been registered.
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
-                                            handler: @escaping () throws -> R) {
-        let handlerWrapper = ConstrainedXPCHandlerWithoutMessageWithReply(handler: handler)
-        self.routesWithoutMessageWithReply[route.route] = handlerWrapper
+                                            handler: @escaping () throws -> R) throws {
+        if self.routes.keys.contains(route.route) {
+            throw XPCError.routeAlreadyRegistered(route.route.pathComponents)
+        }
+        
+        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithReply(handler: handler)
     }
     
     /// Registers a route that has a message and expects a reply.
     ///
-    /// If this route has already been registered, calling this function will overwrite the existing registration. Routes are unique based on their paths and types.
-    ///
     /// - Parameters:
     ///   - route: A route that has a message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    /// - Throws: If this route has already been registered.
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
-                                                          handler: @escaping (M) throws -> R) {
-        let handlerWrapper = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
-        self.routesWithMessageWithReply[route.route] = handlerWrapper
+                                                          handler: @escaping (M) throws -> R) throws {
+        if self.routes.keys.contains(route.route) {
+            throw XPCError.routeAlreadyRegistered(route.route.pathComponents)
+        }
+        
+        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
     }
     
     internal func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
@@ -267,38 +272,14 @@ public class XPCServer {
     
     private func handleMessage(connection: xpc_connection_t, message: xpc_object_t, reply: inout xpc_object_t?) throws {
         let request = try Request(dictionary: message)
-
-        // If a dictionary reply exists, then the message expects a reply
-        if var reply = reply {
-            if request.containsPayload {
-                if let handler = self.routesWithMessageWithReply[request.route] {
-                    try handler.handle(request: request, reply: &reply)
-                    xpc_connection_send_message(connection, reply)
-                } else {
-                    throw XPCError.routeNotRegistered(String(describing: request.route))
-                }
-            } else {
-                if let handler = self.routesWithoutMessageWithReply[request.route] {
-                    try handler.handle(reply: &reply)
-                    xpc_connection_send_message(connection, reply)
-                } else {
-                    throw XPCError.routeNotRegistered(String(describing: request.route))
-                }
-            }
-        } else { // Otherwise the message can't receive a reply
-            if request.containsPayload {
-                if let handler = self.routesWithMessageWithoutReply[request.route] {
-                    try handler.handle(request: request)
-                } else {
-                    throw XPCError.routeNotRegistered(String(describing: request.route))
-                }
-            } else {
-                if let handler = self.routesWithoutMessageWithoutReply[request.route] {
-                    try handler.handle()
-                } else {
-                    throw XPCError.routeNotRegistered(String(describing: request.route))
-                }
-            }
+        guard let handler = self.routes[request.route] else {
+            throw XPCError.routeNotRegistered(request.route.pathComponents)
+        }
+        try handler.handle(request: request, reply: &reply)
+        
+        // If a dictionary reply exists, then the message expects a reply to be sent back
+        if let reply = reply {
+            xpc_connection_send_message(connection, reply)
         }
     }
     
@@ -340,54 +321,88 @@ public class XPCServer {
 // These wrappers perform type erasure via their implemented protocols while internally maintaining type constraints
 // This makes it possible to create heterogenous collections of them
 
-fileprivate protocol XPCHandlerWithoutMessageWithoutReply {
-    func handle() throws -> Void
+fileprivate protocol XPCHandler {
+    func handle(request: Request, reply: inout xpc_object_t?) throws
 }
 
-fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReply: XPCHandlerWithoutMessageWithoutReply {
+fileprivate extension XPCHandler {
+    
+    /// Validates that the incoming request matches the handler in terms of the presence of a message and reply.
+    ///
+    /// The actual validation of the types themselves is performed as part of encoding/decoding and is intentionally not checked by this function.
+    ///
+    /// - Parameters:
+    ///   - request: The incoming request.
+    ///   - reply: The XPC reply object, if one exists.
+    ///   - messageType: The parameter type of the registered handler, if applicable.
+    ///   - replyType: The return type of the registered handler, if applicable.
+    /// - Throws: If the check fails.
+    func checkMatchesRequest(_ request: Request,
+                             reply: inout xpc_object_t?,
+                             messageType: Any.Type?,
+                             replyType: Any.Type?) throws {
+        var errorMessages = [String]()
+        
+        // Message
+        if messageType == nil, request.containsPayload {
+            errorMessages.append("Request had a message of type \(String(describing: request.route.messageType)), " +
+                                 "but the handler registered with the server does not have a message parameter.")
+        } else if let messageType = messageType, !request.containsPayload {
+            errorMessages.append("Request did not contain a message, but the handler registered with the server has " +
+                                 "a message parameter of type \(messageType).")
+        }
+        
+        // Reply
+        if replyType == nil, reply != nil {
+            errorMessages.append("Request expects a reply of type \(String(describing: request.route.replyType)), " +
+                                 "but the handler registered with the server has no return value.")
+        } else if let replyType = replyType, reply == nil {
+            errorMessages.append("Request does not expect a reply, but the handler registered with the server has a " +
+                                 "return value of type \(replyType).")
+        }
+        
+        if !errorMessages.isEmpty {
+            throw XPCError.routeMismatch(request.route.pathComponents, errorMessages.joined(separator: "\n"))
+        }
+    }
+}
+
+fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReply: XPCHandler {
     let handler: () throws -> Void
     
-    func handle() throws {
+    func handle(request: Request, reply: inout xpc_object_t?) throws {
+        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil)
         try self.handler()
     }
 }
 
-fileprivate protocol XPCHandlerWithMessageWithoutReply {
-    func handle(request: Request) throws -> Void
-}
-
-fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReply<M: Decodable>: XPCHandlerWithMessageWithoutReply {
+fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReply<M: Decodable>: XPCHandler {
     let handler: (M) throws -> Void
     
-    func handle(request: Request) throws {
+    func handle(request: Request, reply: inout xpc_object_t?) throws {
+        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
         try self.handler(decodedMessage)
     }
 }
 
-fileprivate protocol XPCHandlerWithoutMessageWithReply {
-    func handle(reply: inout xpc_object_t) throws
-}
-
-fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReply<R: Encodable>: XPCHandlerWithoutMessageWithReply {
+fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReply<R: Encodable>: XPCHandler {
     let handler: () throws -> R
     
-    func handle(reply: inout xpc_object_t) throws {
+    func handle(request: Request, reply: inout xpc_object_t?) throws {
+        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self)
         let payload = try self.handler()
-        try Response.encodePayload(payload, intoReply: &reply)
+        try Response.encodePayload(payload, intoReply: &reply!)
     }
 }
 
-fileprivate protocol XPCHandlerWithMessageWithReply {
-    func handle(request: Request, reply: inout xpc_object_t) throws
-}
-
-fileprivate struct ConstrainedXPCHandlerWithMessageWithReply<M: Decodable, R: Encodable>: XPCHandlerWithMessageWithReply {
+fileprivate struct ConstrainedXPCHandlerWithMessageWithReply<M: Decodable, R: Encodable>: XPCHandler {
     let handler: (M) throws -> R
     
-    func handle(request: Request, reply: inout xpc_object_t) throws {
+    func handle(request: Request, reply: inout xpc_object_t?) throws {
+        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self)
         let decodedMessage = try request.decodePayload(asType: M.self)
         let payload = try self.handler(decodedMessage)
-        try Response.encodePayload(payload, intoReply: &reply)
+        try Response.encodePayload(payload, intoReply: &reply!)
     }
 }
