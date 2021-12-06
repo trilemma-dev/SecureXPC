@@ -105,7 +105,7 @@ public class XPCServer {
     ///
     /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
     /// - Returns: A server instance configured for this XPC Service.
-    public static func forThisXPCService() throws -> XPCServer & BlockingStart {
+    public static func forThisXPCService() throws -> XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
     
@@ -127,7 +127,7 @@ public class XPCServer {
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & BlockingStart {
+    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingStart {
         try XPCMachServer._forThisBlessedHelperTool()
     }
 
@@ -162,7 +162,7 @@ public class XPCServer {
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & BlockingStart {
+    ) throws -> XPCServer & NonBlockingStart {
         try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 
@@ -296,6 +296,14 @@ public class XPCServer {
 
 	// MARK: Abstract methods
     
+    /// Begins processing requests received by this XPC server and never returns.
+    ///
+    /// Internally this function calls [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
+    /// never returns.
+    public func startAndBlock() -> Never {
+        fatalError("Abstract Method")
+    }
+    
 	/// Determines whether the message should be accepted.
 	///
 	/// This is determined using the client requirements provided to this server upon initialization.
@@ -309,14 +317,6 @@ public class XPCServer {
 }
 
 // MARK: public server protocols
-
-public protocol BlockingStart {
-    /// Begins processing requests received by this XPC server and never returns.
-    ///
-    /// Internally this function calls [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
-    /// never returns.
-    func startAndBlock() -> Never
-}
 
 public protocol NonBlockingStart {
     /// Begins processing requests received by this XPC server.

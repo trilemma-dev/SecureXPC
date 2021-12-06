@@ -10,7 +10,7 @@ import Foundation
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
-internal class XPCServiceServer: XPCServer, BlockingStart {
+internal class XPCServiceServer: XPCServer {
     
     
     
@@ -43,7 +43,7 @@ internal class XPCServiceServer: XPCServer, BlockingStart {
         return (uint32ToString(packageType.bigEndian), uint32ToString(packageCreator.bigEndian))
     }
     
-	public func startAndBlock() -> Never {
+	public override func startAndBlock() -> Never {
 		xpc_main { connection in
 			// Listen for events (messages or errors) coming from this connection
 			xpc_connection_set_event_handler(connection, { event in
