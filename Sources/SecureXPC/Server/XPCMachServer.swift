@@ -10,7 +10,7 @@ import Foundation
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
-internal class XPCMachServer: XPCServer, NonBlockingStart {
+internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
     private let machServiceName: String
     private let clientRequirements: [SecRequirement]
