@@ -297,9 +297,6 @@ public class XPCServer {
 	// MARK: Abstract methods
     
     /// Begins processing requests received by this XPC server and never returns.
-    ///
-    /// Internally this function calls [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
-    /// never returns.
     public func startAndBlock() -> Never {
         fatalError("Abstract Method")
     }

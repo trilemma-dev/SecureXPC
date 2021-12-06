@@ -12,8 +12,6 @@ import Foundation
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
     
-    
-    
 	private static let service = XPCServiceServer()
 
     internal static func _forThisXPCService() throws -> XPCServiceServer {
