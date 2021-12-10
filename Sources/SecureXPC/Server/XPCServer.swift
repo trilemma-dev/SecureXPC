@@ -68,13 +68,15 @@ import Foundation
 /// `Codable` and may not exist in the client.
 ///
 /// ### Starting a Server
-/// Once all of the routes are registered, the server must be told to start processing requests:
+/// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
+/// ```swift
+/// server.startAndBlock()
+/// ```
+///
+/// Returned server instances which conform to ``NonBlockingStartable`` can also be started in a non-blocking manner:
 /// ```swift
 /// server.start()
 /// ```
-///
-/// Internally this function calls [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and never
-/// returns.
 ///
 /// ## Topics
 /// ### Retrieving a Server
@@ -83,13 +85,14 @@ import Foundation
 /// - ``forThisMachService(named:clientRequirements:)``
 ///
 /// ### Registering Routes
-/// - ``registerRoute(_:handler:)-1jw9d``
-/// - ``registerRoute(_:handler:)-4fxv0``
-/// - ``registerRoute(_:handler:)-4ttqe``
-/// - ``registerRoute(_:handler:)-9a0x9``
+/// - ``registerRoute(_:handler:)-82935``
+/// - ``registerRoute(_:handler:)-7yvyr``
+/// - ``registerRoute(_:handler:)-3ohmq``
+/// - ``registerRoute(_:handler:)-4jjs6`` 
 ///
 /// ### Starting a Server
-/// - ``start()``
+/// - ``startAndBlock()``
+/// - ``NonBlockingStartable/start()``
 ///
 /// ### Error Handling
 /// - ``errorHandler``
@@ -101,7 +104,7 @@ public class XPCServer {
     ///
     /// For the provided server to function properly, the caller must be an XPC Service.
     ///
-    /// > Important: No requests will be processed until ``start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` is called.
     ///
     /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
     /// - Returns: A server instance configured for this XPC Service.
@@ -123,11 +126,11 @@ public class XPCServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No requests will be processed until ``start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer {
+    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingStartable {
         try XPCMachServer._forThisBlessedHelperTool()
     }
 
@@ -152,7 +155,7 @@ public class XPCServer {
     /// }
     /// ```
     ///
-    /// > Important: No requests will be processed until ``start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
     ///
     /// - Parameters:
     ///   - named: The name of the mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
@@ -162,7 +165,7 @@ public class XPCServer {
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) throws -> XPCServer {
+    ) throws -> XPCServer & NonBlockingStartable {
         try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 
@@ -295,15 +298,12 @@ public class XPCServer {
     }
 
 	// MARK: Abstract methods
-
-	/// Begins processing requests received by this XPC server.
-	///
-    /// Internally this function calls [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) and
-    /// never returns.
-	public func start() -> Never {
-		fatalError("Abstract Method")
-	}
-
+    
+    /// Begins processing requests received by this XPC server and never returns.
+    public func startAndBlock() -> Never {
+        fatalError("Abstract Method")
+    }
+    
 	/// Determines whether the message should be accepted.
 	///
 	/// This is determined using the client requirements provided to this server upon initialization.
@@ -314,6 +314,16 @@ public class XPCServer {
 	internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
 		fatalError("Abstract Method")
 	}
+}
+
+// MARK: public server protocols
+
+/// An ``XPCServer`` which can be started in a non-blocking manner.
+///
+/// > Warning: Do not implement this protocol. Additions made to this protocol will not be considered a breaking change for SemVer purposes.
+public protocol NonBlockingStartable {
+    /// Begins processing requests received by this XPC server.
+    func start()
 }
 
 // MARK: handler function wrappers

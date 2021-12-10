@@ -10,7 +10,7 @@ import Foundation
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
-internal class XPCMachServer: XPCServer {
+internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
     private let machServiceName: String
     private let clientRequirements: [SecRequirement]
@@ -143,8 +143,8 @@ internal class XPCMachServer: XPCServer {
 			throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
 		}
 	}
-
-	public override func start() -> Never {
+    
+    public func start() {
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
         let machService = machServiceName.withCString { serviceNamePointer in
             return xpc_connection_create_mach_service(
@@ -153,15 +153,19 @@ internal class XPCMachServer: XPCServer {
                 UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
         
-		// Start listener for the Mach service, all received events should be for incoming connections
-		 xpc_connection_set_event_handler(machService, { connection in
-			 // Listen for events (messages or errors) coming from this connection
-			 xpc_connection_set_event_handler(connection, { event in
-				 self.handleEvent(connection: connection, event: event)
-			 })
-			 xpc_connection_resume(connection)
-		 })
-		 xpc_connection_resume(machService)
+        // Start listener for the Mach service, all received events should be for incoming connections
+         xpc_connection_set_event_handler(machService, { connection in
+             // Listen for events (messages or errors) coming from this connection
+             xpc_connection_set_event_handler(connection, { event in
+                 self.handleEvent(connection: connection, event: event)
+             })
+             xpc_connection_resume(connection)
+         })
+         xpc_connection_resume(machService)
+    }
+    
+	public override func startAndBlock() -> Never {
+        self.start()
 
         // Park the main thread, allowing for incoming connections and requests to be processed
         dispatchMain()

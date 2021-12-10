@@ -41,7 +41,7 @@ internal class XPCServiceServer: XPCServer {
         return (uint32ToString(packageType.bigEndian), uint32ToString(packageCreator.bigEndian))
     }
     
-	public override func start() -> Never {
+	public override func startAndBlock() -> Never {
 		xpc_main { connection in
 			// Listen for events (messages or errors) coming from this connection
 			xpc_connection_set_event_handler(connection, { event in
