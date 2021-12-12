@@ -12,7 +12,11 @@ import Foundation
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
 internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
+    /// Name of the service.
     private let machServiceName: String
+    /// Receives new incoming connections, created once the server is started.
+    private var machService: xpc_connection_t?
+    /// The code signing requirements a client must match in order for an incoming request to be handled.
     private let clientRequirements: [SecRequirement]
     
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
@@ -149,7 +153,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
         let machService = machServiceName.withCString { serviceNamePointer in
             return xpc_connection_create_mach_service(
                 serviceNamePointer,
-                nil, // targetq: DispatchQueue, defaults to using DISPATCH_TARGET_QUEUE_DEFAULT
+                self.targetQueue,
                 UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
         
@@ -159,9 +163,12 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
              xpc_connection_set_event_handler(connection, { event in
                  self.handleEvent(connection: connection, event: event)
              })
+             self.connections.append(WeakConnection(connection))
              xpc_connection_resume(connection)
          })
          xpc_connection_resume(machService)
+        
+        self.machService = machService
     }
     
 	public override func startAndBlock() -> Never {

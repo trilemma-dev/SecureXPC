@@ -177,6 +177,36 @@ public class XPCServer {
     // Routes
     private var routes = [XPCRoute : XPCHandler]()
     
+    /// Array of weak references to connections, used to update their dispatch queues
+    internal var connections = [WeakConnection]()
+    
+    /// Weak reference wrapper around an `xpc_connection_t`
+    internal class WeakConnection {
+        weak var connection: xpc_connection_t?
+        
+        init(_ connection: xpc_connection_t) {
+            self.connection = connection
+        }
+    }
+    
+    // Actual dispatch queue
+    private var _targetQueue: DispatchQueue? = nil
+    
+    /// The queue used to run the handlers associated with registered routes.
+    ///
+    /// Applying the target queue is asynchronous and non-preemptive and therefore will not interrupt the execution of an already-running handler. The queue
+    /// returned from reading this property will always be the one most recently set even if it is not yet the queue used to run handlers for all incoming requests.
+    public var targetQueue: DispatchQueue? {
+        set {
+            connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
+            _targetQueue = newValue
+        }
+        
+        get {
+            _targetQueue
+        }
+    }
+    
     /// Registers a route that has no message and can't receive a reply.
     ///
     /// - Parameters:

@@ -43,10 +43,12 @@ internal class XPCServiceServer: XPCServer {
     
 	public override func startAndBlock() -> Never {
 		xpc_main { connection in
+            xpc_connection_set_target_queue(connection, XPCServiceServer.service.targetQueue)
 			// Listen for events (messages or errors) coming from this connection
 			xpc_connection_set_event_handler(connection, { event in
 				XPCServiceServer.service.handleEvent(connection: connection, event: event)
 			})
+            XPCServiceServer.service.connections.append(WeakConnection(connection))
 			xpc_connection_resume(connection)
 		}
 	}
