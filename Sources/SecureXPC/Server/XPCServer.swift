@@ -189,21 +189,13 @@ public class XPCServer {
         }
     }
     
-    // Actual dispatch queue
-    private var _targetQueue: DispatchQueue? = nil
-    
     /// The queue used to run the handlers associated with registered routes.
     ///
     /// Applying the target queue is asynchronous and non-preemptive and therefore will not interrupt the execution of an already-running handler. The queue
     /// returned from reading this property will always be the one most recently set even if it is not yet the queue used to run handlers for all incoming requests.
     public var targetQueue: DispatchQueue? {
-        set {
+        willSet {
             connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
-            _targetQueue = newValue
-        }
-        
-        get {
-            _targetQueue
         }
     }
     
@@ -293,6 +285,9 @@ public class XPCServer {
                 self.errorHandler?(XPCError.insecure)
             }
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
+            // Removes this connection as it's become invalid as well as any other weak connections which now happen to
+            // be wrapping a nil connection
+            self.connections.removeAll { $0.connection == nil ? true : xpc_equal($0.connection!, connection) }
             self.errorHandler?(XPCError.connectionInvalid)
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
             self.errorHandler?(XPCError.connectionInterrupted)

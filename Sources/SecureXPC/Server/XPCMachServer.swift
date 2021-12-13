@@ -15,7 +15,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     /// Name of the service.
     private let machServiceName: String
     /// Receives new incoming connections, created once the server is started.
-    private var machService: xpc_connection_t?
+    private var listenerConnection: xpc_connection_t?
     /// The code signing requirements a client must match in order for an incoming request to be handled.
     private let clientRequirements: [SecRequirement]
     
@@ -150,7 +150,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
     public func start() {
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
-        let machService = machServiceName.withCString { serviceNamePointer in
+        let listenerConnection = machServiceName.withCString { serviceNamePointer in
             return xpc_connection_create_mach_service(
                 serviceNamePointer,
                 self.targetQueue,
@@ -158,7 +158,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
         }
         
         // Start listener for the Mach service, all received events should be for incoming connections
-         xpc_connection_set_event_handler(machService, { connection in
+         xpc_connection_set_event_handler(listenerConnection, { connection in
              // Listen for events (messages or errors) coming from this connection
              xpc_connection_set_event_handler(connection, { event in
                  self.handleEvent(connection: connection, event: event)
@@ -166,9 +166,9 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
              self.connections.append(WeakConnection(connection))
              xpc_connection_resume(connection)
          })
-         xpc_connection_resume(machService)
+         xpc_connection_resume(listenerConnection)
         
-        self.machService = machService
+        self.listenerConnection = listenerConnection
     }
     
 	public override func startAndBlock() -> Never {
