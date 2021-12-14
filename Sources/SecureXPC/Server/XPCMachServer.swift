@@ -201,6 +201,12 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 	}
 
     public override var endpoint: XPCServerEndpoint {
+        fatalError("""
+            The ability to export the endpoint of an XPCServer for a Mach Service is untested, and likely broken.
+
+            See https://github.com/trilemma-dev/SecureXPC/issues/33
+        """)
+
         guard let connection = self.serviceListenerConnection else {
             fatalError("An XPCServer's endpoint can only be retrieved after start() has been called on it.")
         }
