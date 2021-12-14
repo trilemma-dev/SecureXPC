@@ -199,7 +199,13 @@ public class XPCServer {
         }
         
         static func == (lhs: XPCServer.WeakConnection, rhs: XPCServer.WeakConnection) -> Bool {
-            lhs.connectionHash == rhs.connectionHash
+            if let lconnection = lhs.connection, let rconnection = rhs.connection { // Compare connections directly
+                return xpc_equal(lconnection, rconnection)
+            } else if lhs.connection == nil && rhs.connection == nil { // Compare hashes as connections no longer exist
+                return lhs.connectionHash == rhs.connectionHash
+            } else { // Only one has a connection, so never equal
+                return false
+            }
         }
         
         func hash(into hasher: inout Hasher) {
