@@ -163,7 +163,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
              xpc_connection_set_event_handler(connection, { event in
                  self.handleEvent(connection: connection, event: event)
              })
-             self.connections.append(Weak<xpc_connection_t>(connection))
+             self.addConnection(connection)
              xpc_connection_resume(connection)
          })
          xpc_connection_resume(listenerConnection)

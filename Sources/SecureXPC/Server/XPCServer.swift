@@ -177,8 +177,35 @@ public class XPCServer {
     // Routes
     private var routes = [XPCRoute : XPCHandler]()
     
-    /// Array of weak references to connections, used to update their dispatch queues
-    internal var connections = [Weak<xpc_connection_t>]()
+    /// Set of weak references to connections, used to update their dispatch queues.
+    private var connections = Set<WeakConnection>()
+    
+    /// Weak wrapper around a connection stored in the `connections` variable.
+    ///
+    /// Designed to be conveniently settable as the context of an `xpc_connection_t` so that it's accessible from its finalizer.
+    fileprivate class WeakConnection: Hashable {
+        private weak var server: XPCServer?
+        fileprivate weak var connection: xpc_connection_t?
+        private let connectionHash: Int
+        
+        init(_ connection: xpc_connection_t, server: XPCServer) {
+            self.connection = connection
+            self.connectionHash = xpc_hash(connection)
+            self.server = server
+        }
+        
+        func removeFromContainer() {
+            self.server?.connections.remove(self)
+        }
+        
+        static func == (lhs: XPCServer.WeakConnection, rhs: XPCServer.WeakConnection) -> Bool {
+            lhs.connectionHash == rhs.connectionHash
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(self.connectionHash)
+        }
+    }
     
     /// The queue used to run the handlers associated with registered routes.
     ///
@@ -186,7 +213,7 @@ public class XPCServer {
     /// returned from reading this property will always be the one most recently set even if it is not yet the queue used to run handlers for all incoming requests.
     public var targetQueue: DispatchQueue? {
         willSet {
-            connections.compactMap{ $0.value }.forEach{ xpc_connection_set_target_queue($0, newValue) }
+            connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
         }
     }
     
@@ -250,6 +277,22 @@ public class XPCServer {
         self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
     }
     
+    internal func addConnection(_ connection: xpc_connection_t) {
+        // Keep a weak reference to the connection and this server, setting this as the context on the connection
+        let weakConnection = WeakConnection(connection, server: self)
+        self.connections.insert(weakConnection)
+        xpc_connection_set_context(connection, Unmanaged.passUnretained(weakConnection).toOpaque())
+        
+        // The finalizer is called when the connection's retain count has reached zero, so now we need to remove the
+        // wrapper from the containing connections array
+        xpc_connection_set_finalizer_f(connection, { opaqueWeakConnection in
+            if let opaqueWeakConnection = opaqueWeakConnection {
+                let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
+                weakConnection.removeFromContainer()
+            }
+        })
+    }
+    
     internal func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
             if self.acceptMessage(connection: connection, message: event) {
@@ -276,9 +319,6 @@ public class XPCServer {
                 self.errorHandler?(XPCError.insecure)
             }
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
-            // Removes this connection as it's become invalid as well as any other weak connections which now happen to
-            // be wrapping a nil connection
-            self.connections.removeAll { $0.value == nil ? true : xpc_equal($0.value!, connection) }
             self.errorHandler?(XPCError.connectionInvalid)
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
             self.errorHandler?(XPCError.connectionInterrupted)
