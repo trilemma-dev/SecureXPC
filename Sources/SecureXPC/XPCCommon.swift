@@ -19,3 +19,12 @@ func const(_ input: UnsafePointer<CChar>!) -> UnsafePointer<CChar>! {
 	let mutableCopy = strdup(input)!
 	return UnsafePointer(mutableCopy) // The result should never actually be mutated
 }
+
+/// Weak reference wrapper
+internal class Weak<T: AnyObject> {
+    weak var value: T?
+    
+    init(_ value: T) {
+        self.value = value
+    }
+}

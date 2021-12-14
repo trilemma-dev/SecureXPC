@@ -48,7 +48,7 @@ internal class XPCServiceServer: XPCServer {
 			xpc_connection_set_event_handler(connection, { event in
 				XPCServiceServer.service.handleEvent(connection: connection, event: event)
 			})
-            XPCServiceServer.service.connections.append(WeakConnection(connection))
+            XPCServiceServer.service.connections.append(Weak<xpc_connection_t>(connection))
 			xpc_connection_resume(connection)
 		}
 	}

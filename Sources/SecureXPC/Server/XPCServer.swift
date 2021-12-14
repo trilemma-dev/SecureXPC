@@ -178,16 +178,7 @@ public class XPCServer {
     private var routes = [XPCRoute : XPCHandler]()
     
     /// Array of weak references to connections, used to update their dispatch queues
-    internal var connections = [WeakConnection]()
-    
-    /// Weak reference wrapper around an `xpc_connection_t`
-    internal class WeakConnection {
-        weak var connection: xpc_connection_t?
-        
-        init(_ connection: xpc_connection_t) {
-            self.connection = connection
-        }
-    }
+    internal var connections = [Weak<xpc_connection_t>]()
     
     /// The queue used to run the handlers associated with registered routes.
     ///
@@ -195,7 +186,7 @@ public class XPCServer {
     /// returned from reading this property will always be the one most recently set even if it is not yet the queue used to run handlers for all incoming requests.
     public var targetQueue: DispatchQueue? {
         willSet {
-            connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
+            connections.compactMap{ $0.value }.forEach{ xpc_connection_set_target_queue($0, newValue) }
         }
     }
     
@@ -287,7 +278,7 @@ public class XPCServer {
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
             // Removes this connection as it's become invalid as well as any other weak connections which now happen to
             // be wrapping a nil connection
-            self.connections.removeAll { $0.connection == nil ? true : xpc_equal($0.connection!, connection) }
+            self.connections.removeAll { $0.value == nil ? true : xpc_equal($0.value!, connection) }
             self.errorHandler?(XPCError.connectionInvalid)
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
             self.errorHandler?(XPCError.connectionInterrupted)
