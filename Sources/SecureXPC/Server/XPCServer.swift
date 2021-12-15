@@ -285,10 +285,12 @@ public class XPCServer {
         // The finalizer is called when the connection's retain count has reached zero, so now we need to remove the
         // wrapper from the containing connections array
         xpc_connection_set_finalizer_f(connection, { opaqueWeakConnection in
-            if let opaqueWeakConnection = opaqueWeakConnection {
-                let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
-                weakConnection.removeFromContainer()
+            guard let opaqueWeakConnection = opaqueWeakConnection else {
+                fatalError("Connection with retain count of zero is missing context, this should never happen")
             }
+            
+            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
+            weakConnection.removeFromContainer()
         })
     }
     
