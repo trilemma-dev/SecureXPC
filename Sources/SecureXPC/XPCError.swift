@@ -56,6 +56,10 @@ public enum XPCError: Error, Codable {
     /// This may mean there is a configuration issue. Alternatively it could be the caller is an XPC Mach service, in which case use
     /// ``XPCServer/forThisMachService(named:clientRequirements:)`` instead.
     case notXPCService
+    /// The caller is a misconfigured XPC Service.
+    ///
+    /// Currently, this means that its bundle idenifiter was not set.
+    case misconfiguredXPCService
     /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCServer`` route. The associated
     /// value describes the error.
     case other(String)

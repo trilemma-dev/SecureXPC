@@ -371,6 +371,14 @@ public class XPCServer {
 	internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
 		fatalError("Abstract Method")
 	}
+
+    public var serviceName: String? {
+        fatalError("Abstract Property")
+    }
+
+    public var endpoint: XPCServerEndpoint {
+        fatalError("Abstract Method")
+    }
 }
 
 // MARK: public server protocols

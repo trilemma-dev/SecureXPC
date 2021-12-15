@@ -18,7 +18,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     private var listenerConnection: xpc_connection_t?
     /// The code signing requirements a client must match in order for an incoming request to be handled.
     private let clientRequirements: [SecRequirement]
-    
+
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.machServiceName = machServiceName
@@ -156,19 +156,17 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
                 self.targetQueue,
                 UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
-        
-        // Start listener for the Mach service, all received events should be for incoming connections
-         xpc_connection_set_event_handler(listenerConnection, { connection in
-             // Listen for events (messages or errors) coming from this connection
-             xpc_connection_set_event_handler(connection, { event in
-                 self.handleEvent(connection: connection, event: event)
-             })
-             self.addConnection(connection)
-             xpc_connection_resume(connection)
-         })
-         xpc_connection_resume(listenerConnection)
-        
         self.listenerConnection = listenerConnection
+      
+        // Start listener for the Mach service, all received events should be for incoming connections
+        xpc_connection_set_event_handler(machService, { connection in
+            // Listen for events (messages or errors) coming from this connection
+            xpc_connection_set_event_handler(connection, { event in
+                self.handleEvent(connection: connection, event: event)
+            })
+            xpc_connection_resume(connection)
+        })
+        xpc_connection_resume(machService)
     }
     
 	public override func startAndBlock() -> Never {
@@ -203,6 +201,24 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 
 		return accept
 	}
+
+    public override var endpoint: XPCServerEndpoint {
+        fatalError("""
+            The ability to export the endpoint of an XPCServer for a Mach Service is untested, and likely broken.
+
+            See https://github.com/trilemma-dev/SecureXPC/issues/33
+        """)
+
+        guard let connection = self.serviceListenerConnection else {
+            fatalError("An XPCServer's endpoint can only be retrieved after start() has been called on it.")
+        }
+
+        let endpoint = xpc_endpoint_create(connection)
+        return XPCServerEndpoint(
+            serviceDescriptor: .machService(name: self.machServiceName),
+            endpoint: endpoint
+        )
+    }
 
 	/// Wrapper around the private undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`.
 	///
