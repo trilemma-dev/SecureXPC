@@ -186,11 +186,10 @@ public class XPCServer {
     fileprivate class WeakConnection: Hashable {
         private weak var server: XPCServer?
         fileprivate weak var connection: xpc_connection_t?
-        private let connectionHash: Int
+        private let id = UUID()
         
         init(_ connection: xpc_connection_t, server: XPCServer) {
             self.connection = connection
-            self.connectionHash = xpc_hash(connection)
             self.server = server
         }
         
@@ -199,17 +198,11 @@ public class XPCServer {
         }
         
         static func == (lhs: XPCServer.WeakConnection, rhs: XPCServer.WeakConnection) -> Bool {
-            if let lconnection = lhs.connection, let rconnection = rhs.connection { // Compare connections directly
-                return xpc_equal(lconnection, rconnection)
-            } else if lhs.connection == nil && rhs.connection == nil { // Compare hashes as connections no longer exist
-                return lhs.connectionHash == rhs.connectionHash
-            } else { // Only one has a connection, so never equal
-                return false
-            }
+            lhs.id == rhs.id
         }
         
         func hash(into hasher: inout Hasher) {
-            hasher.combine(self.connectionHash)
+            self.id.hash(into: &hasher)
         }
     }
     
