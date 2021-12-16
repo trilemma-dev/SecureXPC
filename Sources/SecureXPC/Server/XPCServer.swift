@@ -112,7 +112,7 @@ public class XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
 
-    public static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
         XPCAnonymousServer()
     }
     

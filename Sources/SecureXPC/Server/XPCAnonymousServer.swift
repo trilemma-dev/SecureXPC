@@ -26,6 +26,7 @@ internal class XPCAnonymousServer: XPCServer {
 
     internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         // Anonymous service connections should only ever passed among trusted parties.
+        // TODO: add support for client security requirements https://github.com/trilemma-dev/SecureXPC/issues/36
         true
     }
 
