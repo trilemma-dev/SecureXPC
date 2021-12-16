@@ -12,9 +12,12 @@ import Foundation
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
 internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
+    /// Name of the service.
     private let machServiceName: String
+    /// Receives new incoming connections, created once the server is started.
+    private var listenerConnection: xpc_connection_t?
+    /// The code signing requirements a client must match in order for an incoming request to be handled.
     private let clientRequirements: [SecRequirement]
-    private var serviceListenerConnection: xpc_connection_t? = nil
 
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
@@ -147,24 +150,23 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
     public func start() {
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
-        let machService = machServiceName.withCString { serviceNamePointer in
+        let listenerConnection = machServiceName.withCString { serviceNamePointer in
             return xpc_connection_create_mach_service(
                 serviceNamePointer,
-                nil, // targetq: DispatchQueue, defaults to using DISPATCH_TARGET_QUEUE_DEFAULT
+                self.targetQueue,
                 UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
-
-        self.serviceListenerConnection = machService
-
+        self.listenerConnection = listenerConnection
+      
         // Start listener for the Mach service, all received events should be for incoming connections
-        xpc_connection_set_event_handler(machService, { connection in
+        xpc_connection_set_event_handler(listenerConnection, { connection in
             // Listen for events (messages or errors) coming from this connection
             xpc_connection_set_event_handler(connection, { event in
                 self.handleEvent(connection: connection, event: event)
             })
             xpc_connection_resume(connection)
         })
-        xpc_connection_resume(machService)
+        xpc_connection_resume(listenerConnection)
     }
     
 	public override func startAndBlock() -> Never {
@@ -207,7 +209,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
             See https://github.com/trilemma-dev/SecureXPC/issues/33
         """)
 
-        guard let connection = self.serviceListenerConnection else {
+        guard let connection = self.listenerConnection else {
             fatalError("An XPCServer's endpoint can only be retrieved after start() has been called on it.")
         }
 

@@ -48,19 +48,21 @@ internal class XPCServiceServer: XPCServer {
     // This is safe to unwrap because it was already checked in ``_forThisXPCService``.
     private lazy var xpcServiceName: String = Bundle.main.bundleIdentifier!
 
-	public override func startAndBlock() -> Never {
-		xpc_main { connection in
-            // This is an @convention(c) closure, so we can't just capture `self`.
-            // We access the connection via the singleton reference, instead.
+    public override func startAndBlock() -> Never {
+	      xpc_main { connection in
+            // This is a @convention(c) closure, so we can't just capture `self`.
+            // As such, the singleton reference `XPCServiceServer.service` is used instead.
+            xpc_connection_set_target_queue(connection, XPCServiceServer.service.targetQueue)
             XPCServiceServer.service.connection = connection
-
-			// Listen for events (messages or errors) coming from this connection
-			xpc_connection_set_event_handler(connection, { event in
-				XPCServiceServer.service.handleEvent(connection: connection, event: event)
-			})
-			xpc_connection_resume(connection)
-		}
-	}
+            XPCServiceServer.service.addConnection(connection)
+          
+            // Listen for events (messages or errors) coming from this connection
+            xpc_connection_set_event_handler(connection, { event in
+                XPCServiceServer.service.handleEvent(connection: connection, event: event)
+            })
+			      xpc_connection_resume(connection)
+        }
+    }
 
 	internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
 		// XPC services are application-scoped, so we're assuming they're inheritently safe
