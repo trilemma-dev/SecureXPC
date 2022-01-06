@@ -111,6 +111,10 @@ public class XPCServer {
     public static func forThisXPCService() throws -> XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
+
+    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
+        XPCAnonymousServer()
+    }
     
     /// Provides a server for this helper tool if it was installed with
     /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
