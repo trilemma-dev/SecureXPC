@@ -1,6 +1,6 @@
 //
 //  XPCAnonymousServer.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-28.
 //
@@ -9,9 +9,13 @@ import Foundation
 
 internal class XPCAnonymousServer: XPCServer {
     private let anonymousListenerConnection: xpc_connection_t
+    
+    /// Determines if an incoming request can be handled based on the provided client requirements
+    private let messageAcceptor: SecureMessageAcceptor
 
-    internal override init() {
+    internal init(clientRequirements: [SecRequirement]) {
         self.anonymousListenerConnection = xpc_connection_create(nil, nil)
+        self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
         super.init()
 
         // Start listener for the new anonymous connection, all received events should be for incoming client connections
@@ -25,9 +29,7 @@ internal class XPCAnonymousServer: XPCServer {
     }
 
     internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        // Anonymous service connections should only ever passed among trusted parties.
-        // TODO: add support for client security requirements https://github.com/trilemma-dev/SecureXPC/issues/36
-        true
+        self.messageAcceptor.acceptMessage(connection: connection, message: message)
     }
 
     /// Begins processing requests received by this XPC server and never returns.

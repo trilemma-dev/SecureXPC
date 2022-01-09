@@ -112,8 +112,10 @@ public class XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
 
-    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
-        XPCAnonymousServer()
+    internal static func makeAnonymousService(
+        clientRequirements: [SecRequirement]
+    ) -> XPCServer & NonBlockingStartable {
+        XPCAnonymousServer(clientRequirements: clientRequirements)
     }
     
     /// Provides a server for this helper tool if it was installed with
