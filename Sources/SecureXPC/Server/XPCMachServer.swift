@@ -178,7 +178,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 	}
 
 	internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        self.acceptMessage(connection: connection, message: message)
+        self.messageAcceptor.acceptMessage(connection: connection, message: message)
 	}
 
     public override var endpoint: XPCServerEndpoint {
