@@ -23,9 +23,11 @@ internal struct SecureMessageAcceptor {
         if #available(macOS 11, *) { // publicly documented, but only available since macOS 11
             SecCodeCreateWithXPCMessage(message, SecCSFlags(), &code)
         } else { // private undocumented function: xpc_connection_get_audit_token, available on prior versions of macOS
-            var auditToken = SecureMessageAcceptor.xpc_connection_get_audit_token(connection)
-            let tokenData = NSData(bytes: &auditToken, length: MemoryLayout.size(ofValue: auditToken))
-            let attributes = [kSecGuestAttributeAudit : tokenData] as NSDictionary
+            let token = SecureMessageAcceptor.xpc_connection_get_audit_token(connection)
+            let tokenValues = [token.val.0, token.val.1, token.val.2, token.val.3,
+                               token.val.4, token.val.5, token.val.6, token.val.7]
+            let tokenData = Data(bytes: tokenValues, count: tokenValues.count * MemoryLayout<UInt32>.size)
+            let attributes = [kSecGuestAttributeAudit : tokenData] as CFDictionary
             SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
         }
         guard let code = code else { // Instead of explitly checking the return codes from the SecCode* function calls
