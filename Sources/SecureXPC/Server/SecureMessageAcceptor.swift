@@ -34,7 +34,6 @@ internal struct SecureMessageAcceptor {
             return false
         }
         
-        // Accept message if code is valid and meets any of the client requirements
         return self.requirements.contains { SecCodeCheckValidity(code, SecCSFlags(), $0) == errSecSuccess }
     }
     
