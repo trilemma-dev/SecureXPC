@@ -363,6 +363,13 @@ public class XPCServer {
 	// MARK: Abstract methods
     
     /// Begins processing requests received by this XPC server and never returns.
+    ///
+    /// If this server is for an XPC Service, how the server will run is determined by the info property list's
+    /// [`RunLoopType`](https://developer.apple.com/documentation/bundleresources/information_property_list/xpcservice/runlooptype?changes=l_3).
+    /// If no value is specified, `dispatch_main` is the default. If `dispatch_main` is specified or defaulted to, it is a programming error to call this function
+    /// from any thread besides the main thread.
+    ///
+    /// If this server is for a Mach service, it is always a programming error to call this function from any thread besides the main thread.
     public func startAndBlock() -> Never {
         fatalError("Abstract Method")
     }
