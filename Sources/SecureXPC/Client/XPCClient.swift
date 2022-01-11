@@ -151,6 +151,9 @@ public class XPCClient {
     ///   - serviceName: The name of the XPC service; no validation is performed on this.
     internal init(connection: xpc_connection_t? = nil) {
         self.connection = connection
+        if let connection = connection {
+            xpc_connection_set_event_handler(connection, self.handleConnectionErrors(event:))
+        }
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
@@ -163,7 +166,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
     public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
         let encoded = try Request(route: route.route).dictionary
-        xpc_connection_send_message(getConnection(), encoded)
+        xpc_connection_send_message(try getConnection(), encoded)
     }
     
     /// Sends a message which will not receive a response.
@@ -174,7 +177,7 @@ public class XPCClient {
     /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
         let encoded = try Request(route: route.route, payload: message).dictionary
-        xpc_connection_send_message(getConnection(), encoded)
+        xpc_connection_send_message(try getConnection(), encoded)
     }
     
     /// Sends with no message and provides the reply as either a message on success or an error on failure.
@@ -186,7 +189,7 @@ public class XPCClient {
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withReply reply: @escaping XPCReplyHandler<R>) throws {
         let encoded = try Request(route: route.route).dictionary
-        sendWithReply(encoded: encoded, withReply: reply)
+        try sendWithReply(encoded: encoded, withReply: reply)
     }
     
     /// Sends a message and provides the reply as either a message on success or an error on failure.
@@ -200,13 +203,13 @@ public class XPCClient {
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withReply reply: @escaping XPCReplyHandler<R>) throws {
         let encoded = try Request(route: route.route, payload: message).dictionary
-        sendWithReply(encoded: encoded, withReply: reply)
+        try sendWithReply(encoded: encoded, withReply: reply)
     }
     
     /// Does the actual work of sending an XPC message which receives a reply.
     private func sendWithReply<R: Decodable>(encoded: xpc_object_t,
-                                             withReply reply: @escaping XPCReplyHandler<R>) {
-        xpc_connection_send_message_with_reply(getConnection(), encoded, nil, { xpcResponse in
+                                             withReply reply: @escaping XPCReplyHandler<R>) throws {
+        xpc_connection_send_message_with_reply(try getConnection(), encoded, nil, { xpcResponse in
             let result: Result<R, XPCError>
             if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
                 do {
@@ -224,41 +227,60 @@ public class XPCClient {
                     result = Result.failure(.unknown)
                 }
             } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INVALID) {
-                self.connection = nil
                 result = Result.failure(.connectionInvalid)
             } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INTERRUPTED) {
-                self.connection = nil
                 result = Result.failure(.connectionInterrupted)
-            } else if xpc_equal(xpcResponse, XPC_ERROR_TERMINATION_IMMINENT) {
-                self.connection = nil
-                result = Result.failure(.terminationImminent)
             } else { // Unexpected
                 result = Result.failure(.unknown)
             }
+            self.handleConnectionErrors(event: xpcResponse)
             reply(result)
         })
     }
 
-    private func getConnection() -> xpc_connection_t {
+    private func getConnection() throws -> xpc_connection_t {
         if let existingConnection = self.connection { return existingConnection }
 
-        let newConnection = self.createConnection()
+        let newConnection = try self.createConnection()
         self.connection = newConnection
 
-        xpc_connection_set_event_handler(newConnection, self.handle(connectionEvent:))
+        xpc_connection_set_event_handler(newConnection, self.handleConnectionErrors(event:))
         xpc_connection_resume(newConnection)
 
         return newConnection
     }
 
-    private func handle(connectionEvent: xpc_object_t) {
-        if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INVALID) {
+    private func handleConnectionErrors(event: xpc_object_t) {
+        if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
+            // Paraphrasing from Apple documentation:
+            //   If the named service provided could not be found in the XPC service namespace. The connection is
+            //   useless and should be disposed of.
+            //
+            // While the underlying connection is useless, this client instance is *not* useless. A scenario we want to
+            // support is:
+            //  - API user creates a client
+            //  - Attempts to send a message to a blessed helper tool
+            //  - `XPCError.connectionInvalid` is thrown
+            //  - Error is handled by installing the helper tool
+            //  - Using the same client instance successfully sends a message to the now installed helper tool
             self.connection = nil
-        } else if xpc_equal(connectionEvent, XPC_ERROR_CONNECTION_INTERRUPTED) {
-            self.connection = nil
-        } else if xpc_equal(connectionEvent, XPC_ERROR_TERMINATION_IMMINENT) {
-            self.connection = nil
+        } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
+            // Apple documentation:
+            //   Will be delivered to the connection’s event handler if the remote service exited. The connection is
+            //   still live even in this case, and resending a message will cause the service to be launched on-demand.
+            //
+            // While Apple's documentation is technically correct, it's misleading in the case of an anonymous
+            // connection where there is no service. Because there is no service, there is nothing to be relaunched
+            // on-demand. The connection might technically still be alive, but resending a message will *not* work.
+            //
+            // By setting the connection to `nil` when there is no service (indicated by no service name), anonymous
+            // clients can throw a useful specific error when `createConnection()` is called.
+            if self.serviceName == nil {
+                self.connection = nil
+            }
         }
+        
+        // XPC_ERROR_TERMINATION_IMMINENT is not applicable to the client side of a connection
     }
 
     // MARK: Abstract methods
@@ -268,8 +290,8 @@ public class XPCClient {
         fatalError("Abstract Property")
     }
 
-    /// Creates and returns a connection for the service represented by this client.
-    internal func createConnection() -> xpc_connection_t {
+    /// Creates and returns a connection for the service represented by this client or throws an error if it's unable to do so.
+    internal func createConnection() throws -> xpc_connection_t {
         fatalError("Abstract Method")
     }
 }

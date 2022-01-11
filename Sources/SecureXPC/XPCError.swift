@@ -27,6 +27,10 @@ public enum XPCError: Error, Codable {
     /// In practice this error is not expected to be encountered as this framework only supports XPC Mach service connections; this error applies to XPC Services
     /// which use a different type of connection.
     case terminationImminent
+    /// The connection to the server has already experienced an interruption and cannot be reestablished under any circumstances.
+    ///
+    /// This is expected behavior when attempting to send a message to an anonymous server after the connection has been interrupted.
+    case connectionCannotBeReestablished
     /// A request was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
     /// client.
     case insecure
