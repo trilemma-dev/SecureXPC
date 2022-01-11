@@ -16,6 +16,8 @@ internal class XPCAnonymousServer: XPCServer {
     internal init(clientRequirements: [SecRequirement]) {
         self.anonymousListenerConnection = xpc_connection_create(nil, nil)
         self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
+        super.init()
+        self.addConnection(self.anonymousListenerConnection)
     }
 
     internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
@@ -43,6 +45,8 @@ extension XPCAnonymousServer: NonBlockingStartable {
             xpc_connection_set_event_handler(newClientConnection, { event in
                 self.handleEvent(connection: newClientConnection, event: event)
             })
+            xpc_connection_set_target_queue(newClientConnection, self.targetQueue)
+            self.addConnection(newClientConnection)
             xpc_connection_resume(newClientConnection)
         })
         xpc_connection_resume(self.anonymousListenerConnection)
