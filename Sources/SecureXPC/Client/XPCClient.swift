@@ -290,7 +290,7 @@ public class XPCClient {
         fatalError("Abstract Property")
     }
 
-    /// Creates and returns a connection for the service represented by this client or throws an error if it's unable to do so.
+    /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() throws -> xpc_connection_t {
         fatalError("Abstract Method")
     }

@@ -33,7 +33,7 @@ class ServerTerminationIntegrationTest: XCTestCase {
         try client.sendMessage("1st message", route: echoRoute) { _ in }
         
         // Shut down the server, simulating the scenario of the process containing the server terminating
-        (server as! XPCAnonymousServer).shutdown()
+        (server as! XPCAnonymousServer).simulateDisconnectionForTesting()
         
         // Make two more calls after having shutdown the server:
         // - The second call should fail upon trying to send the message, connection is interrupted
@@ -42,26 +42,22 @@ class ServerTerminationIntegrationTest: XCTestCase {
         let cannotBeReestablishedExpectation = self.expectation(description: "Third message can't be sent")
         try client.sendMessage("2nd message", route: echoRoute) { response in
             switch response {
-                case .failure(let error):
-                    switch error {
-                        case .connectionInterrupted:
-                            interruptedExpectation.fulfill()
-                            
-                            // make another call to the server and this should fail with connectionCannotBeReestablished
-                            do {
-                                try client.sendMessage("3rd message", route: echoRoute) { _ in }
-                                XCTFail("No error was thrown. \(XPCError.connectionCannotBeReestablished) should " +
-                                        "have been thrown.")
-                            } catch XPCError.connectionCannotBeReestablished {
-                                cannotBeReestablishedExpectation.fulfill()
-                            } catch {
-                                XCTFail("Unexpected error: \(error). \(XPCError.connectionCannotBeReestablished) " +
-                                        "should have been thrown.")
-                            }
-                        default:
-                            XCTFail("Unexpected error: \(error). \(XPCError.connectionInterrupted) should have been " +
-                                    "returned.")
+                case .failure(.connectionInterrupted):
+                    interruptedExpectation.fulfill()
+                    
+                    // make another call to the server and this should fail with connectionCannotBeReestablished
+                    do {
+                        try client.sendMessage("3rd message", route: echoRoute) { _ in }
+                        XCTFail("No error was thrown. \(XPCError.connectionCannotBeReestablished) should " +
+                                "have been thrown.")
+                    } catch XPCError.connectionCannotBeReestablished {
+                        cannotBeReestablishedExpectation.fulfill()
+                    } catch {
+                        XCTFail("Unexpected error: \(error). \(XPCError.connectionCannotBeReestablished) " +
+                                "should have been thrown.")
                     }
+                case .failure(let error):
+                    XCTFail("Unexpected error: \(error). \(XPCError.connectionInterrupted) should have been returned.")
                 case .success(_):
                     XCTFail("No error was returned. \(XPCError.connectionInterrupted) should have been returned.")
             }

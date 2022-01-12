@@ -34,8 +34,7 @@ internal class XPCAnonymousServer: XPCServer {
         )
     }
     
-    // This exists for testing purposes
-    internal func shutdown() {
+    internal func simulateDisconnectionForTesting() {
         xpc_connection_cancel(self.anonymousListenerConnection)
         // A new event handler must be set otherwise the existing one will still be used even after cancellation
         xpc_connection_set_event_handler(self.anonymousListenerConnection, { _ in })
