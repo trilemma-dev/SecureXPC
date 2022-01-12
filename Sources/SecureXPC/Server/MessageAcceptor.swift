@@ -21,12 +21,14 @@ internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
 
 /// This is intended for use by `XPCAnonymousServer`
 internal struct SameProcessMessageAcceptor: MessageAcceptor {
-    /// This process's PID.
-    private static let processPID = getpid()
-    
     /// Accepts a message only if it is coming from this process.
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        SameProcessMessageAcceptor.processPID == xpc_connection_get_pid(connection)
+        // In the case of an XPCAnonymousServer, all of the connections must be created after the server itself was
+        // created. As such, the process containing the server must always exist first and so no other process can
+        // have the same PID while that process is still running. While it's possible the process now corresponding to
+        // the PID returned by xpc_connection_get_pid(...) is not the process that created the connection, there's no
+        // way for it fake being this process. Therefore for anonymous connections it's safe to directly compare PIDs.
+        getpid() == xpc_connection_get_pid(connection)
     }
 }
 
