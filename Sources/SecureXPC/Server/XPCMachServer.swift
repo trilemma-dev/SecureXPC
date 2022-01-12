@@ -14,8 +14,8 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     
     /// Name of the service.
     private let machServiceName: String
-    /// Receives new incoming connections, created once the server is started.
-    private var listenerConnection: xpc_connection_t?
+    /// Receives new incoming connections
+    private var listenerConnection: xpc_connection_t
     /// Determines if an incoming request will be accepted based on the provided client requirements
     private let messageAcceptor: SecureMessageAcceptor
 
@@ -23,12 +23,22 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.machServiceName = machServiceName
         self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
+        
+        // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
+        self.listenerConnection = machServiceName.withCString { serviceNamePointer in
+            return xpc_connection_create_mach_service(
+                serviceNamePointer,
+                nil,
+                UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
+        }
+        super.init()
+        self.addConnection(self.listenerConnection)
     }
     
     /// Cache of servers with the machServiceName as the key.
     ///
-    /// This exists for correctness reasons, not as a performance optimization. Only one connection for a named service can exist simultaneously, so it's important
-    /// this invariant be upheld when returning `XPCServer` instances.
+    /// This exists for correctness reasons, not as a performance optimization. Only one listener connection for a named service can exist simultaneously, so it's
+    /// important this invariant be upheld when returning `XPCServer` instances.
     private static var machServerCache = [String : XPCMachServer]()
     
     /// Prevents race conditions for creating and retrieving cached Mach servers
@@ -150,21 +160,14 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 	}
     
     public func start() {
-        // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
-        let listenerConnection = machServiceName.withCString { serviceNamePointer in
-            return xpc_connection_create_mach_service(
-                serviceNamePointer,
-                self.targetQueue,
-                UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
-        }
-        self.listenerConnection = listenerConnection
-      
-        // Start listener for the Mach service, all received events should be for incoming connections
+        // Set listener for the Mach service, all received events will be incoming connections
         xpc_connection_set_event_handler(listenerConnection, { connection in
             // Listen for events (messages or errors) coming from this connection
             xpc_connection_set_event_handler(connection, { event in
                 self.handleEvent(connection: connection, event: event)
             })
+            self.addConnection(connection)
+            xpc_connection_set_target_queue(connection, self.targetQueue)
             xpc_connection_resume(connection)
         })
         xpc_connection_resume(listenerConnection)
@@ -182,20 +185,9 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 	}
 
     public override var endpoint: XPCServerEndpoint {
-        fatalError("""
-            The ability to export the endpoint of an XPCServer for a Mach Service is untested, and likely broken.
-
-            See https://github.com/trilemma-dev/SecureXPC/issues/33
-        """)
-
-        guard let connection = self.listenerConnection else {
-            fatalError("An XPCServer's endpoint can only be retrieved after start() has been called on it.")
-        }
-
-        let endpoint = xpc_endpoint_create(connection)
-        return XPCServerEndpoint(
+        XPCServerEndpoint(
             serviceDescriptor: .machService(name: self.machServiceName),
-            endpoint: endpoint
+            endpoint: xpc_endpoint_create(self.listenerConnection)
         )
     }
 }
