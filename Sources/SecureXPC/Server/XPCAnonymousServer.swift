@@ -18,6 +18,8 @@ internal class XPCAnonymousServer: XPCServer {
     internal init(messageAcceptor: MessageAcceptor) {
         self._messageAcceptor = messageAcceptor
         self.anonymousListenerConnection = xpc_connection_create(nil, nil)
+        super.init()
+        self.addConnection(self.anonymousListenerConnection)
     }
 
     /// Begins processing requests received by this XPC server and never returns.
@@ -41,6 +43,8 @@ extension XPCAnonymousServer: NonBlockingStartable {
             xpc_connection_set_event_handler(newClientConnection, { event in
                 self.handleEvent(connection: newClientConnection, event: event)
             })
+            xpc_connection_set_target_queue(newClientConnection, self.targetQueue)
+            self.addConnection(newClientConnection)
             xpc_connection_resume(newClientConnection)
         })
         xpc_connection_resume(self.anonymousListenerConnection)

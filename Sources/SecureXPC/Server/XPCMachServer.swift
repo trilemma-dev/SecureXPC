@@ -168,6 +168,8 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
             xpc_connection_set_event_handler(connection, { event in
                 self.handleEvent(connection: connection, event: event)
             })
+            xpc_connection_set_target_queue(connection, self.targetQueue)
+            self.addConnection(connection)
             xpc_connection_resume(connection)
         })
         xpc_connection_resume(listenerConnection)
