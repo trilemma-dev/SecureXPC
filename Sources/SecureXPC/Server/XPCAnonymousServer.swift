@@ -10,16 +10,16 @@ import Foundation
 internal class XPCAnonymousServer: XPCServer {
     private let anonymousListenerConnection: xpc_connection_t
     
-    /// Determines if an incoming request can be handled based on the provided client requirements
-    private let messageAcceptor: SecureMessageAcceptor
-
-    internal init(clientRequirements: [SecRequirement]) {
-        self.anonymousListenerConnection = xpc_connection_create(nil, nil)
-        self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
+    private let _messageAcceptor: MessageAcceptor
+    override internal var messageAcceptor: MessageAcceptor {
+        _messageAcceptor
     }
 
-    internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        self.messageAcceptor.acceptMessage(connection: connection, message: message)
+    internal init(messageAcceptor: MessageAcceptor) {
+        self._messageAcceptor = messageAcceptor
+        self.anonymousListenerConnection = xpc_connection_create(nil, nil)
+        super.init()
+        self.addConnection(self.anonymousListenerConnection)
     }
 
     /// Begins processing requests received by this XPC server and never returns.
@@ -43,6 +43,8 @@ extension XPCAnonymousServer: NonBlockingStartable {
             xpc_connection_set_event_handler(newClientConnection, { event in
                 self.handleEvent(connection: newClientConnection, event: event)
             })
+            xpc_connection_set_target_queue(newClientConnection, self.targetQueue)
+            self.addConnection(newClientConnection)
             xpc_connection_resume(newClientConnection)
         })
         xpc_connection_resume(self.anonymousListenerConnection)

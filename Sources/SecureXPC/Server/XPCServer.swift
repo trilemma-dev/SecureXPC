@@ -111,11 +111,16 @@ public class XPCServer {
     public static func forThisXPCService() throws -> XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
+    
+    /// Creates a new anonymous server that only accepts connections from the same process it's running in.
+    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
+        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
+    }
 
     internal static func makeAnonymousService(
         clientRequirements: [SecRequirement]
     ) -> XPCServer & NonBlockingStartable {
-        XPCAnonymousServer(clientRequirements: clientRequirements)
+        XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     
     /// Provides a server for this helper tool if it was installed with
@@ -302,7 +307,7 @@ public class XPCServer {
     
     internal func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
-            if self.acceptMessage(connection: connection, message: event) {
+            if self.messageAcceptor.acceptMessage(connection: connection, message: event) {
                 var reply = xpc_dictionary_create_reply(event)
                 do {
                     try handleMessage(connection: connection, message: event, reply: &reply)
@@ -381,9 +386,14 @@ public class XPCServer {
 	///   - connection: The connection the message was sent over.
 	///   - message: The message.
 	/// - Returns: whether the message can be accepted
+    /*
 	internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
 		fatalError("Abstract Method")
-	}
+	}*/
+    
+    internal var messageAcceptor: MessageAcceptor {
+        fatalError("Abstract Property")
+    }
 
     public var serviceName: String? {
         fatalError("Abstract Property")

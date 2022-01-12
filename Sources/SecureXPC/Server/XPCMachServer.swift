@@ -17,12 +17,15 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     /// Receives new incoming connections
     private var listenerConnection: xpc_connection_t
     /// Determines if an incoming request will be accepted based on the provided client requirements
-    private let messageAcceptor: SecureMessageAcceptor
-
+    private let _messageAcceptor: SecureMessageAcceptor
+    override internal var messageAcceptor: MessageAcceptor {
+        _messageAcceptor
+    }
+    
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.machServiceName = machServiceName
-        self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
+        self._messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
         
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
         self.listenerConnection = machServiceName.withCString { serviceNamePointer in
@@ -73,7 +76,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
                 
                 // Turn into sets so they can be compared without taking into account the order of requirements
                 let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
-                let cachedRequirementsData = Set<Data>(try cachedServer.messageAcceptor.requirements
+                let cachedRequirementsData = Set<Data>(try cachedServer._messageAcceptor.requirements
                                                                        .map(requirementTransform))
                 guard requirementsData == cachedRequirementsData else {
                     throw XPCError.conflictingClientRequirements
@@ -166,8 +169,8 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
             xpc_connection_set_event_handler(connection, { event in
                 self.handleEvent(connection: connection, event: event)
             })
-            self.addConnection(connection)
             xpc_connection_set_target_queue(connection, self.targetQueue)
+            self.addConnection(connection)
             xpc_connection_resume(connection)
         })
         xpc_connection_resume(listenerConnection)
@@ -178,10 +181,6 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 
         // Park the main thread, allowing for incoming connections and requests to be processed
         dispatchMain()
-	}
-
-	internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        self.messageAcceptor.acceptMessage(connection: connection, message: message)
 	}
 
     public override var endpoint: XPCServerEndpoint {
