@@ -17,12 +17,15 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
     /// Receives new incoming connections, created once the server is started.
     private var listenerConnection: xpc_connection_t?
     /// Determines if an incoming request will be accepted based on the provided client requirements
-    private let messageAcceptor: SecureMessageAcceptor
-
+    private let _messageAcceptor: SecureMessageAcceptor
+    override internal var messageAcceptor: MessageAcceptor {
+        _messageAcceptor
+    }
+    
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.machServiceName = machServiceName
-        self.messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
+        self._messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
     }
     
     /// Cache of servers with the machServiceName as the key.
@@ -63,7 +66,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
                 
                 // Turn into sets so they can be compared without taking into account the order of requirements
                 let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
-                let cachedRequirementsData = Set<Data>(try cachedServer.messageAcceptor.requirements
+                let cachedRequirementsData = Set<Data>(try cachedServer._messageAcceptor.requirements
                                                                        .map(requirementTransform))
                 guard requirementsData == cachedRequirementsData else {
                     throw XPCError.conflictingClientRequirements
@@ -175,10 +178,6 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 
         // Park the main thread, allowing for incoming connections and requests to be processed
         dispatchMain()
-	}
-
-	internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        self.messageAcceptor.acceptMessage(connection: connection, message: message)
 	}
 
     public override var endpoint: XPCServerEndpoint {

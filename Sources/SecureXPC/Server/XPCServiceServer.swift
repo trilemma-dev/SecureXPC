@@ -12,6 +12,12 @@ import Foundation
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
 	private static let service = XPCServiceServer()
+    
+    private let _messageAcceptor = AlwaysAcceptingMessageAcceptor()
+    override internal var messageAcceptor: MessageAcceptor {
+        _messageAcceptor
+    }
+    
     private var connection: xpc_connection_t? = nil
 
     internal static func _forThisXPCService() throws -> XPCServiceServer {
@@ -63,11 +69,6 @@ internal class XPCServiceServer: XPCServer {
 			      xpc_connection_resume(connection)
         }
     }
-
-	internal override func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-		// XPC services are application-scoped, so we're assuming they're inheritently safe
-		true
-	}
 
     public override var serviceName: String? {
         xpcServiceName

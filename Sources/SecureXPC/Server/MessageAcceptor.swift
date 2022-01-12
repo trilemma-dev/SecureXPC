@@ -1,5 +1,5 @@
 //
-//  SecureMessageAcceptor.swift
+//  MessageAcceptor.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2022-01-06
@@ -7,10 +7,33 @@
 
 import Foundation
 
+protocol MessageAcceptor {
+    /// Determines whether an incoming message should be accepted.
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool
+}
+
+/// This should only be used by XPC Services which are application-scoped, so it's safe to assume they're inheritently safe
+internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        true
+    }
+}
+
+/// This is intended for use by `XPCAnonymousServer`
+internal struct SameProcessMessageAcceptor: MessageAcceptor {
+    /// This process's PID.
+    private static let processPID = getpid()
+    
+    /// Accepts a message only if it is coming from this process.
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        SameProcessMessageAcceptor.processPID == xpc_connection_get_pid(connection)
+    }
+}
+
 /// Accepts messages which meet the provided code signing requirements.
 ///
 /// Uses undocumented functionality prior to macOS 11.
-internal struct SecureMessageAcceptor {
+internal struct SecureMessageAcceptor: MessageAcceptor {
     /// At least one of these code signing requirements must be met in order for the message to be accepted
     internal let requirements: [SecRequirement]
     
@@ -30,7 +53,7 @@ internal struct SecureMessageAcceptor {
             let attributes = [kSecGuestAttributeAudit : tokenData] as CFDictionary
             SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &code)
         }
-        guard let code = code else { // Instead of explitly checking the return codes from the SecCode* function calls
+        guard let code = code else { // Instead of explicitly checking the return codes from the SecCode* function calls
             return false
         }
         
