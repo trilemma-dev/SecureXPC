@@ -10,16 +10,8 @@ import XCTest
 
 class RoundTripIntegrationTest: XCTestCase {
     var xpcClient: XPCClient! = nil
-
-    static let dummyRequirements: [SecRequirement] = {
-        var requirement: SecRequirement?
-        // This is a worthless security requirement which should always result in the connection being accepted
-        SecRequirementCreateWithString("info [CFBundleVersion] exists" as CFString, SecCSFlags(), &requirement)
-        
-        return [requirement!]
-    }()
     
-    let anonymousServer = XPCServer.makeAnonymousService(clientRequirements: RoundTripIntegrationTest.dummyRequirements)
+    let anonymousServer = XPCServer.makeAnonymousService()
 
     override func setUp() {
         let endpoint = anonymousServer.endpoint
