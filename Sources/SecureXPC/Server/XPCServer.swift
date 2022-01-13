@@ -73,7 +73,7 @@ import Foundation
 /// server.startAndBlock()
 /// ```
 ///
-/// Returned server instances which conform to ``NonBlockingStartable`` can also be started in a non-blocking manner:
+/// Returned server instances which conform to ``NonBlockingServer`` can also be started in a non-blocking manner:
 /// ```swift
 /// server.start()
 /// ```
@@ -92,7 +92,7 @@ import Foundation
 ///
 /// ### Starting a Server
 /// - ``startAndBlock()``
-/// - ``NonBlockingStartable/start()``
+/// - ``NonBlockingServer/start()``
 ///
 /// ### Error Handling
 /// - ``errorHandler``
@@ -137,7 +137,7 @@ public class XPCServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
@@ -166,7 +166,7 @@ public class XPCServer {
     /// }
     /// ```
     ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
     ///
     /// - Parameters:
     ///   - named: The name of the mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
