@@ -11,7 +11,7 @@ import XCTest
 class RoundTripIntegrationTest: XCTestCase {
     var xpcClient: XPCClient! = nil
     
-    let anonymousServer = XPCServer.makeAnonymousService()
+    let anonymousServer = XPCServer.makeAnonymous()
 
     override func setUp() {
         let endpoint = anonymousServer.endpoint
