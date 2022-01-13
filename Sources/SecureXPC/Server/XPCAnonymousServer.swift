@@ -33,6 +33,12 @@ internal class XPCAnonymousServer: XPCServer {
             endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
         )
     }
+    
+    internal func simulateDisconnectionForTesting() {
+        xpc_connection_cancel(self.anonymousListenerConnection)
+        // A new event handler must be set otherwise the existing one will still be used even after cancellation
+        xpc_connection_set_event_handler(self.anonymousListenerConnection, { _ in })
+    }
 }
 
 extension XPCAnonymousServer: NonBlockingStartable {

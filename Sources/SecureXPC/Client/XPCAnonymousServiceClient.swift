@@ -9,7 +9,7 @@ import Foundation
 
 /// A concrete implementation of ``XPCClient`` which can communicate with an anonymous XPC service.
 ///
-/// In the case of this framework, the Mach service is expected to be represented by an `XPCMachServer`.
+/// In the case of this framework, the anonymous service is expected to be represented by an `XPCAnonymousServer`.
 internal class XPCAnonymousServiceClient: XPCClient {
     override var serviceName: String? { nil }
 
@@ -17,9 +17,9 @@ internal class XPCAnonymousServiceClient: XPCClient {
     init(connection: xpc_connection_t) {
         super.init(connection: connection)
     }
-
-    /// Creates and returns a connection for the Mach service represented by this client.
-    internal override func createConnection() -> xpc_connection_t {
-        fatalError("Anonymous XPC connections cannot be restarted.")
+    
+    internal override func createConnection() throws -> xpc_connection_t {
+        // Anonymous clients aren't capable of creating a new connection as there is no service to reconnect to
+        throw XPCError.connectionCannotBeReestablished
     }
 }
