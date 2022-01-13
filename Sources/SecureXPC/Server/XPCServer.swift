@@ -300,7 +300,7 @@ public class XPCServer {
                 fatalError("Connection with retain count of zero is missing context, this should never happen")
             }
             
-            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).taketexetainedValue()
+            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
             weakConnection.removeFromContainer()
         })
     }
