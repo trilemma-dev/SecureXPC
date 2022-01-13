@@ -113,13 +113,13 @@ public class XPCServer {
     }
     
     /// Creates a new anonymous server that only accepts connections from the same process it's running in.
-    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymousService() -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
 
     internal static func makeAnonymousService(
         clientRequirements: [SecRequirement]
-    ) -> XPCServer & NonBlockingStartable {
+    ) -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     
@@ -141,7 +141,7 @@ public class XPCServer {
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingStartable {
+    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
     }
 
@@ -176,7 +176,7 @@ public class XPCServer {
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & NonBlockingStartable {
+    ) throws -> XPCServer & NonBlockingServer {
         try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 
@@ -300,7 +300,7 @@ public class XPCServer {
                 fatalError("Connection with retain count of zero is missing context, this should never happen")
             }
             
-            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
+            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).taketexetainedValue()
             weakConnection.removeFromContainer()
         })
     }
@@ -379,28 +379,12 @@ public class XPCServer {
         fatalError("Abstract Method")
     }
     
-	/// Determines whether the message should be accepted.
-	///
-	/// This is determined using the client requirements provided to this server upon initialization.
-	/// - Parameters:
-	///   - connection: The connection the message was sent over.
-	///   - message: The message.
-	/// - Returns: whether the message can be accepted
-    /*
-	internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-		fatalError("Abstract Method")
-	}*/
-    
     internal var messageAcceptor: MessageAcceptor {
         fatalError("Abstract Property")
     }
 
     public var serviceName: String? {
         fatalError("Abstract Property")
-    }
-
-    public var endpoint: XPCServerEndpoint {
-        fatalError("Abstract Method")
     }
 }
 
@@ -409,9 +393,11 @@ public class XPCServer {
 /// An ``XPCServer`` which can be started in a non-blocking manner.
 ///
 /// > Warning: Do not implement this protocol. Additions made to this protocol will not be considered a breaking change for SemVer purposes.
-public protocol NonBlockingStartable {
+public protocol NonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
+    /// Use an endpoint to create connections to this server
+    var endpoint: XPCServerEndpoint { get }
 }
 
 // MARK: handler function wrappers
