@@ -73,16 +73,4 @@ internal class XPCServiceServer: XPCServer {
     public override var serviceName: String? {
         xpcServiceName
     }
-
-    public override var endpoint: XPCServerEndpoint {
-        guard let connection = self.connection else {
-            fatalError("An XPCServer's endpoint can only be retrieved after startAndBlock() has been called on it.")
-        }
-
-        let endpoint = xpc_endpoint_create(connection)
-        return XPCServerEndpoint(
-            serviceDescriptor: .xpcService(name: self.xpcServiceName),
-            endpoint: endpoint
-        )
-    }
 }

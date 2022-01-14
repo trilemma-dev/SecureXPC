@@ -10,7 +10,7 @@ import Foundation
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
-internal class XPCMachServer: XPCServer, NonBlockingStartable {
+internal class XPCMachServer: XPCServer {
     
     /// Name of the service.
     private let machServiceName: String
@@ -159,6 +159,15 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
 		}
 	}
     
+	public override func startAndBlock() -> Never {
+        self.start()
+
+        // Park the main thread, allowing for incoming connections and requests to be processed
+        dispatchMain()
+	}
+}
+
+extension XPCMachServer: NonBlockingServer {
     public func start() {
         // Set listener for the Mach service, all received events will be incoming connections
         xpc_connection_set_event_handler(listenerConnection, { connection in
@@ -173,14 +182,7 @@ internal class XPCMachServer: XPCServer, NonBlockingStartable {
         xpc_connection_resume(listenerConnection)
     }
     
-	public override func startAndBlock() -> Never {
-        self.start()
-
-        // Park the main thread, allowing for incoming connections and requests to be processed
-        dispatchMain()
-	}
-
-    public override var endpoint: XPCServerEndpoint {
+    public var endpoint: XPCServerEndpoint {
         XPCServerEndpoint(
             serviceDescriptor: .machService(name: self.machServiceName),
             endpoint: xpc_endpoint_create(self.listenerConnection)

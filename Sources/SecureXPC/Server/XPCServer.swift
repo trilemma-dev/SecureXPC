@@ -73,7 +73,7 @@ import Foundation
 /// server.startAndBlock()
 /// ```
 ///
-/// Returned server instances which conform to ``NonBlockingStartable`` can also be started in a non-blocking manner:
+/// Returned server instances which conform to ``NonBlockingServer`` can also be started in a non-blocking manner:
 /// ```swift
 /// server.start()
 /// ```
@@ -92,7 +92,7 @@ import Foundation
 ///
 /// ### Starting a Server
 /// - ``startAndBlock()``
-/// - ``NonBlockingStartable/start()``
+/// - ``NonBlockingServer/start()``
 ///
 /// ### Error Handling
 /// - ``errorHandler``
@@ -113,11 +113,11 @@ public class XPCServer {
     }
     
     /// Creates a new anonymous server that only accepts connections from the same process it's running in.
-    internal static func makeAnonymous() -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymous() -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
 
-    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     
@@ -135,11 +135,11 @@ public class XPCServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingStartable {
+    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
     }
 
@@ -164,7 +164,7 @@ public class XPCServer {
     /// }
     /// ```
     ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingStartable/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
     ///
     /// - Parameters:
     ///   - named: The name of the mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
@@ -174,7 +174,7 @@ public class XPCServer {
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & NonBlockingStartable {
+    ) throws -> XPCServer & NonBlockingServer {
         try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 
@@ -377,28 +377,12 @@ public class XPCServer {
         fatalError("Abstract Method")
     }
     
-	/// Determines whether the message should be accepted.
-	///
-	/// This is determined using the client requirements provided to this server upon initialization.
-	/// - Parameters:
-	///   - connection: The connection the message was sent over.
-	///   - message: The message.
-	/// - Returns: whether the message can be accepted
-    /*
-	internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-		fatalError("Abstract Method")
-	}*/
-    
     internal var messageAcceptor: MessageAcceptor {
         fatalError("Abstract Property")
     }
 
     public var serviceName: String? {
         fatalError("Abstract Property")
-    }
-
-    public var endpoint: XPCServerEndpoint {
-        fatalError("Abstract Method")
     }
 }
 
@@ -407,9 +391,20 @@ public class XPCServer {
 /// An ``XPCServer`` which can be started in a non-blocking manner.
 ///
 /// > Warning: Do not implement this protocol. Additions made to this protocol will not be considered a breaking change for SemVer purposes.
-public protocol NonBlockingStartable {
+public protocol NonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
+    /// Use an endpoint to create connections to this server
+    var endpoint: XPCServerEndpoint { get }
+    
+    // Internal implementation note: `endpoint` is part of the `NonBlockingServer` protocol instead of `XPCServer` as
+    // `XPCServiceServer` can't have an endpoint created for it.
+    
+    // From a technical perspective this is because endpoints are only created from connection listeners, which an XPC
+    // Service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From
+    // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC Service because
+    // they're designed to only allow communication between the main app and .xpc bundles contained within the same
+    // main app's bundle. As such there's no valid use case for creating such an endpoint.
 }
 
 // MARK: handler function wrappers

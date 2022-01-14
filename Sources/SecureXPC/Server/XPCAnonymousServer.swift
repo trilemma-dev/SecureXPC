@@ -27,13 +27,6 @@ internal class XPCAnonymousServer: XPCServer {
         fatalError("startAndBlock() is not supported for anonymous connections. Use start() instead.")
     }
 
-    public override var endpoint: XPCServerEndpoint {
-        XPCServerEndpoint(
-            serviceDescriptor: .anonymous,
-            endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
-        )
-    }
-    
     internal func simulateDisconnectionForTesting() {
         xpc_connection_cancel(self.anonymousListenerConnection)
         // A new event handler must be set otherwise the existing one will still be used even after cancellation
@@ -41,7 +34,7 @@ internal class XPCAnonymousServer: XPCServer {
     }
 }
 
-extension XPCAnonymousServer: NonBlockingStartable {
+extension XPCAnonymousServer: NonBlockingServer {
     public func start() {
         // Start listener for the new anonymous connection, all received events should be for incoming client connections
         xpc_connection_set_event_handler(anonymousListenerConnection, { newClientConnection in
@@ -54,5 +47,12 @@ extension XPCAnonymousServer: NonBlockingStartable {
             xpc_connection_resume(newClientConnection)
         })
         xpc_connection_resume(self.anonymousListenerConnection)
+    }
+    
+    public var endpoint: XPCServerEndpoint {
+        XPCServerEndpoint(
+            serviceDescriptor: .anonymous,
+            endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
+        )
     }
 }
