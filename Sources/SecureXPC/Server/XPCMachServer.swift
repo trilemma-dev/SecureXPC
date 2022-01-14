@@ -11,7 +11,6 @@ import Foundation
 ///
 /// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
 internal class XPCMachServer: XPCServer {
-    
     /// Name of the service.
     private let machServiceName: String
     /// Receives new incoming connections
@@ -35,6 +34,46 @@ internal class XPCMachServer: XPCServer {
         self.addConnection(self.listenerConnection)
     }
     
+    public override func startAndBlock() -> Never {
+        self.start()
+
+        // Park the main thread, allowing for incoming connections and requests to be processed
+        dispatchMain()
+    }
+}
+
+extension XPCMachServer: NonBlockingServer {
+    public func start() {
+        // Set listener for the Mach service, all received events will be incoming connections
+        xpc_connection_set_event_handler(listenerConnection, { connection in
+            // Listen for events (messages or errors) coming from this connection
+            xpc_connection_set_event_handler(connection, { event in
+                self.handleEvent(connection: connection, event: event)
+            })
+            xpc_connection_set_target_queue(connection, self.targetQueue)
+            self.addConnection(connection)
+            xpc_connection_resume(connection)
+        })
+        xpc_connection_resume(listenerConnection)
+    }
+    
+    public var endpoint: XPCServerEndpoint {
+        XPCServerEndpoint(
+            serviceDescriptor: .machService(name: self.machServiceName),
+            endpoint: xpc_endpoint_create(self.listenerConnection)
+        )
+    }
+}
+
+extension XPCMachServer: CustomDebugStringConvertible {
+    /// Description which includes the name of the service and its memory address (to help in debugging uniqueness bugs)
+    var debugDescription: String {
+        "\(XPCMachServer.self) [\(self.machServiceName)] \(Unmanaged.passUnretained(self).toOpaque())"
+    }
+}
+
+/// Contains all of the `static` code that provides the entry points to retrieving an `XPCMachServer` instance.
+extension XPCMachServer {
     /// Cache of servers with the machServiceName as the key.
     ///
     /// This exists for correctness reasons, not as a performance optimization. Only one listener connection for a named service can exist simultaneously, so it's
@@ -89,23 +128,23 @@ internal class XPCMachServer: XPCServer {
         }
     }
 
-	internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
-		// Determine mach service name using the launchd property list's MachServices entry
-		let machServiceName: String
-		let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
-		let launchdPropertyList = try PropertyListSerialization.propertyList(
-			from: launchdData,
-			options: .mutableContainersAndLeaves,
-			format: nil) as? NSDictionary
-		if let machServices = launchdPropertyList?["MachServices"] as? [String : Any] {
-			if machServices.count == 1, let name = machServices.first?.key {
-				machServiceName = name
-			} else {
-				throw XPCError.misconfiguredBlessedHelperTool("MachServices dictionary does not have exactly one entry")
-			}
-		} else {
-			throw XPCError.misconfiguredBlessedHelperTool("launchd property list missing MachServices key")
-		}
+    internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
+        // Determine mach service name using the launchd property list's MachServices entry
+        let machServiceName: String
+        let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
+        let launchdPropertyList = try PropertyListSerialization.propertyList(
+            from: launchdData,
+            options: .mutableContainersAndLeaves,
+            format: nil) as? NSDictionary
+        if let machServices = launchdPropertyList?["MachServices"] as? [String : Any] {
+            if machServices.count == 1, let name = machServices.first?.key {
+                machServiceName = name
+            } else {
+                throw XPCError.misconfiguredBlessedHelperTool("MachServices dictionary does not have exactly one entry")
+            }
+        } else {
+            throw XPCError.misconfiguredBlessedHelperTool("launchd property list missing MachServices key")
+        }
 
         // Generate client requirements from info property list's SMAuthorizedClients
         var clientRequirements = [SecRequirement]()
@@ -131,69 +170,31 @@ internal class XPCMachServer: XPCServer {
             throw XPCError.misconfiguredBlessedHelperTool("No requirements were generated from SMAuthorizedClients")
         }
 
-		return try getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
-	}
-
-	/// Read the property list embedded within this helper tool.
-	///
-	/// - Returns: The property list as data.
-	private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
-		// By passing in nil, this returns a handle for the dynamic shared object (shared library) for this helper tool
-		if let handle = dlopen(nil, RTLD_LAZY) {
-			defer { dlclose(handle) }
-
-			if let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) {
-				let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
-
-				var size = UInt(0)
-				if let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) {
-					return Data(bytes: section, count: Int(size))
-				} else { // No section found with the name corresponding to the property list
-					throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
-				}
-			} else { // Can't get pointer to MH_EXECUTE_SYM
-				throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
-			}
-		} else { // Can't open handle
-			throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
-		}
-	}
-    
-	public override func startAndBlock() -> Never {
-        self.start()
-
-        // Park the main thread, allowing for incoming connections and requests to be processed
-        dispatchMain()
-	}
-}
-
-extension XPCMachServer: NonBlockingServer {
-    public func start() {
-        // Set listener for the Mach service, all received events will be incoming connections
-        xpc_connection_set_event_handler(listenerConnection, { connection in
-            // Listen for events (messages or errors) coming from this connection
-            xpc_connection_set_event_handler(connection, { event in
-                self.handleEvent(connection: connection, event: event)
-            })
-            xpc_connection_set_target_queue(connection, self.targetQueue)
-            self.addConnection(connection)
-            xpc_connection_resume(connection)
-        })
-        xpc_connection_resume(listenerConnection)
+        return try getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
-    
-    public var endpoint: XPCServerEndpoint {
-        XPCServerEndpoint(
-            serviceDescriptor: .machService(name: self.machServiceName),
-            endpoint: xpc_endpoint_create(self.listenerConnection)
-        )
-    }
-}
 
-extension XPCMachServer: CustomDebugStringConvertible {
-    
-    /// Description which includes the name of the service and its memory address (to help in debugging uniqueness bugs)
-    var debugDescription: String {
-        "\(XPCMachServer.self) [\(self.machServiceName)] \(Unmanaged.passUnretained(self).toOpaque())"
+    /// Read the property list embedded within this helper tool.
+    ///
+    /// - Returns: The property list as data.
+    private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
+        // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this helper tool
+        if let handle = dlopen(nil, RTLD_LAZY) {
+            defer { dlclose(handle) }
+
+            if let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) {
+                let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
+
+                var size = UInt(0)
+                if let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) {
+                    return Data(bytes: section, count: Int(size))
+                } else { // No section found with the name corresponding to the property list
+                    throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
+                }
+            } else { // Can't get pointer to MH_EXECUTE_SYM
+                throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
+            }
+        } else { // Can't open handle
+            throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
+        }
     }
 }
