@@ -291,7 +291,7 @@ public class XPCServer {
         // Keep a weak reference to the connection and this server, setting this as the context on the connection
         let weakConnection = WeakConnection(connection, server: self)
         self.connections.insert(weakConnection)
-        xpc_connection_set_context(connection, Unmanaged.passUnretained(weakConnection).toOpaque())
+        xpc_connection_set_context(connection, Unmanaged.passRetained(weakConnection).toOpaque())
         
         // The finalizer is called when the connection's retain count has reached zero, so now we need to remove the
         // wrapper from the containing connections array
@@ -300,7 +300,7 @@ public class XPCServer {
                 fatalError("Connection with retain count of zero is missing context, this should never happen")
             }
             
-            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeUnretainedValue()
+            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeRetainedValue()
             weakConnection.removeFromContainer()
         })
     }
