@@ -161,4 +161,20 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 	func superDecoder(forKey key: K) throws -> Decoder {
 		return XPCDecoderImpl(value: try value(forKey: key), codingPath: self.codingPath + [key])
 	}
+    
+    // MARK: XPC specific decoding
+    
+    func decodeEndpoint(forKey key: K) throws -> xpc_endpoint_t {
+        let value = try value(forKey: key)
+        let valueType = xpc_get_type(value)
+        if valueType != XPC_TYPE_ENDPOINT {
+            let message = "Expected type: \(XPC_TYPE_ENDPOINT.description)\nActual type: \(valueType.description)"
+            let context = DecodingError.Context(codingPath: self.codingPath,
+                                                debugDescription: message,
+                                                underlyingError: nil)
+            throw DecodingError.typeMismatch(xpc_object_t.self, context)
+        }
+        
+        return value
+    }
 }

@@ -19,6 +19,13 @@ internal class XPCDecoderImpl: Decoder {
 		self.value = value
 		self.codingPath = codingPath
 	}
+    
+    // Internal implementation so that XPC-specific functions of the container can be accessed
+    internal func xpcContainer<Key>(
+        keyedBy type: Key.Type
+    ) throws -> XPCKeyedDecodingContainer<Key> where Key : CodingKey {
+        return try XPCKeyedDecodingContainer(value: self.value, codingPath: self.codingPath)
+    }
 
 	func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key : CodingKey {
 		return KeyedDecodingContainer(try XPCKeyedDecodingContainer(value: self.value, codingPath: self.codingPath))
