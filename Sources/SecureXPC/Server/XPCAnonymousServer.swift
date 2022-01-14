@@ -24,7 +24,8 @@ internal class XPCAnonymousServer: XPCServer {
 
     /// Begins processing requests received by this XPC server and never returns.
     public override func startAndBlock() -> Never {
-        fatalError("startAndBlock() is not supported for anonymous connections. Use start() instead.")
+        self.start()
+        dispatchMain()
     }
 
     internal func simulateDisconnectionForTesting() {

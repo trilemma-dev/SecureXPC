@@ -372,7 +372,7 @@ public class XPCServer {
     /// If no value is specified, `dispatch_main` is the default. If `dispatch_main` is specified or defaulted to, it is a programming error to call this function
     /// from any thread besides the main thread.
     ///
-    /// If this server is for a Mach service, it is always a programming error to call this function from any thread besides the main thread.
+    /// If this server is for a Mach service or is an anonymous server, it is always a programming error to call this function from any thread besides the main thread.
     public func startAndBlock() -> Never {
         fatalError("Abstract Method")
     }
