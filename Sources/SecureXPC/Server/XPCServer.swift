@@ -113,13 +113,11 @@ public class XPCServer {
     }
     
     /// Creates a new anonymous server that only accepts connections from the same process it's running in.
-    internal static func makeAnonymousService() -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymous() -> XPCServer & NonBlockingStartable {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
 
-    internal static func makeAnonymousService(
-        clientRequirements: [SecRequirement]
-    ) -> XPCServer & NonBlockingStartable {
+    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingStartable {
         XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     

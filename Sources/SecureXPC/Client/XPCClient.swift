@@ -135,7 +135,7 @@ public class XPCClient {
         xpc_connection_resume(connection)
 
         switch endpoint.serviceDescriptor {
-        case .anonymous: return XPCAnonymousServiceClient(connection: connection)
+        case .anonymous: return XPCAnonymousClient(connection: connection)
         case .xpcService(name: let name): return XPCServiceClient(xpcServiceName: name, connection: connection)
         case .machService(name: let name): return XPCMachClient(machServiceName: name, connection: connection)
         }
