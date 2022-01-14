@@ -15,7 +15,7 @@ internal class XPCMachServer: XPCServer {
     /// Name of the service.
     private let machServiceName: String
     /// Receives new incoming connections
-    private var listenerConnection: xpc_connection_t
+    private let listenerConnection: xpc_connection_t
     /// Determines if an incoming request will be accepted based on the provided client requirements
     private let _messageAcceptor: SecureMessageAcceptor
     override internal var messageAcceptor: MessageAcceptor {
@@ -29,10 +29,7 @@ internal class XPCMachServer: XPCServer {
         
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
         self.listenerConnection = machServiceName.withCString { serviceNamePointer in
-            return xpc_connection_create_mach_service(
-                serviceNamePointer,
-                nil,
-                UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
+            xpc_connection_create_mach_service(serviceNamePointer, nil, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
         super.init()
         self.addConnection(self.listenerConnection)
