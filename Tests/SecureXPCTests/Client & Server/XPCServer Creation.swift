@@ -8,8 +8,15 @@
 import Foundation
 import XCTest
 import SecureXPC
+@testable import SecureXPC
 
 final class XPCServerCreationTests: XCTestCase {
+    
+    func testCreateNeverStartedAnonymousServer() {
+        // This is testing that the server can succesfully be deallocated without it ever having been started
+        // See https://github.com/trilemma-dev/SecureXPC/issues/54
+        _ = XPCServer.makeAnonymous()
+    }
     
     func testFailToRetrieveServicesServer() {
         do {

@@ -15,6 +15,12 @@ internal class XPCMachServer: XPCServer {
     private let machServiceName: String
     /// Receives new incoming connections
     private let listenerConnection: xpc_connection_t
+    /// The dispatch queue used when new connections are being received
+    private let listenerQueue: DispatchQueue
+    /// Whether this server has been started, if not connections are added to pendingConnections
+    private var started = false
+    /// Connections received while the server is not started
+    private var pendingConnections = [xpc_connection_t]()
     /// Determines if an incoming request will be accepted based on the provided client requirements
     private let _messageAcceptor: SecureMessageAcceptor
     override internal var messageAcceptor: MessageAcceptor {
@@ -25,13 +31,23 @@ internal class XPCMachServer: XPCServer {
     private init(machServiceName: String, clientRequirements: [SecRequirement]) {
         self.machServiceName = machServiceName
         self._messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
-        
+        let listenerQueue = DispatchQueue(label: String(describing: XPCMachServer.self))
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
-        self.listenerConnection = machServiceName.withCString { serviceNamePointer in
-            xpc_connection_create_mach_service(serviceNamePointer, nil, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
+        self.listenerConnection = machServiceName.withCString { namePointer in
+            xpc_connection_create_mach_service(namePointer, listenerQueue, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
+        self.listenerQueue = listenerQueue
         super.init()
-        self.addConnection(self.listenerConnection)
+        
+        // Configure listener for new connections, all received events are incoming client connections
+        xpc_connection_set_event_handler(self.listenerConnection, { connection in
+            if self.started {
+                self.startClientConnection(connection)
+            } else {
+                self.pendingConnections.append(connection)
+            }
+        })
+        xpc_connection_resume(self.listenerConnection)
     }
     
     public override func startAndBlock() -> Never {
@@ -44,17 +60,13 @@ internal class XPCMachServer: XPCServer {
 
 extension XPCMachServer: NonBlockingServer {
     public func start() {
-        // Set listener for the Mach service, all received events will be incoming connections
-        xpc_connection_set_event_handler(listenerConnection, { connection in
-            // Listen for events (messages or errors) coming from this connection
-            xpc_connection_set_event_handler(connection, { event in
-                self.handleEvent(connection: connection, event: event)
-            })
-            xpc_connection_set_target_queue(connection, self.targetQueue)
-            self.addConnection(connection)
-            xpc_connection_resume(connection)
-        })
-        xpc_connection_resume(listenerConnection)
+        self.listenerQueue.sync {
+            self.started = true
+            for connection in self.pendingConnections {
+                self.startClientConnection(connection)
+            }
+            self.pendingConnections.removeAll()
+        }
     }
     
     public var endpoint: XPCServerEndpoint {
@@ -81,7 +93,7 @@ extension XPCMachServer {
     private static var machServerCache = [String : XPCMachServer]()
     
     /// Prevents race conditions for creating and retrieving cached Mach servers
-    private static let serialQueue = DispatchQueue(label: "XPC Mach Server Serial Queue")
+    private static let serialQueue = DispatchQueue(label: "XPCMachServer Retrieval Queue")
     
     /// Returns a server with the provided name and requirements OR throws an error if that's not possible.
     ///

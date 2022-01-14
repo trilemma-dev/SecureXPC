@@ -17,8 +17,6 @@ internal class XPCServiceServer: XPCServer {
     override internal var messageAcceptor: MessageAcceptor {
         _messageAcceptor
     }
-    
-    private var connection: xpc_connection_t? = nil
 
     internal static func _forThisXPCService() throws -> XPCServiceServer {
         // An XPC Service's package type must be equal to "XPC!", see Apple's documentation for details
@@ -55,18 +53,10 @@ internal class XPCServiceServer: XPCServer {
     private lazy var xpcServiceName: String = Bundle.main.bundleIdentifier!
 
     public override func startAndBlock() -> Never {
-	      xpc_main { connection in
+        xpc_main { connection in
             // This is a @convention(c) closure, so we can't just capture `self`.
             // As such, the singleton reference `XPCServiceServer.service` is used instead.
-            xpc_connection_set_target_queue(connection, XPCServiceServer.service.targetQueue)
-            XPCServiceServer.service.connection = connection
-            XPCServiceServer.service.addConnection(connection)
-          
-            // Listen for events (messages or errors) coming from this connection
-            xpc_connection_set_event_handler(connection, { event in
-                XPCServiceServer.service.handleEvent(connection: connection, event: event)
-            })
-			      xpc_connection_resume(connection)
+            XPCServiceServer.service.startClientConnection(connection)
         }
     }
 
