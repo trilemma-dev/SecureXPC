@@ -396,6 +396,15 @@ public protocol NonBlockingServer {
     func start()
     /// Use an endpoint to create connections to this server
     var endpoint: XPCServerEndpoint { get }
+    
+    // Internal implementation note: `endpoint` is part of the `NonBlockingServer` protocol instead of `XPCServer` as
+    // `XPCServiceServer` can't have an endpoint created for it.
+    
+    // From a technical perspective this is because endpoints are only created from connection listeners, which an XPC
+    // Service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From
+    // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC Service because
+    // they're designed to only allow communication between the main app and .xpc bundles contained within the same
+    // main app's bundle. As such there's no valid use case for creating such an endpoint.
 }
 
 // MARK: handler function wrappers
