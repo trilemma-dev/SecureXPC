@@ -14,6 +14,10 @@ struct XPCRoute: Codable, Hashable {
     // These are intentionally excluded when computing equality and hash values as routes are uniqued only on path
     let messageType: String?
     let replyType: String?
+    /// Whether the route expects the handler registered on the server to have a non-`Void` type.
+    ///
+    /// The client may still request a response meaning that completion and any error that occurred can be sent back, but the handler is not expected to return data.
+    let expectsReply: Bool
     
     fileprivate init(pathComponents: [String], messageType: Any.Type?, replyType: Any.Type?) {
         self.pathComponents = pathComponents
@@ -26,8 +30,10 @@ struct XPCRoute: Codable, Hashable {
         
         if let replyType = replyType {
             self.replyType = String(describing: replyType)
+            self.expectsReply = (replyType.self != Void.self)
         } else {
             self.replyType = nil
+            self.expectsReply = false
         }
     }
     

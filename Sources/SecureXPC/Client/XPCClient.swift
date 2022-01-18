@@ -157,87 +157,154 @@ public class XPCClient {
     }
     
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
-    public typealias XPCReplyHandler<R> = (Result<R, XPCError>) -> Void
+    public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
     
     /// Sends with no message and will not receive a reply.
     ///
     /// - Parameters:
     ///   - route: The server route which will handle this.
-    /// - Throws: If unable to encode the route. No error will be thrown if communication with the server fails.
-    public func send(route: XPCRouteWithoutMessageWithoutReply) throws {
-        let encoded = try Request(route: route.route).dictionary
-        xpc_connection_send_message(try getConnection(), encoded)
+    ///   - onCompletion: An optionally provided function or closure to receive a response upon successful completion or error.
+    public func send(route: XPCRouteWithoutMessageWithoutReply,
+                     onCompletion handler: XPCResponseHandler<Void>?) {
+        if let handler = handler {
+            do {
+                let encoded = try Request(route: route.route).dictionary
+                sendWithResponse(encoded: encoded, withResponse: handler)
+            } catch {
+                handler(.failure(.encodingError(String(describing: error))))
+            }
+        } else {
+            if let encoded = try? Request(route: route.route).dictionary,
+               let connection = try? getConnection() {
+                xpc_connection_send_message(connection, encoded)
+            }
+        }
     }
     
-    /// Sends a message which will not receive a response.
+    /// Sends a message which will not receive a reply.
     ///
     /// - Parameters:
-    ///    - message: Message to be sent.
-    ///    - route: The server route which should handle this message.
-    /// - Throws: If unable to encode the message or route. No error will be thrown if communication with the server fails.
-    public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) throws {
-        let encoded = try Request(route: route.route, payload: message).dictionary
-        xpc_connection_send_message(try getConnection(), encoded)
+    ///   - message: Message to be sent.
+    ///   - route: The server route which should handle this message.
+    ///   - onCompletion: An optionally provided function or closure to receive a response upon successful completion or error.
+    public func sendMessage<M: Encodable>(_ message: M,
+                                          route: XPCRouteWithMessageWithoutReply<M>,
+                                          onCompletion handler: XPCResponseHandler<Void>?) {
+        if let handler = handler {
+            do {
+                let encoded = try Request(route: route.route, payload: message).dictionary
+                sendWithResponse(encoded: encoded, withResponse: handler)
+            } catch {
+                handler(.failure(.encodingError(String(describing: error))))
+            }
+        } else {
+            if let encoded = try? Request(route: route.route, payload: message).dictionary,
+               let connection = try? getConnection() {
+                xpc_connection_send_message(connection, encoded)
+            }
+        }
     }
     
-    /// Sends with no message and provides the reply as either a message on success or an error on failure.
+    /// Sends with no message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
     ///   - route: The server route which will handle this.
-    ///   - withReply: A function or closure to receive the reply.
-    /// - Throws: If unable to encode the route or the server throws an error. No error will be thrown if communication with the server fails.
+    ///   - withResponse: A function or closure to receive the response.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
-                                   withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encoded = try Request(route: route.route).dictionary
-        try sendWithReply(encoded: encoded, withReply: reply)
+                                   withReply handler: @escaping XPCResponseHandler<R>) {
+        do {
+            let encoded = try Request(route: route.route).dictionary
+            sendWithResponse(encoded: encoded, withResponse: handler)
+        } catch {
+            handler(.failure(.encodingError(String(describing: error))))
+        }
     }
     
-    /// Sends a message and provides the reply as either a message on success or an error on failure.
+    /// Sends a message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
     ///    - message: Message to be sent.
     ///    - route: The server route which should handle this message.
-    ///    - withReply: A function or closure to receive the message's reply.
-    /// - Throws: If unable to encode the message or route or the server throws an error. No error will be thrown if communication with the server fails.
+    ///    - withResponse: A function or closure to receive the message's response.
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,
-                                                        withReply reply: @escaping XPCReplyHandler<R>) throws {
-        let encoded = try Request(route: route.route, payload: message).dictionary
-        try sendWithReply(encoded: encoded, withReply: reply)
+                                                        withResponse handler: @escaping XPCResponseHandler<R>) {
+        do {
+            let encoded = try Request(route: route.route, payload: message).dictionary
+            sendWithResponse(encoded: encoded, withResponse: handler)
+        } catch {
+            handler(.failure(.encodingError(String(describing: error))))
+        }
     }
     
-    /// Does the actual work of sending an XPC message which receives a reply.
-    private func sendWithReply<R: Decodable>(encoded: xpc_object_t,
-                                             withReply reply: @escaping XPCReplyHandler<R>) throws {
-        xpc_connection_send_message_with_reply(try getConnection(), encoded, nil, { xpcResponse in
+    /// Does the actual work of sending an XPC message which receives a response.
+    private func sendWithResponse<R: Decodable>(encoded: xpc_object_t,
+                                                withResponse handler: @escaping XPCResponseHandler<R>) {
+        // Get the connection or inform the handler of failure and return
+        var connection: xpc_connection_t?
+        do {
+            connection = try getConnection()
+        } catch {
+            if let error = error as? XPCError {
+                handler(.failure(error))
+            } else {
+                handler(.failure(.unknown))
+            }
+        }
+        guard let connection = connection else {
+            return
+        }
+        
+        // Async send the message over XPC
+        xpc_connection_send_message_with_reply(connection, encoded, nil) { reply in
             let result: Result<R, XPCError>
-            if xpc_get_type(xpcResponse) == XPC_TYPE_DICTIONARY {
+            if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
                 do {
-                    let response = try Response(dictionary: xpcResponse)
+                    let response = try Response(dictionary: reply)
                     if response.containsPayload {
-                        result = Result.success(try response.decodePayload(asType: R.self))
+                        result = .success(try response.decodePayload(asType: R.self))
                     } else if response.containsError {
-                        result = Result.failure(try response.decodeError())
+                        result = .failure(try response.decodeError())
+                    } else if R.self == NoPayload.self { // Special case to handle when no payload is expected behavior
+                        result = .success(NoPayload.instance as! R)
                     } else {
-                        result = Result.failure(.unknown)
+                        result = .failure(.unknown)
                     }
                 } catch let error as XPCError  {
-                    result = Result.failure(error)
+                    result = .failure(error)
                 } catch {
-                    result = Result.failure(.unknown)
+                    result = .failure(.unknown)
                 }
-            } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INVALID) {
-                result = Result.failure(.connectionInvalid)
-            } else if xpc_equal(xpcResponse, XPC_ERROR_CONNECTION_INTERRUPTED) {
-                result = Result.failure(.connectionInterrupted)
+            } else if xpc_equal(reply, XPC_ERROR_CONNECTION_INVALID) {
+                result = .failure(.connectionInvalid)
+            } else if xpc_equal(reply, XPC_ERROR_CONNECTION_INTERRUPTED) {
+                result = .failure(.connectionInterrupted)
             } else { // Unexpected
-                result = Result.failure(.unknown)
+                result = .failure(.unknown)
             }
-            self.handleConnectionErrors(event: xpcResponse)
-            reply(result)
-        })
+            self.handleConnectionErrors(event: reply)
+            handler(result)
+        }
     }
-
+    
+    /// Wrapper that handles responses without a payload since `Void` is not `Decodable`
+    private func sendWithResponse(encoded: xpc_object_t, withResponse handler: @escaping XPCResponseHandler<Void>) {
+        let wrappedHandler: XPCResponseHandler<NoPayload> = { response in
+            switch response {
+                case .success(_):
+                    handler(.success(()))
+                case .failure(let error):
+                    handler(.failure(error))
+            }
+        }
+        self.sendWithResponse(encoded: encoded, withResponse: wrappedHandler)
+    }
+    
+    /// Represents an XPC call which does not contain a payload in the response
+    fileprivate enum NoPayload: Decodable {
+        case instance
+    }
+    
     private func getConnection() throws -> xpc_connection_t {
         if let existingConnection = self.connection { return existingConnection }
 
