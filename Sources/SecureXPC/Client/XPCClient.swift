@@ -60,7 +60,7 @@ import Foundation
 /// })
 /// ```
 ///
-/// The ``XPCClient/XPCReplyHandler`` provided to the `withReply` parameter is always passed a
+/// The ``XPCClient/XPCResponseHandler`` provided to the `withResponse` parameter is always passed a
 /// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` and a
 ///  `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an ``XPCError`` on failure.
 ///
@@ -83,12 +83,12 @@ import Foundation
 /// - ``forXPCService(named:)``
 /// - ``forMachService(named:)``
 /// ### Calling Routes
-/// - ``send(route:)``
-/// - ``send(route:withReply:)``
-/// - ``sendMessage(_:route:)``
-/// - ``sendMessage(_:route:withReply:)``
-/// ### Receiving Replies
-/// - ``XPCReplyHandler``
+/// - ``send(route:onCompletion:)``
+/// - ``send(route:withResponse:)``
+/// - ``sendMessage(_:route:onCompletion:)``
+/// - ``sendMessage(_:route:withResponse:)``
+/// ### Receiving Responses
+/// - ``XPCResponseHandler``
 public class XPCClient {
     
     // MARK: Public factories
@@ -211,7 +211,7 @@ public class XPCClient {
     ///   - route: The server route which will handle this.
     ///   - withResponse: A function or closure to receive the response.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
-                                   withReply handler: @escaping XPCResponseHandler<R>) {
+                                   withResponse handler: @escaping XPCResponseHandler<R>) {
         do {
             let encoded = try Request(route: route.route).dictionary
             sendWithResponse(encoded: encoded, withResponse: handler)
