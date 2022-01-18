@@ -265,8 +265,8 @@ public class XPCClient {
                         result = .success(try response.decodePayload(asType: R.self))
                     } else if response.containsError {
                         result = .failure(try response.decodeError())
-                    } else if R.self == NoPayload.self { // Special case to handle when no payload is expected behavior
-                        result = .success(NoPayload.instance as! R)
+                    } else if R.self == EmptyResponse.self { // Special case for when an empty response is expected
+                        result = .success(EmptyResponse.instance as! R)
                     } else {
                         result = .failure(.unknown)
                     }
@@ -289,7 +289,7 @@ public class XPCClient {
     
     /// Wrapper that handles responses without a payload since `Void` is not `Decodable`
     private func sendWithResponse(encoded: xpc_object_t, withResponse handler: @escaping XPCResponseHandler<Void>) {
-        let wrappedHandler: XPCResponseHandler<NoPayload> = { response in
+        self.sendWithResponse(encoded: encoded) { (response: Result<EmptyResponse, XPCError>) -> Void in
             switch response {
                 case .success(_):
                     handler(.success(()))
@@ -297,11 +297,10 @@ public class XPCClient {
                     handler(.failure(error))
             }
         }
-        self.sendWithResponse(encoded: encoded, withResponse: wrappedHandler)
     }
     
-    /// Represents an XPC call which does not contain a payload in the response
-    fileprivate enum NoPayload: Decodable {
+    /// Represents an XPC call which does not contain a payload or error in the response
+    fileprivate enum EmptyResponse: Decodable {
         case instance
     }
     
