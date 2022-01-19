@@ -19,7 +19,7 @@ these routes.
 
 In a file shared by the client and server define one or more routes:
 ```swift
-let route = XPCRouteWithMessageWithReply("bezaddle",
+let route = XPCRouteWithMessageWithReply("bedazzle",
                                          messageType: String.self,
                                          replyType: Bool.self)
 ```
@@ -47,11 +47,11 @@ See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 In another program retrieve a client, then call one of those routes:
 ```swift
 let client = <# client retrieval here #>
-try client.sendMessage("Get Schwifty", route: route, withReply: { result in
-    switch result {
-        case let .success(reply):
+try client.sendMessage("Get Schwifty", route: route, withResponse: { response in
+    switch response {
+        case .success(let reply):
             <# use the reply #>
-        case let .failure(error):
+        case .failure(let error):
             <# handle the error #>
     }
 })
