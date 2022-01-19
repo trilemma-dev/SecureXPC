@@ -37,23 +37,13 @@ import Foundation
 /// name of the service as well its security requirements. See ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and
 /// details.
 ///
-/// **Requirement Checking**
-///
-/// SecureXPC requires that a server for an XPC Mach service provide code signing requirements which define which clients are allowed to talk to it.
-///
-/// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used; if for some reason the function is unavailable
-/// then no messages will be accepted. When messages are not accepted, if the ``XPCServer/errorHandler`` is set then it is called
-/// with ``XPCError/insecure``.
-///
-///
 /// ### Registering & Handling Routes
 /// Once a server instance has been retrieved, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
 /// providing a route and a compatible closure or function. For example:
 /// ```swift
 ///     ...
 ///     let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
-///                                                          messageType:Config.self,
+///                                                          messageType: Config.self,
 ///                                                          replyType: Config.self)
 ///     server.registerRoute(updateConfigRoute, handler: updateConfig)
 /// }
@@ -63,9 +53,8 @@ import Foundation
 /// }
 /// ```
 ///
-/// If the function or closure provided as the `handler` parameter throws an error and the route expects a return, then ``XPCError/other(_:)`` will be
-/// returned to the client with the `String` associated type describing the thrown error. It is intentional the thrown error is not marshalled as that type may not be
-/// `Codable` and may not exist in the client.
+/// If the function or closure throws an error and the route expects a return, then ``XPCError/other(_:)`` will be returned to the client with the `String`
+/// associated type describing the thrown error. It is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
 ///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
@@ -151,23 +140,30 @@ public class XPCServer {
     /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
     /// of any connecting clients:
     /// ```swift
-    /// let reqString = """identifier "com.example.AuthorizedClient" and certificate leaf[subject.OU] = "4L0ZG128MM" """
+    /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
     /// var requirement: SecRequirement?
     /// if SecRequirementCreateWithString(reqString as CFString,
     ///                                   SecCSFlags(),
     ///                                   &requirement) == errSecSuccess,
     ///   let requirement = requirement {
-    ///    let server = XPCServer.forThisMachService(named: "com.example.service",
-    ///                                              clientRequirements: [requirement])
+    ///     let server = XPCServer.forThisMachService(named: "com.example.service",
+    ///                                               clientRequirements: [requirement])
     ///
     ///    <# configure and start server #>
     /// }
     /// ```
-    ///
     /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
     ///
+    /// ## Requirements Checking
+    ///
+    /// SecureXPC requires that a server for an XPC Mach service provide code signing requirements which define which clients are allowed to talk to it.
+    ///
+    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
+    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if the
+    /// ``XPCServer/errorHandler`` is set then it is called with ``XPCError/insecure``.
+    ///
     /// - Parameters:
-    ///   - named: The name of the mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
+    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
     /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
     ///           requirements.
@@ -373,7 +369,7 @@ public class XPCServer {
         }
     }
 
-	// MARK: Abstract methods
+	// MARK: Abstract methods & properties
     
     /// Begins processing requests received by this XPC server and never returns.
     ///
@@ -387,11 +383,15 @@ public class XPCServer {
         fatalError("Abstract Method")
     }
     
-    internal var messageAcceptor: MessageAcceptor {
+    /// The name of the service this server is bound to.
+    ///
+    /// Anonymous servers do not represent a service and therefore will always have a `nil` service name.
+    public var serviceName: String? {
         fatalError("Abstract Property")
     }
-
-    public var serviceName: String? {
+    
+    /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
+    internal var messageAcceptor: MessageAcceptor {
         fatalError("Abstract Property")
     }
 }

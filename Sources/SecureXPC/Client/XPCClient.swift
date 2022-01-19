@@ -11,7 +11,7 @@ import Foundation
 ///
 /// ### Retrieving a Client
 /// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
-/// type of service you're using, it's likely it's an XPC Service.
+/// type of service you're using, it's likely an XPC Service.
 ///
 /// **XPC Services**
 ///
@@ -42,41 +42,51 @@ import Foundation
 /// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
 /// ```swift
 /// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
-/// try client.send(route: resetRoute)
+/// client.send(route: resetRoute, onCompletion: nil)
 /// ```
 ///
-/// While a client may throw an error when sending, this will only occur due to an encoding error. If after successfully encoding the message fails to send or is not
-/// received by a server, no error will be raised due to how XPC is designed. If it is important for your code to have confirmation of receipt then a route with a reply
-/// should be used:
+/// If confirmation that the send was received is needed, then an `onCompletion` handler must be set:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithReply("reset", replyType: Bool.self)
-/// try client.send(route: resetRoute, withReply: { result in
-///     switch result {
-///          case let .success(reply):
+/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// client.send(route: resetRoute, onCompletion: { response in
+///     switch response {
+///         case .success(_):
+///             <# confirm success #>
+///         case .failure(let error):
+///             <# handle the error #>
+///     }
+/// })
+/// ```
+///
+/// If the client needs to receive information back from the server, a route with a reply type must be used:
+/// ```swift
+/// let currentConfigRoute = XPCRouteWithoutMessageWithReply("config", "current",
+///                                                          replyType: Config.self)
+/// client.send(route: currentConfigRoute, withResponse: { response in
+///     switch response {
+///          case .success(let reply):
 ///              <# use the reply #>
-///          case let .failure(error):
+///          case .failure(let error):
 ///              <# handle the error #>
 ///     }
 /// })
 /// ```
 ///
-/// The ``XPCClient/XPCResponseHandler`` provided to the `withResponse` parameter is always passed a
-/// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` and a
-///  `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an ``XPCError`` on failure.
-///
 /// When calling a route, there is also the option to include a message:
 /// ```swift
-/// let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
+/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
 ///                                                      messageType: Config.self,
 ///                                                      replyType: Config.self)
 /// let config = <# create Config instance #>
-/// client.sendMessage(config, route: updateConfigRoute, withReply: {
-///     <# process reply #>
+/// client.sendMessage(config, route: updateConfigRoute, withResponse: {
+///     <# process response #>
 /// })
 /// ```
 ///
-/// In this example a custom `Config` type that conforms to `Codable` was used as both the message and reply types. A hypothetical implementation could
-/// consist of the desired configuration update being sent as a message and the server replying with the actual configuration after attempting to apply the changes.
+/// The ``XPCClient/XPCResponseHandler`` provided to the `withResponse` or `onCompletion` parameter is always passed a
+/// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` (or
+/// `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an
+/// ``XPCError`` on failure.
 ///
 /// ## Topics
 /// ### Retrieving a Client
