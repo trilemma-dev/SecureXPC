@@ -285,7 +285,17 @@ public class XPCServer {
         self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithReply(handler: handler)
     }
     
-    internal func addConnection(_ connection: xpc_connection_t) {
+    internal func startClientConnection(_ connection: xpc_connection_t) {
+        // Listen for events (messages or errors) coming from this connection
+        xpc_connection_set_event_handler(connection, { event in
+            self.handleEvent(connection: connection, event: event)
+        })
+        xpc_connection_set_target_queue(connection, self.targetQueue)
+        self.addConnection(connection)
+        xpc_connection_resume(connection)
+    }
+    
+    private func addConnection(_ connection: xpc_connection_t) {
         // Keep a weak reference to the connection and this server, setting this as the context on the connection
         let weakConnection = WeakConnection(connection, server: self)
         self.connections.insert(weakConnection)
@@ -303,7 +313,7 @@ public class XPCServer {
         })
     }
     
-    internal func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
+    private func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
             if self.messageAcceptor.acceptMessage(connection: connection, message: event) {
                 var reply = xpc_dictionary_create_reply(event)

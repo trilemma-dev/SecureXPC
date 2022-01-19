@@ -8,18 +8,34 @@
 import Foundation
 
 internal class XPCAnonymousServer: XPCServer {
+    /// Receives new incoming connections
     private let anonymousListenerConnection: xpc_connection_t
-    
+    /// The dispatch queue used when new connections are being received
+    private let listenerQueue = DispatchQueue(label: String(describing: XPCAnonymousServer.self))
+    /// Whether this server has been started, if not connections are added to pendingConnections
+    private var started = false
+    /// Connections received while the server is not started
+    private var pendingConnections = [xpc_connection_t]()
+    /// Determines if an incoming request will be accepted based on the provided client requirements
     private let _messageAcceptor: MessageAcceptor
     override internal var messageAcceptor: MessageAcceptor {
         _messageAcceptor
     }
-
+    
     internal init(messageAcceptor: MessageAcceptor) {
         self._messageAcceptor = messageAcceptor
-        self.anonymousListenerConnection = xpc_connection_create(nil, nil)
+        self.anonymousListenerConnection = xpc_connection_create(nil, listenerQueue)
         super.init()
-        self.addConnection(self.anonymousListenerConnection)
+        
+        // Configure listener for new anonymous connections, all received events are incoming client connections
+        xpc_connection_set_event_handler(self.anonymousListenerConnection, { connection in
+            if self.started {
+                self.startClientConnection(connection)
+            } else {
+                self.pendingConnections.append(connection)
+            }
+        })
+        xpc_connection_resume(self.anonymousListenerConnection)
     }
 
     /// Begins processing requests received by this XPC server and never returns.
@@ -37,17 +53,13 @@ internal class XPCAnonymousServer: XPCServer {
 
 extension XPCAnonymousServer: NonBlockingServer {
     public func start() {
-        // Start listener for the new anonymous connection, all received events should be for incoming client connections
-        xpc_connection_set_event_handler(anonymousListenerConnection, { newClientConnection in
-            // Listen for events (messages or errors) coming from this connection
-            xpc_connection_set_event_handler(newClientConnection, { event in
-                self.handleEvent(connection: newClientConnection, event: event)
-            })
-            xpc_connection_set_target_queue(newClientConnection, self.targetQueue)
-            self.addConnection(newClientConnection)
-            xpc_connection_resume(newClientConnection)
-        })
-        xpc_connection_resume(self.anonymousListenerConnection)
+        self.listenerQueue.sync {
+            self.started = true
+            for connection in self.pendingConnections {
+                self.startClientConnection(connection)
+            }
+            self.pendingConnections.removeAll()
+        }
     }
     
     public var endpoint: XPCServerEndpoint {
