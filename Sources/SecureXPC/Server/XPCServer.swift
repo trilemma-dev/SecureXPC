@@ -443,7 +443,6 @@ fileprivate extension XPCHandler {
                              messageType: Any.Type?,
                              replyType: Any.Type?) throws {
         var errorMessages = [String]()
-        
         // Message
         if messageType == nil, request.containsPayload {
             errorMessages.append("Request had a message of type \(String(describing: request.route.messageType)), " +
@@ -454,7 +453,7 @@ fileprivate extension XPCHandler {
         }
         
         // Reply
-        if replyType == nil, reply != nil {
+        if replyType == nil, reply != nil && request.route.expectsReply {
             errorMessages.append("Request expects a reply of type \(String(describing: request.route.replyType)), " +
                                  "but the handler registered with the server has no return value.")
         } else if let replyType = replyType, reply == nil {
