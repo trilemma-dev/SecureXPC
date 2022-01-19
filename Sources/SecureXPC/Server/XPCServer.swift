@@ -72,116 +72,24 @@ import Foundation
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
 /// - ``forThisMachService(named:clientRequirements:)``
-///
 /// ### Registering Routes
 /// - ``registerRoute(_:handler:)-82935``
 /// - ``registerRoute(_:handler:)-7yvyr``
 /// - ``registerRoute(_:handler:)-3ohmq``
-/// - ``registerRoute(_:handler:)-4jjs6`` 
-///
+/// - ``registerRoute(_:handler:)-4jjs6``
+/// ### Configuring a Server
+/// - ``targetQueue``
+/// - ``errorHandler``
 /// ### Starting a Server
 /// - ``startAndBlock()``
 /// - ``NonBlockingServer/start()``
-///
-/// ### Error Handling
-/// - ``errorHandler``
+/// ### Server Information
+/// - ``serviceName``
 public class XPCServer {
-
-    // MARK: Public factories
-    
-    /// Provides a server for this XPC Service.
-    ///
-    /// For the provided server to function properly, the caller must be an XPC Service.
-    ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` is called.
-    ///
-    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
-    /// - Returns: A server instance configured for this XPC Service.
-    public static func forThisXPCService() throws -> XPCServer {
-        try XPCServiceServer._forThisXPCService()
-    }
-    
-    /// Creates a new anonymous server that only accepts connections from the same process it's running in.
-    internal static func makeAnonymous() -> XPCServer & NonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
-    }
-
-    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
-    }
-    
-    /// Provides a server for this helper tool if it was installed with
-    /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
-    ///
-    /// To successfully call this function the following requirements must be met:
-    ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
-    ///   - The info property list embedded in this helper tool must have at least one element in its
-    ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
-    ///   array
-    ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
-    ///     - To be valid, it must be creatable by
-    ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
-    ///
-    /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
-    ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
-    ///
-    /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
-    /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingServer {
-        try XPCMachServer._forThisBlessedHelperTool()
-    }
-
-    /// Provides a server for this XPC Mach service that accepts requests from clients which meet the security requirements.
-	///
-    /// For the provided server to function properly, the caller must be an XPC Mach service.
-    ///
-	/// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specifiy the
-    /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
-    /// of any connecting clients:
-    /// ```swift
-    /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
-    /// var requirement: SecRequirement?
-    /// if SecRequirementCreateWithString(reqString as CFString,
-    ///                                   SecCSFlags(),
-    ///                                   &requirement) == errSecSuccess,
-    ///   let requirement = requirement {
-    ///     let server = XPCServer.forThisMachService(named: "com.example.service",
-    ///                                               clientRequirements: [requirement])
-    ///
-    ///    <# configure and start server #>
-    /// }
-    /// ```
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
-    ///
-    /// ## Requirements Checking
-    ///
-    /// SecureXPC requires that a server for an XPC Mach service provide code signing requirements which define which clients are allowed to talk to it.
-    ///
-    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if the
-    /// ``XPCServer/errorHandler`` is set then it is called with ``XPCError/insecure``.
-    ///
-    /// - Parameters:
-    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
-    ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
-    /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
-    ///           requirements.
-    public static func forThisMachService(
-        named machServiceName: String,
-        clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & NonBlockingServer {
-        try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
-    }
-
-    // MARK: Implementation
-
     /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
     
-    // Routes
     private var routes = [XPCRoute : XPCHandler]()
-    
     /// Set of weak references to connections, used to update their dispatch queues.
     private var connections = Set<WeakConnection>()
     
@@ -415,6 +323,96 @@ public protocol NonBlockingServer {
     // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC Service because
     // they're designed to only allow communication between the main app and .xpc bundles contained within the same
     // main app's bundle. As such there's no valid use case for creating such an endpoint.
+}
+
+// MARK: public factories
+
+// Contains all of the `static` code that provides the entry points to retrieving an `XPCServer` instance.
+extension XPCServer {
+    /// Provides a server for this XPC Service.
+    ///
+    /// For the provided server to function properly, the caller must be an XPC Service.
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` is called.
+    ///
+    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
+    /// - Returns: A server instance configured for this XPC Service.
+    public static func forThisXPCService() throws -> XPCServer {
+        try XPCServiceServer._forThisXPCService()
+    }
+    
+    /// Creates a new anonymous server that only accepts connections from the same process it's running in.
+    internal static func makeAnonymous() -> XPCServer & NonBlockingServer {
+        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
+    }
+
+    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
+        XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
+    }
+    
+    /// Provides a server for this helper tool if it was installed with
+    /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+    ///
+    /// To successfully call this function the following requirements must be met:
+    ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
+    ///   - The info property list embedded in this helper tool must have at least one element in its
+    ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
+    ///   array
+    ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
+    ///     - To be valid, it must be creatable by
+    ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
+    ///
+    /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
+    ///
+    /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
+    /// - Returns: A server instance configured with the embedded property list entries.
+    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingServer {
+        try XPCMachServer._forThisBlessedHelperTool()
+    }
+
+    /// Provides a server for this XPC Mach service that accepts requests from clients which meet the security requirements.
+    ///
+    /// For the provided server to function properly, the caller must be an XPC Mach service.
+    ///
+    /// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specifiy the
+    /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
+    /// of any connecting clients:
+    /// ```swift
+    /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
+    /// var requirement: SecRequirement?
+    /// if SecRequirementCreateWithString(reqString as CFString,
+    ///                                   SecCSFlags(),
+    ///                                   &requirement) == errSecSuccess,
+    ///   let requirement = requirement {
+    ///     let server = XPCServer.forThisMachService(named: "com.example.service",
+    ///                                               clientRequirements: [requirement])
+    ///
+    ///    <# configure and start server #>
+    /// }
+    /// ```
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
+    ///
+    /// ## Requirements Checking
+    ///
+    /// SecureXPC requires that a server for an XPC Mach service provide code signing requirements which define which clients are allowed to talk to it.
+    ///
+    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
+    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if the
+    /// ``XPCServer/errorHandler`` is set then it is called with ``XPCError/insecure``.
+    ///
+    /// - Parameters:
+    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
+    ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
+    /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
+    ///           requirements.
+    public static func forThisMachService(
+        named machServiceName: String,
+        clientRequirements: [SecRequirement]
+    ) throws -> XPCServer & NonBlockingServer {
+        try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
+    }
 }
 
 // MARK: handler function wrappers
