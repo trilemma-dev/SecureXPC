@@ -1,12 +1,18 @@
 //
 //  XPCServerEndpoint.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-28.
 //
 
 import Foundation
 
+/// An endpoint is used to create clients which can communicate with their associated server.
+///
+/// Endpoints are retrieved from a server's ``NonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing XPC
+/// connection.
+///
+/// > Warning: While ``XPCServerEndpoint`` conforms to `Codable` it can only be encoded and decoded by the `SecureXPC` framework.
 public struct XPCServerEndpoint {
     // Technically, an `xpc_endpoint_t` is sufficient to create a new connection, on its own. However, it's useful to
     // be able to communicate the kind of connection, and its name, so we also store those, separately.
