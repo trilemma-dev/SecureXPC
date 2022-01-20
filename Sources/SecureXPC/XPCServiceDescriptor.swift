@@ -7,7 +7,7 @@
 
 import Foundation
 
-internal enum XPCServiceDescriptor {
+internal enum XPCServiceDescriptor: Codable {
     case anonymous
     case xpcService(name: String)
     case machService(name: String)

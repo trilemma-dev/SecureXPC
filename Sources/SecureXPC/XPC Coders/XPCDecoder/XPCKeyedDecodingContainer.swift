@@ -161,4 +161,10 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 	func superDecoder(forKey key: K) throws -> Decoder {
 		return XPCDecoderImpl(value: try value(forKey: key), codingPath: self.codingPath + [key])
 	}
+    
+    // MARK: XPC specific decoding
+    
+    func decodeEndpoint(forKey key: K) throws -> xpc_endpoint_t {
+        return try decode(key: key, xpcType: XPC_TYPE_ENDPOINT, transform: {$0})
+    }
 }

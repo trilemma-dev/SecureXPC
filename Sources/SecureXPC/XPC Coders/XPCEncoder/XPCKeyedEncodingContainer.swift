@@ -168,5 +168,11 @@ internal class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPC
 
 		return encoder
 	}
+    
+    // MARK: XPC specific encoding
+    
+    func encode(_ value: xpc_endpoint_t, forKey key: K) {
+        self.setValue(XPCObject(object: value), forKey: key)
+    }
 }
 

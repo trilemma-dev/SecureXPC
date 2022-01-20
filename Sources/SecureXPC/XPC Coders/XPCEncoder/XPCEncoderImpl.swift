@@ -18,6 +18,14 @@ internal class XPCEncoderImpl: Encoder, XPCContainer {
 	init(codingPath: [CodingKey]) {
 		self.codingPath = codingPath
 	}
+    
+    // Internal implementation so that XPC-specific functions of the container can be accessed
+    internal func xpcContainer<Key>(keyedBy type: Key.Type) -> XPCKeyedEncodingContainer<Key> where Key: CodingKey {
+        let container = XPCKeyedEncodingContainer<Key>(codingPath: self.codingPath)
+        self.container = container
+        
+        return container
+    }
 
 	func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key : CodingKey {
 		let container = XPCKeyedEncodingContainer<Key>(codingPath: self.codingPath)
