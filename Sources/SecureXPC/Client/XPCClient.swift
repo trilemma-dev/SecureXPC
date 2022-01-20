@@ -333,7 +333,7 @@ public class XPCClient {
     private func sendWithResponse<R: Decodable>(encoded: xpc_object_t,
                                                 withResponse handler: @escaping XPCResponseHandler<R>) {
         // Get the connection or inform the handler of failure and return
-        var connection: xpc_connection_t?
+        let connection: xpc_connection_t
         do {
             connection = try getConnection()
         } catch {
@@ -342,8 +342,6 @@ public class XPCClient {
             } else {
                 handler(.failure(.unknown))
             }
-        }
-        guard let connection = connection else {
             return
         }
         
