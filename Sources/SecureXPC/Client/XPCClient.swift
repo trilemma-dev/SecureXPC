@@ -225,7 +225,7 @@ public class XPCClient {
     ///   - route: The server route which will handle this.
     @available(macOS 10.15.0, *)
     public func send(route: XPCRouteWithoutMessageWithoutReply) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withUnsafeThrowingContinuation { continuation in
             send(route: route) { response in
                 continuation.resume(with: response)
             }
@@ -262,7 +262,7 @@ public class XPCClient {
     ///    - route: The server route which should handle this message.
     @available(macOS 10.15.0, *)
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withUnsafeThrowingContinuation { continuation in
             sendMessage(message, route: route) { response in
                 continuation.resume(with: response)
             }
@@ -290,7 +290,7 @@ public class XPCClient {
     ///    - route: The server route which should handle this message.
     @available(macOS 10.15.0, *)
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>) async throws -> R {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withUnsafeThrowingContinuation { continuation in
             send(route: route) { response in
                 continuation.resume(with: response)
             }
@@ -322,7 +322,7 @@ public class XPCClient {
     @available(macOS 10.15.0, *)
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>) async throws -> R {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withUnsafeThrowingContinuation { continuation in
             sendMessage(message, route: route) { response in
                 continuation.resume(with: response)
             }
