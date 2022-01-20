@@ -337,11 +337,7 @@ public class XPCClient {
         do {
             connection = try getConnection()
         } catch {
-            if let error = error as? XPCError {
-                handler(.failure(error))
-            } else {
-                handler(.failure(.unknown))
-            }
+            handler(.failure(XPCError.asXPCError(error: error, expectingOtherError: false)))
             return
         }
         
@@ -360,17 +356,11 @@ public class XPCClient {
                     } else {
                         result = .failure(.unknown)
                     }
-                } catch let error as XPCError  {
-                    result = .failure(error)
                 } catch {
-                    result = .failure(.unknown)
+                    result = .failure(XPCError.asXPCError(error: error, expectingOtherError: false))
                 }
-            } else if xpc_equal(reply, XPC_ERROR_CONNECTION_INVALID) {
-                result = .failure(.connectionInvalid)
-            } else if xpc_equal(reply, XPC_ERROR_CONNECTION_INTERRUPTED) {
-                result = .failure(.connectionInterrupted)
-            } else { // Unexpected
-                result = .failure(.unknown)
+            } else {
+                result = .failure(XPCError.fromXPCObject(reply))
             }
             self.handleConnectionErrors(event: reply)
             handler(result)

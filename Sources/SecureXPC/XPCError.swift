@@ -69,4 +69,38 @@ public enum XPCError: Error, Codable {
     case other(String)
     /// Unknown error occurred.
     case unknown
+    
+    /// Represents the provided error as an ``XPCError``.
+    ///
+    /// - Parameters:
+    ///   - error: The error to be represented as an ``XPCError``
+    ///   - expectingNonXPCError: Whether an error which is not an ``XPCError``, `DecodingError`, or `EncodingError` is expected. If it is,
+    ///   then its description will be returned as ``XPCError/other(_:)``, otherwise ``XPCError/unknown`` will be returned.
+    /// - Returns: An ``XPCError`` to represent the passed in `error`
+    internal static func asXPCError(error: Error, expectingOtherError: Bool) -> XPCError {
+        if let error = error as? XPCError {
+            return error
+        } else if let error = error as? DecodingError {
+            return .decodingError(String(describing: error))
+        } else if let error = error as? EncodingError {
+            return .encodingError(String(describing: error))
+        } else if expectingOtherError {
+            return .other(String(describing: error))
+        } else {
+            return .unknown
+        }
+    }
+    
+    /// If the XPC object is an error it will be returned as the corresponding ``XPCError``, otherwise ``XPCError/unknown`` will be returned.
+    internal static func fromXPCObject(_ object: xpc_object_t) -> XPCError {
+        if xpc_equal(object, XPC_ERROR_CONNECTION_INVALID) {
+            return .connectionInvalid
+        } else if xpc_equal(object, XPC_ERROR_CONNECTION_INTERRUPTED) {
+            return .connectionInterrupted
+        } else if xpc_equal(object, XPC_ERROR_TERMINATION_IMMINENT) {
+            return .terminationImminent
+        } else {
+            return .unknown
+        }
+    }
 }

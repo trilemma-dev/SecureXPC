@@ -223,33 +223,16 @@ public class XPCServer {
                 var reply = xpc_dictionary_create_reply(event)
                 do {
                     try handleMessage(connection: connection, message: event, reply: &reply)
-                } catch let error as XPCError {
+                } catch {
+                    let error = XPCError.asXPCError(error: error, expectingOtherError: true)
                     self.errorHandler?(error)
                     self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
-                } catch let error as DecodingError {
-                    let wrappedError = XPCError.decodingError(String(describing: error))
-                    self.errorHandler?(wrappedError)
-                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
-                }  catch let error as EncodingError {
-                    let wrappedError = XPCError.encodingError(String(describing: error))
-                    self.errorHandler?(wrappedError)
-                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
-                } catch {
-                    let wrappedError = XPCError.other(String(describing: error))
-                    self.errorHandler?(wrappedError)
-                    self.replyWithErrorIfPossible(wrappedError, connection: connection, reply: &reply)
                 }
             } else {
-                self.errorHandler?(XPCError.insecure)
+                self.errorHandler?(.insecure)
             }
-        } else if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
-            self.errorHandler?(XPCError.connectionInvalid)
-        } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
-            self.errorHandler?(XPCError.connectionInterrupted)
-        } else if xpc_equal(event, XPC_ERROR_TERMINATION_IMMINENT) {
-            self.errorHandler?(XPCError.terminationImminent)
         } else {
-            self.errorHandler?(XPCError.unknown)
+            self.errorHandler?(XPCError.fromXPCObject(event))
         }
     }
     
