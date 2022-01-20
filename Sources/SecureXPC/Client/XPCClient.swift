@@ -88,10 +88,29 @@ import Foundation
 /// `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an
 /// ``XPCError`` on failure.
 ///
+/// ### Calling Routes Async
+/// While calling routes is always done asynchronously, on macOS 10.15 and later it is possible to call routes using `async`.
+///
+/// Calling a route with no message and no reply:
+/// ```swift
+/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// try await client.send(route: resetRoute)
+/// ```
+///
+/// Calling a route with a message and a reply:
+/// ```swift
+/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
+///                                                      messageType: Config.self,
+///                                                      replyType: Config.self)
+/// let config = <# create Config instance #>
+/// let newConfig = try await client.sendMessage(config, route: updateConfigRoute)
+/// ```
+///
 /// ## Topics
 /// ### Retrieving a Client
 /// - ``forXPCService(named:)``
 /// - ``forMachService(named:)``
+/// - ``forEndpoint(_:)``
 /// ### Calling Routes
 /// - ``send(route:onCompletion:)``
 /// - ``send(route:withResponse:)``
@@ -99,6 +118,13 @@ import Foundation
 /// - ``sendMessage(_:route:withResponse:)``
 /// ### Receiving Responses
 /// - ``XPCResponseHandler``
+/// ### Calling Routes Async
+/// - ``send(route:)-2xpwh``
+/// - ``send(route:)-72u0z``
+/// - ``sendMessage(_:route:)-8jn0q``
+/// - ``sendMessage(_:route:)-45tw9``
+/// ### Client Information
+/// - ``serviceName``
 public class XPCClient {
     
     // MARK: Public factories
@@ -166,6 +192,8 @@ public class XPCClient {
         }
     }
     
+    // MARK: Send
+    
     /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
     public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
     
@@ -187,6 +215,19 @@ public class XPCClient {
             if let encoded = try? Request(route: route.route).dictionary,
                let connection = try? getConnection() {
                 xpc_connection_send_message(connection, encoded)
+            }
+        }
+    }
+    
+    /// Sends with no message and does not receive a reply.
+    ///
+    /// - Parameters:
+    ///   - route: The server route which will handle this.
+    @available(macOS 10.15.0, *)
+    public func send(route: XPCRouteWithoutMessageWithoutReply) async throws {
+        try await withUnsafeThrowingContinuation { continuation in
+            send(route: route) { response in
+                continuation.resume(with: response)
             }
         }
     }
@@ -215,6 +256,19 @@ public class XPCClient {
         }
     }
     
+    /// Sends a message and does not receive a reply.
+    ///
+    /// - Parameters:
+    ///    - route: The server route which should handle this message.
+    @available(macOS 10.15.0, *)
+    public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) async throws {
+        try await withUnsafeThrowingContinuation { continuation in
+            sendMessage(message, route: route) { response in
+                continuation.resume(with: response)
+            }
+        }
+    }
+    
     /// Sends with no message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
@@ -227,6 +281,19 @@ public class XPCClient {
             sendWithResponse(encoded: encoded, withResponse: handler)
         } catch {
             handler(.failure(.encodingError(String(describing: error))))
+        }
+    }
+    
+    /// Sends with no message and receives a reply.
+    ///
+    /// - Parameters:
+    ///    - route: The server route which should handle this message.
+    @available(macOS 10.15.0, *)
+    public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>) async throws -> R {
+        try await withUnsafeThrowingContinuation { continuation in
+            send(route: route) { response in
+                continuation.resume(with: response)
+            }
         }
     }
     
@@ -244,6 +311,21 @@ public class XPCClient {
             sendWithResponse(encoded: encoded, withResponse: handler)
         } catch {
             handler(.failure(.encodingError(String(describing: error))))
+        }
+    }
+    
+    /// Sends a message which receives a reply.
+    ///
+    /// - Parameters:
+    ///    - message: Message to be sent.
+    ///    - route: The server route which should handle this message.
+    @available(macOS 10.15.0, *)
+    public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
+                                                        route: XPCRouteWithMessageWithReply<M, R>) async throws -> R {
+        try await withUnsafeThrowingContinuation { continuation in
+            sendMessage(message, route: route) { response in
+                continuation.resume(with: response)
+            }
         }
     }
     
@@ -314,6 +396,15 @@ public class XPCClient {
         case instance
     }
     
+    @available(macOS 10.15.0, *)
+    private func sendWithResponse<R: Decodable>(encoded: xpc_object_t) async throws -> R {
+        try await withCheckedThrowingContinuation { continuation in
+            sendWithResponse(encoded: encoded) { response in
+                continuation.resume(with: response)
+            }
+        }
+    }
+    
     private func getConnection() throws -> xpc_connection_t {
         if let existingConnection = self.connection { return existingConnection }
 
@@ -359,9 +450,11 @@ public class XPCClient {
         // XPC_ERROR_TERMINATION_IMMINENT is not applicable to the client side of a connection
     }
 
-    // MARK: Abstract methods
+    // MARK: Abstract methods & properties
 
-
+    /// The name of the service this client is configured to communicate with.
+    ///
+    /// If this is configured to talk to an anonymous server then there is no service and therefore the service name will always be `nil`.
     public var serviceName: String? {
         fatalError("Abstract Property")
     }
