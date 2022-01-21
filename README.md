@@ -1,10 +1,10 @@
-SecureXPC provides an easy way to perform secure XPC Mach service communication. 
-[`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types are used to send messages and
-receive replies. This framework is ideal for communicating with helper tools installed via 
-[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+Use pure Swift to easily communicate with XPC Services and XPC Mach services, with customized support for helper tools
+installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless). A
+client-server model is used with [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types
+to send messages and receive replies to registered routes.
 
-To see a runnable sample app using this framework, check out
-[SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample).
+macOS 10.10 and later is supported. Starting with macOS 10.15, clients can use `async` functions to make calls while
+servers can register `async` handlers for their routes.
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
 
@@ -16,19 +16,18 @@ these routes.
 ## Routes
 In a file shared by the client and server define one or more routes:
 ```swift
-let route = XPCRouteWithMessageWithReply("bezaddle",
-                                         messageType: String.self,
-                                         replyType: Bool.self)
+let route = XPCRoute.named("bedazzle")
+                    .withMessageType(String.self)
+                    .withReplyType(Bool.self)
 ```
 
 ## Server
 In one program create a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = XPCMachServer(machServiceName: "com.example.service",
-                               clientRequirements: requirements)
+    let server = <# server retrieval here #>
     server.registerRoute(route, handler: bedazzle)
-    server.start()
+    server.startAndBlock()
 }
 
 private func bedazzle(message: String) throws -> Bool {
@@ -36,24 +35,43 @@ private func bedazzle(message: String) throws -> Bool {
 }
 ```
 
-If this program is a helper tool installed by `SMJobBless`, then in many cases it can be initialized automatically:
-```swift
-let server = XPCMachServer.forThisBlessedHelperTool()
-```
+There are multiple types of servers which can be retrieved:
+ - `XPCServer.forThisXPCService()`
+     - For an XPC Service, which is a private helper available only to the main application that contains it
+ - `XPCServer.forThisBlessedHelperTool()`
+     - For a helper tool installed via
+       [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+     - To see a runnable sample app of this use case, check out
+       [SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample)
+ - `XPCServer.forThisMachService(named:clientRequirements:)`
+     - For Launch Agents, Launch Daemons, and more advanced `SMJobBless` helper tool configurations
+ - `XPCServer.makeAnonymous()`
+     - Typically used for testing purposes
+ - `XPCServer.makeAnonymous(clientRequirements:)`
+     - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details.
 
 ## Client
 In another program create a client, then call one of those routes:
 ```swift
-let client = XPCMachClient(machServiceName: "com.example.service")
-try client.sendMessage("Get Schwifty", route: route, withReply: { result in
+let client = <# client retrieval here #>
+try client.sendMessage("Get Schwifty", route: route, withResponse: { result in
     switch result {
-        case let .success(reply):
+        case .success(let reply):
             <# use the reply #>
-        case let .failure(error):
+        case .failure(let error):
             <# handle the error #>
     }
 })
 ```
+
+There are multiple types of servers which can be created:
+ - `XPCClient.forXPCService(named:)`
+     - For communicating with an XPC Service. This corresponds to servers created with `XPCServer.forThisXPCService()`.
+ - `XPCClient.forMachService(named:)`
+     - For communicating with an XPC Mach service. This corresponds to servers created with
+       `XPCServer.forThisBlessedHelperTool()` or `XPCServer.forThisMachService(named:clientRequirements:)`.
+ - `XPCClient.forEndpoint(_:)`
+    - This is the only way to communicate with an anonymous server. It can also be used with an XPC Mach service.
 
 ---
 
