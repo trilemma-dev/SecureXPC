@@ -13,7 +13,7 @@ import Foundation
 /// There are two different types of services you can retrieve a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're
 /// using, it's likely an XPC Service.
 ///
-/// Anonymous servers can also be created which do not correspond to a service.
+/// Anonymous servers can also be created which do not correspond to an XPC Service or XPC Mach service.
 ///
 /// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
@@ -93,8 +93,9 @@ import Foundation
 /// ### Starting a Server
 /// - ``startAndBlock()``
 /// - ``NonBlockingServer/start()``
-/// ### Server Information
+/// ### Server State
 /// - ``serviceName``
+/// - ``NonBlockingServer/endpoint``
 public class XPCServer {
     /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
@@ -322,7 +323,8 @@ public class XPCServer {
 public protocol NonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
-    /// Use an endpoint to create connections to this server.
+    
+    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
     ///
     /// Endpoints can be sent across an XPC connection.
     var endpoint: XPCServerEndpoint { get }
@@ -355,8 +357,8 @@ extension XPCServer {
     
     /// Creates a new anonymous server that accepts requests from the same process it's running in.
     ///
-    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``NonBlockingServer/endpoint`` and
-    /// then create a client with it:
+    /// Only a client created from an anonymous server's endpoint can communicate with that server. Do this by retrieving the server's
+    /// ``NonBlockingServer/endpoint`` and then creating a client with it:
     /// ```swift
     /// let server = XPCServer.makeAnonymous()
     /// let client = XPCClient.fromEndpoint(server.endpoint)
@@ -364,8 +366,7 @@ extension XPCServer {
     ///
     /// > Important: No requests will be processed until ``NonBlockingServer/start()`` or ``startAndBlock()`` is called.
     ///
-    /// ## Usage
-    /// If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)`` instead.
+    /// > Note: If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)`` instead.
     public static func makeAnonymous() -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
@@ -383,10 +384,10 @@ extension XPCServer {
     /// if SecRequirementCreateWithString(reqString as CFString,
     ///                                   SecCSFlags(),
     ///                                   &requirement) == errSecSuccess,
-    ///   let requirement = requirement {
+    ///    let requirement = requirement {
     ///     let server = XPCServer.makeAnonymous(clientRequirements: [requirement])
     ///
-    ///    <# configure and start server #>
+    ///     <# configure and start server #>
     /// }
     /// ```
     ///
@@ -397,8 +398,7 @@ extension XPCServer {
     /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if the
     /// ``XPCServer/errorHandler`` is set then it is called with ``XPCError/insecure``.
     ///
-    /// ## Usage
-    /// If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
+    /// > Note: If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
     ///
     /// - Parameters:
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
