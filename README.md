@@ -64,14 +64,17 @@ try client.sendMessage("Get Schwifty", route: route, withResponse: { result in
 })
 ```
 
-There are multiple types of servers which can be created:
+There are multiple types of clients which can be retrieved:
  - `XPCClient.forXPCService(named:)`
-     - For communicating with an XPC Service. This corresponds to servers created with `XPCServer.forThisXPCService()`.
+     - For communicating with an XPC Service
+     - This corresponds to servers created with `XPCServer.forThisXPCService()`
  - `XPCClient.forMachService(named:)`
-     - For communicating with an XPC Mach service. This corresponds to servers created with
-       `XPCServer.forThisBlessedHelperTool()` or `XPCServer.forThisMachService(named:clientRequirements:)`.
+     - For communicating with an XPC Mach service
+     - This corresponds to servers created with `XPCServer.forThisBlessedHelperTool()` or
+       `XPCServer.forThisMachService(named:clientRequirements:)`
  - `XPCClient.forEndpoint(_:)`
-    - This is the only way to communicate with an anonymous server. It can also be used with an XPC Mach service.
+    - This is the only way to communicate with an anonymous server
+    - It can also be used with an XPC Mach service
 
 ---
 
