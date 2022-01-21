@@ -49,13 +49,13 @@ import Foundation
 /// ### Calling Routes
 /// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// client.send(route: resetRoute, onCompletion: nil)
 /// ```
 ///
 /// If confirmation that the send was received is needed, then an `onCompletion` handler must be set:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// client.send(route: resetRoute, onCompletion: { response in
 ///     switch response {
 ///         case .success(_):
@@ -68,8 +68,8 @@ import Foundation
 ///
 /// If the client needs to receive information back from the server, a route with a reply type must be used:
 /// ```swift
-/// let currentConfigRoute = XPCRouteWithoutMessageWithReply("config", "current",
-///                                                          replyType: Config.self)
+/// let currentConfigRoute = XPCRoute.named("config", "current")
+///                                  .withReplyType(Config.self)
 /// client.send(route: currentConfigRoute, withResponse: { response in
 ///     switch response {
 ///          case .success(let reply):
@@ -82,9 +82,9 @@ import Foundation
 ///
 /// When calling a route, there is also the option to include a message:
 /// ```swift
-/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
-///                                                      messageType: Config.self,
-///                                                      replyType: Config.self)
+/// let updateConfigRoute = XPCRoute.named("config", "update")
+///                                 .withMessageType(Config.self)
+///                                 .withReplyType(Config.self)
 /// let config = <# create Config instance #>
 /// client.sendMessage(config, route: updateConfigRoute, withResponse: {
 ///     <# process response #>
@@ -101,15 +101,15 @@ import Foundation
 ///
 /// Calling a route with no message and no reply:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// try await client.send(route: resetRoute)
 /// ```
 ///
 /// Calling a route with a message and a reply:
 /// ```swift
-/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
-///                                                      messageType: Config.self,
-///                                                      replyType: Config.self)
+/// let updateConfigRoute = XPCRoute.named("config", "update")
+///                                 .withMessageType(Config.self)
+///                                 .withReplyType(Config.self)
 /// let config = <# create Config instance #>
 /// let newConfig = try await client.sendMessage(config, route: updateConfigRoute)
 /// ```
