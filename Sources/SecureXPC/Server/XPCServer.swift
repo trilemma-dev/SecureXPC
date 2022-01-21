@@ -13,6 +13,8 @@ import Foundation
 /// There are two different types of services you can retrieve a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're
 /// using, it's likely an XPC Service.
 ///
+/// Anonymous servers can also be created which do not correspond to an XPC Service or XPC Mach service.
+///
 /// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
@@ -22,7 +24,6 @@ import Foundation
 /// ```
 ///
 /// #### XPC Mach services
-///
 /// Launch Agents, Launch Daemons, and helper tools installed with
 /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
 /// over XPC by using Mach services.
@@ -36,6 +37,13 @@ import Foundation
 /// For Launch Agents, Launch Daemons, more advanced `SMJobBless` helper tool configurations, as well as other cases it is necessary both to the specify the
 /// name of the service as well its security requirements. See ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and
 /// details.
+///
+/// #### Anonymous servers
+/// An anonymous server can be created by any macOS program. Use cases for making one include:
+///  - Allowing two processes which are not XPC services to communicate over XPC with each other. This is done by having one of those processes make an
+///    anonymous server and send its ``NonBlockingServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that endpoint
+///    from the XPC Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
+///  - Testing code that would otherwise run as part of an XPC Mach service without needing to install a helper tool. However, note that this code won't run as root.
 ///
 /// ### Registering & Handling Routes
 /// Once a server instance has been retrieved, one or more routes should be registered with it. This is done by calling one of the `registerRoute` functions and
@@ -72,6 +80,8 @@ import Foundation
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
 /// - ``forThisMachService(named:clientRequirements:)``
+/// - ``makeAnonymous()``
+/// - ``makeAnonymous(clientRequirements:)``
 /// ### Registering Routes
 /// - ``registerRoute(_:handler:)-82935``
 /// - ``registerRoute(_:handler:)-7yvyr``
@@ -83,8 +93,9 @@ import Foundation
 /// ### Starting a Server
 /// - ``startAndBlock()``
 /// - ``NonBlockingServer/start()``
-/// ### Server Information
+/// ### Server State
 /// - ``serviceName``
+/// - ``NonBlockingServer/endpoint``
 public class XPCServer {
     /// If set, errors encountered will be sent to this handler.
     public var errorHandler: ((XPCError) -> Void)?
@@ -295,7 +306,10 @@ public class XPCServer {
 public protocol NonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
-    /// Use an endpoint to create connections to this server
+    
+    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
+    ///
+    /// Endpoints can be sent across an XPC connection.
     var endpoint: XPCServerEndpoint { get }
     
     // Internal implementation note: `endpoint` is part of the `NonBlockingServer` protocol instead of `XPCServer` as
@@ -324,12 +338,54 @@ extension XPCServer {
         try XPCServiceServer._forThisXPCService()
     }
     
-    /// Creates a new anonymous server that only accepts connections from the same process it's running in.
-    internal static func makeAnonymous() -> XPCServer & NonBlockingServer {
+    /// Creates a new anonymous server that accepts requests from the same process it's running in.
+    ///
+    /// Only a client created from an anonymous server's endpoint can communicate with that server. Do this by retrieving the server's
+    /// ``NonBlockingServer/endpoint`` and then creating a client with it:
+    /// ```swift
+    /// let server = XPCServer.makeAnonymous()
+    /// let client = XPCClient.fromEndpoint(server.endpoint)
+    /// ```
+    ///
+    /// > Important: No requests will be processed until ``NonBlockingServer/start()`` or ``startAndBlock()`` is called.
+    ///
+    /// > Note: If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)`` instead.
+    public static func makeAnonymous() -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
 
-    internal static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
+    /// Creates a new anonymous server that accepts requests from clients which meet the security requirements.
+    ///
+    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``NonBlockingServer/endpoint`` and
+    /// send it across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required
+    /// that you specifiy the
+    /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
+    /// of any connecting clients:
+    /// ```swift
+    /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
+    /// var requirement: SecRequirement?
+    /// if SecRequirementCreateWithString(reqString as CFString,
+    ///                                   SecCSFlags(),
+    ///                                   &requirement) == errSecSuccess,
+    ///    let requirement = requirement {
+    ///     let server = XPCServer.makeAnonymous(clientRequirements: [requirement])
+    ///
+    ///     <# configure and start server #>
+    /// }
+    /// ```
+    ///
+    /// > Important: No requests will be processed until ``NonBlockingServer/start()`` or ``startAndBlock()`` is called.
+    ///
+    /// ## Requirements Checking
+    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
+    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if the
+    /// ``XPCServer/errorHandler`` is set then it is called with ``XPCError/insecure``.
+    ///
+    /// > Note: If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
+    ///
+    /// - Parameters:
+    ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
+    public static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     

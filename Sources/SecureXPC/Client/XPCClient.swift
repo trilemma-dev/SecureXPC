@@ -13,8 +13,9 @@ import Foundation
 /// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
 /// type of service you're using, it's likely an XPC Service.
 ///
-/// **XPC Services**
+/// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server.
 ///
+/// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
 /// The name of the service must be specified when retrieving a client to talk to your XPC Service; this is always the bundle identifier for the service:
@@ -25,8 +26,7 @@ import Foundation
 /// The service itself must create and configure an ``XPCServer`` by calling ``XPCServer/forThisXPCService()`` in order for this client to be able to
 /// communicate with it.
 ///
-/// **XPC Mach services**
-///
+/// #### XPC Mach services
 /// Launch Agents, Launch Daemons, and helper tools installed with
 /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
 /// over XPC by using Mach services.
@@ -37,6 +37,14 @@ import Foundation
 /// ```
 /// The tool itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
 /// ``XPCServer/forThisBlessedHelperTool()`` in order for this client to be able to communicate with it.
+///
+/// #### Endpoints
+/// Clients can be created from server endpoints:
+/// ```swift
+/// let server = XPCServer.makeAnonymous()
+/// let client = XPCClient.forEndpoint(server.endpoint)
+/// ```
+/// Server endpoints can also be sent across XPC connections.
 ///
 /// ### Calling Routes
 /// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
@@ -162,6 +170,9 @@ public class XPCClient {
         XPCMachClient(machServiceName: machServiceName)
     }
 
+    /// Provides a client to communicate with the server corresponding to the provided endpoint.
+    ///
+    /// A server's endpoint is accesible via ``NonBlockingServer/endpoint``. The endpoint can be sent across an XPC connection.
 	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
         let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
 
