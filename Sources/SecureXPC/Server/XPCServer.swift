@@ -50,9 +50,9 @@ import Foundation
 /// providing a route and a compatible closure or function. For example:
 /// ```swift
 ///     ...
-///     let updateConfigRoute = XPCRouteWithMessageWithReply("update", "config",
-///                                                          messageType: Config.self,
-///                                                          replyType: Config.self)
+///     let updateConfigRoute = XPCRoute.named("update", "config")
+///                                     .withMessageType(Config.self)
+///                                     .withReplyType(Config.self)
 ///     server.registerRoute(updateConfigRoute, handler: updateConfig)
 /// }
 ///

@@ -21,7 +21,7 @@ class ServerTerminationIntegrationTest: XCTestCase {
     // This test is intended to simulate a server running in a different process and then that process terminating
     func testShutdownServer() throws {
         // Server & client setup
-        let echoRoute = XPCRouteWithMessageWithReply("echo", messageType: String.self, replyType: String.self)
+        let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         let server = XPCServer.makeAnonymous(clientRequirements: dummyRequirements)
         try server.registerRoute(echoRoute) { msg in
             return "echo: \(msg)"

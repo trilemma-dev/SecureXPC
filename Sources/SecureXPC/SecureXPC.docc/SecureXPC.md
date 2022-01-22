@@ -19,11 +19,10 @@ these routes.
 
 In a file shared by the client and server define one or more routes:
 ```swift
-let route = XPCRouteWithMessageWithReply("bedazzle",
-                                         messageType: String.self,
-                                         replyType: Bool.self)
+let route = XPCRoute.named("bedazzle").withMessageType(String.self)
+                                      .withReplyType(Bool.self)
 ```
-There are four different types of routes; learn more about <doc:/Routes>.
+See ``XPCRoute`` to learn more about how to create routes.
 
 #### Server
 
@@ -66,7 +65,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCServerEndpoint``
 
 ### Routes
-- <doc:/Routes>
+- ``XPCRoute``
 - ``XPCRouteWithoutMessageWithoutReply``
 - ``XPCRouteWithMessageWithoutReply``
 - ``XPCRouteWithoutMessageWithReply``
