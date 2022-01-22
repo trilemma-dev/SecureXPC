@@ -1,7 +1,7 @@
 Use pure Swift to easily and securely communicate with XPC Services and XPC Mach services, with customized support for
 helper tools installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
 A client-server model is used with [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types
-to send messages and receive replies to registered routes.
+to send messages to registered routes and receive replies.
 
 macOS 10.10 and later is supported. Starting with macOS 10.15, clients can use `async` functions to make calls and
 servers can register `async` handlers for their routes.
