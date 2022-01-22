@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Client to server communication is performed using routes. A route is a sequence of `String`s and if applicable also the message and reply types.
 ///
-/// In practice a route is similar to a function signature or a server path with type safety, although it is not precisely either. Message and reply types must be
+/// In practice a route is similar to a function signature or a server path with type safety. Message and reply types must be
 /// [`Codable`](https://developer.apple.com/documentation/swift/codable). Many structs, enums, and classes in the Swift
 /// standard library are already `Codable` and compiler generated conformance is available for simple structs and enums.
 ///
