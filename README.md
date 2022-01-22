@@ -1,10 +1,17 @@
-Use pure Swift to easily and securely communicate with XPC Services and XPC Mach services, with customized support for
-helper tools installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
-A client-server model is used with [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types
-to send messages to registered routes and receive replies.
+Use pure Swift to easily and securely communicate with XPC Services and XPC Mach services. A client-server model 
+enables you to use your own [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types to
+send messages to routes you define and receive replies. 
 
-macOS 10.10 and later is supported. Starting with macOS 10.15, clients can use `async` functions to make calls and
-servers can register `async` handlers for their routes.
+SecureXPC uses [Swift concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html) on macOS 10.15 and
+later allowing clients to make non-blocking asynchronous calls to servers. A closure-based API is also available
+providing compatibility back to OS X 10.10.
+
+This framework is ideal for communicating with helper tools installed via 
+[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless). It's built with
+security in mind, minimizing the opportunities for 
+[exploits](https://objectivebythesea.com/v3/talks/OBTS_v3_wReguła.pdf). Server-side security checks are performed
+against the actual calling process instead of relying on PIDs which are known to be
+[insecure](https://saelo.github.io/presentations/warcon18_dont_trust_the_pid.pdf).
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
 
@@ -35,25 +42,33 @@ private func bedazzle(message: String) throws -> Bool {
 }
 ```
 
-On macOS 10.15 and later `async` functions and closures can be registered as the handler for a route.
+On macOS 10.15 and later `async` functions and closures can also be registered as the handler for a route.
 
 There are multiple types of servers which can be retrieved:
  - `XPCServer.forThisXPCService()`
-     - For an XPC Service, which is a private helper available only to the main application that contains it
+     - For an XPC Service, which is a private helper tool available only to the main application that contains it
  - `XPCServer.forThisBlessedHelperTool()`
      - For a helper tool installed via
        [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
-     - To see a runnable sample app of this use case, check out
+     - To see a sample app for this use case, check out
        [SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample)
  - `XPCServer.forThisMachService(named:clientRequirements:)`
-     - For Launch Agents, Launch Daemons, and more advanced `SMJobBless` helper tool configurations
+     - For
+       [Launch Daemons and Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
+       as well as more advanced `SMJobBless` helper tool configurations
  - `XPCServer.makeAnonymous()`
      - Typically used for testing purposes
  - `XPCServer.makeAnonymous(clientRequirements:)`
      - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details
 
 ## Client
-In another program retrieve a client, then call one of those routes:
+In another program retrieve a client, then call one of the registered routes:
+```swift
+let client = <# client retrieval here #>
+let reply = try await client.sendMessage("Get Schwifty", route: route)
+```
+
+Closure-based variants are available for macOS 10.14 and earlier:
 ```swift
 let client = <# client retrieval here #>
 client.sendMessage("Get Schwifty", route: route, withResponse: { result in
@@ -66,12 +81,6 @@ client.sendMessage("Get Schwifty", route: route, withResponse: { result in
 })
 ```
 
-On macOS 10.15 and later the `async` variants can be used:
-```swift
-let client = <# client retrieval here #>
-let reply = try await client.sendMessage("Get Schwifty", route: route)
-```
-
 There are multiple types of clients which can be retrieved:
  - `XPCClient.forXPCService(named:)`
      - For communicating with an XPC Service
@@ -82,6 +91,8 @@ There are multiple types of clients which can be retrieved:
        `XPCServer.forThisMachService(named:clientRequirements:)`
  - `XPCClient.forEndpoint(_:)`
     - This is the only way to communicate with an anonymous server
+    - This corresponds to servers created with `XPCServer.makeAnonymous()` or
+      `XPCServer.makeAnonymous(clientRequirements:)`
     - It can also be used with an XPC Mach service
 
 ---
