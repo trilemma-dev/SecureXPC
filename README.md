@@ -1,9 +1,9 @@
-Use pure Swift to easily communicate with XPC Services and XPC Mach services, with customized support for helper tools
-installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless). A
-client-server model is used with [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types
+Use pure Swift to easily and securely communicate with XPC Services and XPC Mach services, with customized support for
+helper tools installed via [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+A client-server model is used with [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types
 to send messages and receive replies to registered routes.
 
-macOS 10.10 and later is supported. Starting with macOS 10.15, clients can use `async` functions to make calls while
+macOS 10.10 and later is supported. Starting with macOS 10.15, clients can use `async` functions to make calls and
 servers can register `async` handlers for their routes.
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
@@ -22,11 +22,11 @@ let route = XPCRoute.named("bedazzle")
 ```
 
 ## Server
-In one program create a server, register those routes, and then start the server:
+In one program retrieve a server, register those routes, and then start the server:
 ```swift
     ...
     let server = <# server retrieval here #>
-    server.registerRoute(route, handler: bedazzle)
+    try server.registerRoute(route, handler: bedazzle)
     server.startAndBlock()
 }
 
@@ -34,6 +34,8 @@ private func bedazzle(message: String) throws -> Bool {
      <# implementation here #>
 }
 ```
+
+On macOS 10.15 and later `async` functions and closures can be registered as the handler for a route.
 
 There are multiple types of servers which can be retrieved:
  - `XPCServer.forThisXPCService()`
@@ -48,13 +50,13 @@ There are multiple types of servers which can be retrieved:
  - `XPCServer.makeAnonymous()`
      - Typically used for testing purposes
  - `XPCServer.makeAnonymous(clientRequirements:)`
-     - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details.
+     - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details
 
 ## Client
-In another program create a client, then call one of those routes:
+In another program retrieve a client, then call one of those routes:
 ```swift
 let client = <# client retrieval here #>
-try client.sendMessage("Get Schwifty", route: route, withResponse: { result in
+client.sendMessage("Get Schwifty", route: route, withResponse: { result in
     switch result {
         case .success(let reply):
             <# use the reply #>
@@ -62,6 +64,12 @@ try client.sendMessage("Get Schwifty", route: route, withResponse: { result in
             <# handle the error #>
     }
 })
+```
+
+On macOS 10.15 and later the `async` variants can be used:
+```swift
+let client = <# client retrieval here #>
+let reply = try await client.sendMessage("Get Schwifty", route: route)
 ```
 
 There are multiple types of clients which can be retrieved:
@@ -80,7 +88,7 @@ There are multiple types of clients which can be retrieved:
 
 # `Codable` vs `NSSecureCoding`
 SecureXPC uses types conforming to Swift's `Codable` protocol to serialize data across the XPC connection. Due to the
-nature of how `Codable` is defined, it is not possible for the same instance to be referenced from  multiple other
+nature of how `Codable` is defined, it is not possible for the same instance to be referenced from multiple other
 deserialized instances. This is in contrast to how
 [`NSSecureCoding`](https://developer.apple.com/documentation/foundation/nssecurecoding) behaves, which is used by
 [`NSXPCConnection`](https://developer.apple.com/documentation/foundation/nsxpcconnection) for serialization.
