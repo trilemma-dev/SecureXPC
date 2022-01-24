@@ -50,7 +50,7 @@ class RoundTripIntegrationTest: XCTestCase {
     }
     
     func testSendWithMessageWithReply_AsyncClient_AsyncServer() async throws {
-        let echoRoute = XPCRouteWithMessageWithReply("echo", messageType: String.self, replyType: String.self)
+        let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         try anonymousServer.registerRoute(echoRoute) { (msg: String) async -> String in
             "echo: \(msg)"
         }
@@ -88,7 +88,7 @@ class RoundTripIntegrationTest: XCTestCase {
     }
     
     func testSendWithoutMessageWithReply_AsyncClient_AsyncServer() async throws {
-        let pingRoute = XPCRouteWithoutMessageWithReply("ping", replyType: String.self)
+        let pingRoute = XPCRoute.named("ping").withReplyType(String.self)
         try anonymousServer.registerRoute(pingRoute) { () async -> String in
             "pong"
         }
@@ -144,7 +144,7 @@ class RoundTripIntegrationTest: XCTestCase {
     
     func testSendWithMessageWithoutReply_AsyncClient_AsyncServer() async throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
-        let msgNoReplyRoute = XPCRouteWithMessageWithoutReply("msgNoReplyRoute", messageType: String.self)
+        let msgNoReplyRoute = XPCRoute.named("msgNoReplyRoute").withMessageType(String.self)
         try anonymousServer.registerRoute(msgNoReplyRoute) { (msg: String) async -> Void in
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
@@ -199,7 +199,7 @@ class RoundTripIntegrationTest: XCTestCase {
     
     func testSendWithoutMessageWithoutReply_AsyncClient_AsyncServer() async throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
-        let noMsgNoReplyRoute = XPCRouteWithoutMessageWithoutReply("noMsgNoReplyRoute")
+        let noMsgNoReplyRoute = XPCRoute.named("noMsgNoReplyRoute")
         try anonymousServer.registerRoute(noMsgNoReplyRoute, handler: { () async -> Void in
             remoteHandlerWasCalled.fulfill()
         })
