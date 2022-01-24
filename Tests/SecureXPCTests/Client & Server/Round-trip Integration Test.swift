@@ -24,7 +24,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
         let replyBlockWasCalled = self.expectation(description: "The echo reply was received")
 
-        let echoRoute = XPCRouteWithMessageWithReply("echo", messageType: String.self, replyType: String.self)
+        let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         try anonymousServer.registerRoute(echoRoute) { msg in
             remoteHandlerWasCalled.fulfill()
             return "echo: \(msg)"
@@ -43,7 +43,7 @@ class RoundTripIntegrationTest: XCTestCase {
     }
     
     func testSendWithMessageWithReply_AsyncClient_SyncServer() async throws {
-        let echoRoute = XPCRouteWithMessageWithReply("echo", messageType: String.self, replyType: String.self)
+        let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         try anonymousServer.registerRoute(echoRoute) { msg in "echo: \(msg)" }
         let result = try await xpcClient.sendMessage("Hello, world!", route: echoRoute)
         XCTAssertEqual(result, "echo: Hello, world!")
@@ -62,7 +62,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
         let replyBlockWasCalled = self.expectation(description: "The pong reply was received")
 
-        let pingRoute = XPCRouteWithoutMessageWithReply("ping", replyType: String.self)
+        let pingRoute = XPCRoute.named("ping").withReplyType(String.self)
         try anonymousServer.registerRoute(pingRoute) {
             remoteHandlerWasCalled.fulfill()
             return "pong"
@@ -81,7 +81,7 @@ class RoundTripIntegrationTest: XCTestCase {
     }
     
     func testSendWithoutMessageWithReply_AsyncClient_SyncServer() async throws {
-        let pingRoute = XPCRouteWithoutMessageWithReply("ping", replyType: String.self)
+        let pingRoute = XPCRoute.named("ping").withReplyType(String.self)
         try anonymousServer.registerRoute(pingRoute) { "pong" }
         let result = try await xpcClient.send(route: pingRoute)
         XCTAssertEqual(result, "pong")
@@ -99,7 +99,7 @@ class RoundTripIntegrationTest: XCTestCase {
     func testSendWithMessageWithoutReply_SyncClient_NilOnCompletion_SyncServer() throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
 
-        let msgNoReplyRoute = XPCRouteWithMessageWithoutReply("msgNoReplyRoute", messageType: String.self)
+        let msgNoReplyRoute = XPCRoute.named("msgNoReplyRoute").withMessageType(String.self)
         try anonymousServer.registerRoute(msgNoReplyRoute) { msg in
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
@@ -114,7 +114,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
         let responseBlockWasCalled = self.expectation(description: "The response was received")
 
-        let msgNoReplyRoute = XPCRouteWithMessageWithoutReply("msgNoReplyRoute", messageType: String.self)
+        let msgNoReplyRoute = XPCRoute.named("msgNoReplyRoute").withMessageType(String.self)
         try anonymousServer.registerRoute(msgNoReplyRoute) { msg in
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
@@ -132,7 +132,7 @@ class RoundTripIntegrationTest: XCTestCase {
     
     func testSendWithMessageWithoutReply_AsyncClient_SyncServer() async throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
-        let msgNoReplyRoute = XPCRouteWithMessageWithoutReply("msgNoReplyRoute", messageType: String.self)
+        let msgNoReplyRoute = XPCRoute.named("msgNoReplyRoute").withMessageType(String.self)
         try anonymousServer.registerRoute(msgNoReplyRoute) { msg in
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
@@ -157,7 +157,7 @@ class RoundTripIntegrationTest: XCTestCase {
     func testSendWithoutMessageWithoutReply_SyncClient_NilOnCompletion_SyncServer() throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
 
-        let noMsgNoReplyRoute = XPCRouteWithoutMessageWithoutReply("noMsgNoReplyRoute")
+        let noMsgNoReplyRoute = XPCRoute.named("noMsgNoReplyRoute")
         try anonymousServer.registerRoute(noMsgNoReplyRoute) {
             remoteHandlerWasCalled.fulfill()
         }
@@ -171,7 +171,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
         let responseBlockWasCalled = self.expectation(description: "The response was received")
 
-        let noMsgNoReplyRoute = XPCRouteWithoutMessageWithoutReply("noMsgNoReplyRoute")
+        let noMsgNoReplyRoute = XPCRoute.named("noMsgNoReplyRoute")
         try anonymousServer.registerRoute(noMsgNoReplyRoute) {
             remoteHandlerWasCalled.fulfill()
         }
@@ -188,7 +188,7 @@ class RoundTripIntegrationTest: XCTestCase {
     
     func testSendWithoutMessageWithoutReply_AsyncClient_SyncServer() async throws {
         let remoteHandlerWasCalled = self.expectation(description: "The remote handler was called")
-        let noMsgNoReplyRoute = XPCRouteWithoutMessageWithoutReply("noMsgNoReplyRoute")
+        let noMsgNoReplyRoute = XPCRoute.named("noMsgNoReplyRoute")
         try anonymousServer.registerRoute(noMsgNoReplyRoute) {
             remoteHandlerWasCalled.fulfill()
         }

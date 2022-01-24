@@ -13,8 +13,9 @@ import Foundation
 /// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
 /// type of service you're using, it's likely an XPC Service.
 ///
-/// **XPC Services**
+/// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server.
 ///
+/// #### XPC Services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
 /// The name of the service must be specified when retrieving a client to talk to your XPC Service; this is always the bundle identifier for the service:
@@ -25,8 +26,7 @@ import Foundation
 /// The service itself must create and configure an ``XPCServer`` by calling ``XPCServer/forThisXPCService()`` in order for this client to be able to
 /// communicate with it.
 ///
-/// **XPC Mach services**
-///
+/// #### XPC Mach services
 /// Launch Agents, Launch Daemons, and helper tools installed with
 /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
 /// over XPC by using Mach services.
@@ -38,16 +38,24 @@ import Foundation
 /// The tool itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
 /// ``XPCServer/forThisBlessedHelperTool()`` in order for this client to be able to communicate with it.
 ///
+/// #### Endpoints
+/// Clients can be created from server endpoints:
+/// ```swift
+/// let server = XPCServer.makeAnonymous()
+/// let client = XPCClient.forEndpoint(server.endpoint)
+/// ```
+/// Server endpoints can also be sent across XPC connections.
+///
 /// ### Calling Routes
 /// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// client.send(route: resetRoute, onCompletion: nil)
 /// ```
 ///
 /// If confirmation that the send was received is needed, then an `onCompletion` handler must be set:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// client.send(route: resetRoute, onCompletion: { response in
 ///     switch response {
 ///         case .success(_):
@@ -60,8 +68,8 @@ import Foundation
 ///
 /// If the client needs to receive information back from the server, a route with a reply type must be used:
 /// ```swift
-/// let currentConfigRoute = XPCRouteWithoutMessageWithReply("config", "current",
-///                                                          replyType: Config.self)
+/// let currentConfigRoute = XPCRoute.named("config", "current")
+///                                  .withReplyType(Config.self)
 /// client.send(route: currentConfigRoute, withResponse: { response in
 ///     switch response {
 ///          case .success(let reply):
@@ -74,9 +82,9 @@ import Foundation
 ///
 /// When calling a route, there is also the option to include a message:
 /// ```swift
-/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
-///                                                      messageType: Config.self,
-///                                                      replyType: Config.self)
+/// let updateConfigRoute = XPCRoute.named("config", "update")
+///                                 .withMessageType(Config.self)
+///                                 .withReplyType(Config.self)
 /// let config = <# create Config instance #>
 /// client.sendMessage(config, route: updateConfigRoute, withResponse: {
 ///     <# process response #>
@@ -93,15 +101,15 @@ import Foundation
 ///
 /// Calling a route with no message and no reply:
 /// ```swift
-/// let resetRoute = XPCRouteWithoutMessageWithoutReply("reset")
+/// let resetRoute = XPCRoute.named("reset")
 /// try await client.send(route: resetRoute)
 /// ```
 ///
 /// Calling a route with a message and a reply:
 /// ```swift
-/// let updateConfigRoute = XPCRouteWithMessageWithReply("config", "update",
-///                                                      messageType: Config.self,
-///                                                      replyType: Config.self)
+/// let updateConfigRoute = XPCRoute.named("config", "update")
+///                                 .withMessageType(Config.self)
+///                                 .withReplyType(Config.self)
 /// let config = <# create Config instance #>
 /// let newConfig = try await client.sendMessage(config, route: updateConfigRoute)
 /// ```
@@ -162,6 +170,9 @@ public class XPCClient {
         XPCMachClient(machServiceName: machServiceName)
     }
 
+    /// Provides a client to communicate with the server corresponding to the provided endpoint.
+    ///
+    /// A server's endpoint is accesible via ``NonBlockingServer/endpoint``. The endpoint can be sent across an XPC connection.
 	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
         let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
 
