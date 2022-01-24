@@ -23,7 +23,7 @@ class ServerTerminationIntegrationTest: XCTestCase {
         // Server & client setup
         let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         let server = XPCServer.makeAnonymous(clientRequirements: dummyRequirements)
-        try server.registerRoute(echoRoute) { msg in
+        server.registerRoute(echoRoute) { msg in
             return "echo: \(msg)"
         }
         server.start()
