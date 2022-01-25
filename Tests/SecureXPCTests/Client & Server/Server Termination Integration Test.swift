@@ -19,52 +19,45 @@ class ServerTerminationIntegrationTest: XCTestCase {
     }()
     
     // This test is intended to simulate a server running in a different process and then that process terminating
-    func testShutdownServer() throws {
+    func testShutdownServer() async throws {
         // Server & client setup
-        let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
+        let route = XPCRoute.named("doNothing")
         let server = XPCServer.makeAnonymous(clientRequirements: dummyRequirements)
-        server.registerRoute(echoRoute) { msg in
-            return "echo: \(msg)"
-        }
+        server.registerRoute(route) { }
         server.start()
         let client = XPCClient.forEndpoint(server.endpoint)
         
         // Send a message, which will result in the connection being established with the server
-        client.sendMessage("1st message", route: echoRoute) { _ in }
+        try await client.send(route: route)
         
         // Shut down the server, simulating the scenario of the process containing the server terminating
         (server as! XPCAnonymousServer).simulateDisconnectionForTesting()
         
-        // Make two more calls after having shutdown the server:
-        // - The second call should fail upon trying to send the message, connection is interrupted
-        // - The third call (and any subsequent ones) should fail indicating no new connections can ever be established
         let interruptedExpectation = self.expectation(description: "Second message results in an interrupted error")
-        let cannotBeReestablishedExpectation = self.expectation(description: "Third message can't be sent")
-        client.sendMessage("2nd message", route: echoRoute) { response in
-            switch response {
-                case .failure(.connectionInterrupted):
+        do {
+            try await client.send(route: route)
+        } catch {
+            switch error {
+                case XPCError.connectionInterrupted:
                     interruptedExpectation.fulfill()
-                    
-                    // make another call to the server and this should fail with connectionCannotBeReestablished
-                    client.sendMessage("3rd message", route: echoRoute) { response in
-                        switch response {
-                            case .failure(.connectionCannotBeReestablished):
-                                cannotBeReestablishedExpectation.fulfill()
-                            case .failure(let error):
-                                XCTFail("Unexpected error: \(error). \(XPCError.connectionCannotBeReestablished) " +
-                                        "should have been returned.")
-                            case .success(_):
-                                XCTFail("No error was returned. \(XPCError.connectionCannotBeReestablished) should " +
-                                        "have been returned.")
-                        }
-                    }
-                case .failure(let error):
-                    XCTFail("Unexpected error: \(error). \(XPCError.connectionInterrupted) should have been returned.")
-                case .success(_):
-                    XCTFail("No error was returned. \(XPCError.connectionInterrupted) should have been returned.")
+                default:
+                    XCTFail("Unexpected error: \(error). \(XPCError.connectionInterrupted) should have been thrown.")
             }
         }
         
-        self.waitForExpectations(timeout: 1)
+        let cannotBeReestablishedExpectation = self.expectation(description: "Third message can't establish connection")
+        do {
+            try await client.send(route: route)
+        } catch {
+            switch error {
+                case XPCError.connectionCannotBeReestablished:
+                    cannotBeReestablishedExpectation.fulfill()
+                default:
+                    XCTFail("Unexpected error: \(error). \(XPCError.connectionCannotBeReestablished) should have " +
+                            "been thrown.")
+            }
+        }
+        
+        await self.waitForExpectations(timeout: 1)
     }
 }

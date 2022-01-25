@@ -7,9 +7,9 @@
 
 import Foundation
 
-/// A concrete implementation of ``XPCClient`` which can communicate with an XPC Service.
+/// A concrete implementation of ``XPCClient`` which can communicate with an XPC service.
 ///
-/// In the case of this framework, the XPC Service is expected to be represented by an `XPCServiceServer`.
+/// In the case of this framework, the XPC service is expected to be represented by an `XPCServiceServer`.
 internal class XPCServiceClient: XPCClient {
     private let xpcServiceName: String
 

@@ -190,23 +190,21 @@ extension XPCMachServer {
     /// - Returns: The property list as data.
     private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
         // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this helper tool
-        if let handle = dlopen(nil, RTLD_LAZY) {
-            defer { dlclose(handle) }
-
-            if let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) {
-                let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
-
-                var size = UInt(0)
-                if let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) {
-                    return Data(bytes: section, count: Int(size))
-                } else { // No section found with the name corresponding to the property list
-                    throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
-                }
-            } else { // Can't get pointer to MH_EXECUTE_SYM
-                throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
-            }
-        } else { // Can't open handle
+        guard let handle = dlopen(nil, RTLD_LAZY) else {
             throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
         }
+        defer { dlclose(handle) }
+        
+        guard let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) else {
+            throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
+        }
+        let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
+
+        var size = UInt()
+        guard let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) else {
+            throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
+        }
+        
+        return Data(bytes: section, count: Int(size))
     }
 }

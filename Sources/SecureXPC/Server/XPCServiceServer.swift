@@ -7,26 +7,21 @@
 
 import Foundation
 
-/// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Service.
+/// A concrete implementation of ``XPCServer`` which acts as a server for an XPC service.
 ///
-/// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCServiceClient`.
+/// In the case of this framework, the XPC service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
 	private static let service = XPCServiceServer()
     
-    private let _messageAcceptor = AlwaysAcceptingMessageAcceptor()
-    override internal var messageAcceptor: MessageAcceptor {
-        _messageAcceptor
-    }
-
     internal static func _forThisXPCService() throws -> XPCServiceServer {
-        // An XPC Service's package type must be equal to "XPC!", see Apple's documentation for details
+        // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
         // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
         if mainBundlePackageInfo().packageType != "XPC!" {
             throw XPCError.notXPCService
         }
 
         if Bundle.main.bundleIdentifier == nil {
-            throw XPCError.misconfiguredXPCService
+            throw XPCError.misconfiguredXPCService("The bundle identifier is missing; XPC services must have one")
         }
         
         return service
@@ -49,9 +44,6 @@ internal class XPCServiceServer: XPCServer {
         return (uint32ToString(packageType.bigEndian), uint32ToString(packageCreator.bigEndian))
     }
 
-    // This is safe to unwrap because it was already checked in ``_forThisXPCService``.
-    private lazy var xpcServiceName: String = Bundle.main.bundleIdentifier!
-
     public override func startAndBlock() -> Never {
         xpc_main { connection in
             // This is a @convention(c) closure, so we can't just capture `self`.
@@ -61,6 +53,11 @@ internal class XPCServiceServer: XPCServer {
     }
 
     public override var serviceName: String? {
-        xpcServiceName
+        // This is safe to unwrap because it was already checked in `_forThisXPCService()`.
+        Bundle.main.bundleIdentifier!
+    }
+    
+    override internal var messageAcceptor: MessageAcceptor {
+        AlwaysAcceptingMessageAcceptor.instance
     }
 }

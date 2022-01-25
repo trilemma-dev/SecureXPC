@@ -10,15 +10,15 @@ import Foundation
 /// An XPC client to make requests and receive responses from an ``XPCServer``.
 ///
 /// ### Retrieving a Client
-/// There are two different types of services you can communicate with using this client: XPC Services and XPC Mach services. If you are uncertain which
+/// There are two different types of services you can communicate with using this client: XPC services and XPC Mach services. If you are uncertain which
 /// type of service you're using, it's likely an XPC Service.
 ///
 /// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server.
 ///
-/// #### XPC Services
+/// #### XPC services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
-/// The name of the service must be specified when retrieving a client to talk to your XPC Service; this is always the bundle identifier for the service:
+/// The name of the service must be specified when retrieving a client to talk to your XPC service; this is always the bundle identifier for the service:
 /// ```swift
 /// let client = XPCClient.forXPCService(named: "com.example.myapp.service")
 /// ```
@@ -137,14 +137,14 @@ public class XPCClient {
     
     // MARK: Public factories
     
-    /// Provides a client to communicate with an XPC Service.
+    /// Provides a client to communicate with an XPC service.
     ///
-    /// An XPC Service is a helper tool which ships as part of your app and only your app can communicate with.
+    /// An XPC service is a helper tool which ships as part of your app and only your app can communicate with.
     ///
-    /// In order for this client to be able to communicate with the XPC Service, the service itself must retrieve and configure an ``XPCServer`` by calling
+    /// In order for this client to be able to communicate with the XPC service, the service itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisXPCService()``.
     ///
-    /// > Note: Client creation always succeeds regardless of whether the XPC Service actually exists.
+    /// > Note: Client creation always succeeds regardless of whether the XPC service actually exists.
     ///
     /// - Parameters:
     ///   - named: The bundle identifier of the XPC Service.

@@ -7,19 +7,23 @@
 
 import Foundation
 
-protocol MessageAcceptor {
+internal protocol MessageAcceptor {
     /// Determines whether an incoming message should be accepted.
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool
 }
 
-/// This should only be used by XPC Services which are application-scoped, so it's safe to assume they're inheritently safe
+/// This should only be used by XPC services which are application-scoped, so it's safe to assume they're inheritently safe.
 internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
+    static let instance = AlwaysAcceptingMessageAcceptor()
+    
+    private init() { }
+    
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         true
     }
 }
 
-/// This is intended for use by `XPCAnonymousServer`
+/// This is intended for use by `XPCAnonymousServer`.
 internal struct SameProcessMessageAcceptor: MessageAcceptor {
     /// Accepts a message only if it is coming from this process.
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
