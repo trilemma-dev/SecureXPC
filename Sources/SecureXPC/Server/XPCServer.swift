@@ -10,15 +10,15 @@ import Foundation
 /// An XPC server to receive requests from and send responses to an ``XPCClient``.
 ///
 /// ### Retrieving a Server
-/// There are two different types of services you can retrieve a server for: XPC Services and XPC Mach services. If you're uncertain which type of service you're
-/// using, it's likely an XPC Service.
+/// There are two different types of services you can retrieve a server for: XPC services and XPC Mach services. If you're uncertain which type of service you're
+/// using, it's likely an XPC service.
 ///
-/// Anonymous servers can also be created which do not correspond to an XPC Service or XPC Mach service.
+/// Anonymous servers can also be created which do not correspond to an XPC service or XPC Mach service.
 ///
-/// #### XPC Services
+/// #### XPC services
 /// These are helper tools which ship as part of your app and only your app can communicate with.
 ///
-/// To retrieve a server for an XPC Service:
+/// To retrieve a server for an XPC service:
 /// ```swift
 /// let server = try XPCServer.forThisXPCService()
 /// ```
@@ -354,10 +354,8 @@ public class XPCServer {
                              reply: inout xpc_object_t?) {
         let error = XPCError.asXPCError(error: error, expectingOtherError: expectingOtherError)
         self.errorHandler?(error)
-        self.replyWithErrorIfPossible(error, connection: connection, reply: &reply)
-    }
-    
-    private func replyWithErrorIfPossible(_ error: XPCError, connection: xpc_connection_t, reply: inout xpc_object_t?) {
+        
+        // If it's possible to reply, then send the error back to the client
         if var reply = reply {
             do {
                 try Response.encodeError(error, intoReply: &reply)
@@ -372,7 +370,7 @@ public class XPCServer {
     
     /// Begins processing requests received by this XPC server and never returns.
     ///
-    /// If this server is for an XPC Service, how the server will run is determined by the info property list's
+    /// If this server is for an XPC service, how the server will run is determined by the info property list's
     /// [`RunLoopType`](https://developer.apple.com/documentation/bundleresources/information_property_list/xpcservice/runlooptype?changes=l_3).
     /// If no value is specified, `dispatch_main` is the default. If `dispatch_main` is specified or defaulted to, it is a programming error to call this function
     /// from any thread besides the main thread.
@@ -413,8 +411,8 @@ public protocol NonBlockingServer {
     // `XPCServiceServer` can't have an endpoint created for it.
     
     // From a technical perspective this is because endpoints are only created from connection listeners, which an XPC
-    // Service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From
-    // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC Service because
+    // service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From
+    // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC service because
     // they're designed to only allow communication between the main app and .xpc bundles contained within the same
     // main app's bundle. As such there's no valid use case for creating such an endpoint.
 }
@@ -423,14 +421,12 @@ public protocol NonBlockingServer {
 
 // Contains all of the `static` code that provides the entry points to retrieving an `XPCServer` instance.
 extension XPCServer {
-    /// Provides a server for this XPC Service.
-    ///
-    /// For the provided server to function properly, the caller must be an XPC Service.
+    /// Provides a server for this XPC service.
     ///
     /// > Important: No requests will be processed until ``startAndBlock()`` is called.
     ///
-    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC Service.
-    /// - Returns: A server instance configured for this XPC Service.
+    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC service.
+    /// - Returns: A server instance configured for this XPC service.
     public static func forThisXPCService() throws -> XPCServer {
         try XPCServiceServer._forThisXPCService()
     }

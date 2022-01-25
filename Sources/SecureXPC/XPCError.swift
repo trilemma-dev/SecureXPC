@@ -9,23 +9,15 @@ import Foundation
 
 /// Errors that may be thrown when using ``XPCClient`` or ``XPCServer``.
 public enum XPCError: Error, Codable {
-    /// The connection was closed and can no longer be used; it may be possible to establish another connection.
+    /// The connection is not valid, but could be valid in the future.
     ///
-    /// Corresponds to
-    /// [`XPC_ERROR_CONNECTION_INVALID`](https://developer.apple.com/documentation/xpc/xpc_error_connection_invalid).
+    /// The connection could be invalid because the service is not installed or the service was updated, severing an existing connection.
     case connectionInvalid
     /// The connection experienced an interruption, but is still valid.
     ///
-    /// Corresponds to
-    /// [`XPC_ERROR_CONNECTION_INTERRUPTED`](https://developer.apple.com/documentation/xpc/xpc_error_connection_interrupted).
+    /// The next send may be able to successfully communicate with the server.
     case connectionInterrupted
     /// This XPC service will be terminated imminently.
-    ///
-    /// Corresponds to
-    /// [`XPC_ERROR_TERMINATION_IMMINENT`](https://developer.apple.com/documentation/xpc/xpc_error_termination_imminent).
-    ///
-    /// In practice this error is not expected to be encountered as this framework only supports XPC Mach service connections; this error applies to XPC Services
-    /// which use a different type of connection.
     case terminationImminent
     /// The connection to the server has already experienced an interruption and cannot be reestablished under any circumstances.
     ///
@@ -55,15 +47,15 @@ public enum XPCError: Error, Codable {
     case misconfiguredBlessedHelperTool(String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
-    /// The caller is not an XPC Service.
+    /// The caller is not an XPC service.
     ///
     /// This may mean there is a configuration issue. Alternatively it could be the caller is an XPC Mach service, in which case use
     /// ``XPCServer/forThisMachService(named:clientRequirements:)`` instead.
     case notXPCService
-    /// The caller is a misconfigured XPC Service.
+    /// The caller is a misconfigured XPC service.
     ///
-    /// Currently, this means that its bundle idenifiter was not set.
-    case misconfiguredXPCService
+    /// The associated string is a descriptive error message.
+    case misconfiguredXPCService(String)
     /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCServer`` route. The associated
     /// value describes the error.
     case other(String)
