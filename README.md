@@ -1,4 +1,4 @@
-Use pure Swift to easily and securely communicate with XPC Services and XPC Mach services. A client-server model 
+Use pure Swift to easily and securely communicate with XPC services and XPC Mach services. A client-server model 
 enables you to use your own [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types to
 send messages to routes you define and receive replies. 
 
@@ -33,7 +33,7 @@ In one program retrieve a server, register those routes, and then start the serv
 ```swift
     ...
     let server = <# server retrieval here #>
-    try server.registerRoute(route, handler: bedazzle)
+    server.registerRoute(route, handler: bedazzle)
     server.startAndBlock()
 }
 
@@ -46,7 +46,7 @@ On macOS 10.15 and later `async` functions and closures can also be registered a
 
 There are multiple types of servers which can be retrieved:
  - `XPCServer.forThisXPCService()`
-     - For an XPC Service, which is a private helper tool available only to the main application that contains it
+     - For an XPC service, which is a private helper tool available only to the main application that contains it
  - `XPCServer.forThisBlessedHelperTool()`
      - For a helper tool installed via
        [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
@@ -83,7 +83,7 @@ client.sendMessage("Get Schwifty", route: route, withResponse: { result in
 
 There are multiple types of clients which can be retrieved:
  - `XPCClient.forXPCService(named:)`
-     - For communicating with an XPC Service
+     - For communicating with an XPC service
      - This corresponds to servers created with `XPCServer.forThisXPCService()`
  - `XPCClient.forMachService(named:)`
      - For communicating with an XPC Mach service
