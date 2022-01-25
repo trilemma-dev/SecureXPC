@@ -23,7 +23,7 @@ class ServerTerminationIntegrationTest: XCTestCase {
         // Server & client setup
         let route = XPCRoute.named("doNothing")
         let server = XPCServer.makeAnonymous(clientRequirements: dummyRequirements)
-        try server.registerRoute(route) { }
+        server.registerRoute(route) { }
         server.start()
         let client = XPCClient.forEndpoint(server.endpoint)
         

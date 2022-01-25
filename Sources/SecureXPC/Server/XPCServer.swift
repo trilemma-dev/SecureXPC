@@ -83,15 +83,15 @@ import Foundation
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
 /// ### Registering Routes
-/// - ``registerRoute(_:handler:)-82935``
-/// - ``registerRoute(_:handler:)-7yvyr``
-/// - ``registerRoute(_:handler:)-3ohmq``
-/// - ``registerRoute(_:handler:)-4jjs6``
+/// - ``registerRoute(_:handler:)-4ttqe``
+/// - ``registerRoute(_:handler:)-9a0x9``
+/// - ``registerRoute(_:handler:)-4fxv0``
+/// - ``registerRoute(_:handler:)-1jw9d``
 /// ### Registering Async Routes
-/// - ``registerRoute(_:handler:)-ck6u``
-/// - ``registerRoute(_:handler:)-5gscr``
-/// - ``registerRoute(_:handler:)-3pv2z``
-/// - ``registerRoute(_:handler:)-7l0xv``
+/// - ``registerRoute(_:handler:)-6htah``
+/// - ``registerRoute(_:handler:)-g7ww``
+/// - ``registerRoute(_:handler:)-rw2w``
+/// - ``registerRoute(_:handler:)-2vk6u``
 /// ### Configuring a Server
 /// - ``targetQueue``
 /// - ``errorHandler``
@@ -144,112 +144,117 @@ public class XPCServer {
             connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
         }
     }
+    
     // MARK: Route registration
         
-    private func checkUniqueRoute(route: XPCRoute) throws {
-        if self.routes.keys.contains(route) {
-            throw XPCError.routeAlreadyRegistered(route.pathComponents)
+    /// Internal function that actually registers the route and enforces that a route is only ever registered once.
+    ///
+    /// All of the public functions exist to satisfy type constraints.
+    private func registerRoute(_ route: XPCRoute, handler: XPCHandler) {
+        if let _ = self.routes.updateValue(handler, forKey: route) {
+            fatalError("Route \(route.pathComponents) is already registered")
         }
     }
     
     /// Registers a route that has no message and can't receive a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has no message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
-                              handler: @escaping () throws -> Void) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithoutReplySync(handler: handler)
+                              handler: @escaping () throws -> Void) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplySync(handler: handler))
     }
     
     /// Registers a route that has no message and can't receive a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has no message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     @available(macOS 10.15.0, *)
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
-                              handler: @escaping () async throws -> Void) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync(handler: handler)
+                              handler: @escaping () async throws -> Void) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync(handler: handler))
     }
     
     /// Registers a route that has a message and can't receive a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has a message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
-                                            handler: @escaping (M) throws -> Void) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithoutReplySync(handler: handler)
+                                            handler: @escaping (M) throws -> Void) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplySync(handler: handler))
     }
     
     /// Registers a route that has a message and can't receive a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has a message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     @available(macOS 10.15.0, *)
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
-                                            handler: @escaping (M) async throws -> Void) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithoutReplyAsync(handler: handler)
+                                            handler: @escaping (M) async throws -> Void) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplyAsync(handler: handler))
     }
     
     /// Registers a route that has no message and expects a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has no message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
-                                            handler: @escaping () throws -> R) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithReplySync(handler: handler)
+                                            handler: @escaping () throws -> R) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplySync(handler: handler))
     }
     
     /// Registers a route that has no message and expects a reply.
     ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
     /// - Parameters:
     ///   - route: A route that has no message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     @available(macOS 10.15.0, *)
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
-                                            handler: @escaping () async throws -> R) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithoutMessageWithReplyAsync(handler: handler)
+                                            handler: @escaping () async throws -> R) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplyAsync(handler: handler))
     }
     
     /// Registers a route that has a message and expects a reply.
+    ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has a message and expects a reply.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
+                                                          handler: @escaping (M) throws -> R) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplySync(handler: handler))
+    }
+    
+    /// Registers a route that has a message and expects a reply.
+    ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has a message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     /// - Throws: If this route has already been registered.
-    public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
-                                                          handler: @escaping (M) throws -> R) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithReplySync(handler: handler)
-    }
-    
-    /// Registers a route that has a message and expects a reply.
-    ///
-    /// - Parameters:
-    ///   - route: A route that has a message and expects a reply.
-    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
     @available(macOS 10.15.0, *)
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
-                                                          handler: @escaping (M) async throws -> R) throws {
-        try checkUniqueRoute(route: route.route)
-        self.routes[route.route] = ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler)
+                                                          handler: @escaping (M) async throws -> R) {
+        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler))
     }
     
     internal func startClientConnection(_ connection: xpc_connection_t) {
@@ -344,7 +349,7 @@ public class XPCServer {
             }
         } else {
             fatalError("Non-sync handler for route \(request.route.pathComponents) was found, but only sync routes " +
-                       "should be registerable on this OS version. Handler: \(handler)")
+                       "should be registrable on this OS version. Handler: \(handler)")
         }
     }
     
