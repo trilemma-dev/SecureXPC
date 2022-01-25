@@ -435,15 +435,13 @@ public class XPCClient {
             //   Will be delivered to the connection’s event handler if the remote service exited. The connection is
             //   still live even in this case, and resending a message will cause the service to be launched on-demand.
             //
-            // While Apple's documentation is technically correct, it's misleading in the case of an anonymous
-            // connection where there is no service. Because there is no service, there is nothing to be relaunched
-            // on-demand. The connection might technically still be alive, but resending a message will *not* work.
+            // From observed behavior Apple's documentation is *not* correct. After the connection is interrupted the
+            // subsequent call will result in XPC_ERROR_CONNECTION_INVALID and the service will not be relaunched.
             //
-            // By setting the connection to `nil` when there is no service (indicated by no service name), anonymous
-            // clients can throw a useful specific error when `createConnection()` is called.
-            if self.serviceName == nil {
-                self.connection = nil
-            }
+            // Additionally, in the case of an anonymous connection there is no service. Because there is no service,
+            // there is nothing to be relaunched on-demand. The connection might technically still be alive, but
+            // resending a message will *not* work.
+            self.connection = nil
         }
         
         // XPC_ERROR_TERMINATION_IMMINENT is not applicable to the client side of a connection
