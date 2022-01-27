@@ -436,7 +436,8 @@ public class XPCClient {
             //   still live even in this case, and resending a message will cause the service to be launched on-demand.
             //
             // From observed behavior Apple's documentation is *not* correct. After the connection is interrupted the
-            // subsequent call will result in XPC_ERROR_CONNECTION_INVALID and the service will not be relaunched.
+            // subsequent call will result in XPC_ERROR_CONNECTION_INVALID and the service will not be relaunched. See
+            // https://github.com/trilemma-dev/SecureXPC/issues/70 for more details and discussion.
             //
             // Additionally, in the case of an anonymous connection there is no service. Because there is no service,
             // there is nothing to be relaunched on-demand. The connection might technically still be alive, but
