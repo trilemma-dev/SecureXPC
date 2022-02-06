@@ -9,14 +9,16 @@ import Foundation
 
 internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
 	var codingPath: [CodingKey] = []
+    let userInfo: [CodingUserInfoKey : Any]
 
 	private let value: xpc_object_t
 	private let type: xpc_type_t
 
-	init(value: xpc_object_t, codingPath: [CodingKey]) {
+    init(value: xpc_object_t, codingPath: [CodingKey], userInfo: [CodingUserInfoKey : Any]) {
 		self.value = value
 		self.type = xpc_get_type(value)
 		self.codingPath = codingPath
+        self.userInfo = userInfo
 	}
 
 	func decodeNil() -> Bool {
@@ -96,6 +98,8 @@ internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
 	}
 
 	func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-		return try type.init(from: XPCDecoderImpl(value: self.value, codingPath: self.codingPath))
+		return try type.init(from: XPCDecoderImpl(value: self.value,
+                                                  codingPath: self.codingPath,
+                                                  userInfo: self.userInfo))
 	}
 }
