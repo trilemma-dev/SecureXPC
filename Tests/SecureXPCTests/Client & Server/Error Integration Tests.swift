@@ -29,18 +29,14 @@ class ErrorIntegrationTests: XCTestCase {
         }
         server.start()
         
-        let errorExpectation = self.expectation(description: "\(ExampleError.twoOfAKind) thrown")
-
         do {
             try await client.send(route: failureRoute)
             XCTFail("No error thrown")
         } catch ExampleError.twoOfAKind {
-            errorExpectation.fulfill()
+            // success
         } catch {
             XCTFail("Error of wrong type was thrown: \(type(of: error)).\(error.self)")
         }
-        
-        await self.waitForExpectations(timeout: 1)
     }
     
     func testErrorRegistered_Closure() throws {
@@ -59,10 +55,10 @@ class ErrorIntegrationTests: XCTestCase {
         client.send(route: failureRoute) { result in
             do {
                 try result.get()
-                XCTFail("No errorw thrown")
+                XCTFail("No error thrown")
             } catch XPCError.handlerError(let error) {
-                if let underlyingError = error.underlyingError as? ExampleError,
-                   underlyingError == errorToThrow {
+                if case let .available(underlyingError) = error.underlyingError,
+                   underlyingError as? ExampleError == errorToThrow {
                     errorExpectation.fulfill()
                 } else {
                     XCTFail("Unexpected underlying error: \(error)")
@@ -86,18 +82,14 @@ class ErrorIntegrationTests: XCTestCase {
         }
         server.start()
         
-        let errorExpectation = self.expectation(description: "\(ExampleError.twoOfAKind) thrown")
-
         do {
             try await client.send(route: failureRoute)
-            XCTFail("No errorw thrown")
+            XCTFail("No error thrown")
         } catch ExampleError.twoOfAKind {
-            errorExpectation.fulfill()
+            //success
         } catch {
             XCTFail("Unexpected error was thrown: \(type(of: error)).\(error.self)")
         }
-        
-        await self.waitForExpectations(timeout: 1)
     }
     
     func testErrorNotRegistered_Async() async throws {
@@ -110,17 +102,13 @@ class ErrorIntegrationTests: XCTestCase {
         }
         server.start()
         
-        let errorExpectation = self.expectation(description: "XPCError.handleError thrown")
-
         do {
             try await client.send(route: failureRoute)
-            XCTFail("No errorw thrown")
+            XCTFail("No error thrown")
         } catch XPCError.handlerError(_) {
-            errorExpectation.fulfill()
+            // success
         } catch {
             XCTFail("Unexpected error was thrown: \(type(of: error)).\(error.self)")
         }
-        
-        await self.waitForExpectations(timeout: 1)
     }
 }

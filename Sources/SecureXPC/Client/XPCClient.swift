@@ -401,7 +401,7 @@ public class XPCClient {
                                        unwrappingResponse response: Result<T, XPCError>) {
         if case let .failure(error) = response,
            case let .handlerError(handlerError) = error,
-           let underlyingError = handlerError.underlyingError {
+           case let .available(underlyingError) = handlerError.underlyingError {
             contination.resume(throwing: underlyingError)
         } else {
             contination.resume(with: response)

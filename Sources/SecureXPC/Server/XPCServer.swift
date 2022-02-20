@@ -61,9 +61,6 @@ import Foundation
 /// }
 /// ```
 ///
-/// If the function or closure throws an error and the route expects a return, then ``XPCError/other(_:)`` will be returned to the client with the `String`
-/// associated type describing the thrown error. It is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
-///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
 /// ```swift

@@ -188,6 +188,7 @@ public struct XPCRouteWithoutMessageWithoutReply {
         XPCRouteWithoutMessageWithoutReply(self.route.pathComponents,
                                            errorTypes: self.route.errorTypes + [errorType])
     }
+    
     /// Creates a route which receives a message and will not reply.
     ///
     /// ``XPCRouteWithMessageWithoutReply/withReplyType(_:)`` can be called on it to create a route which is expected to reply.
