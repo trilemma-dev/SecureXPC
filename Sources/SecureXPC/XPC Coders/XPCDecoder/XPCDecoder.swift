@@ -35,7 +35,7 @@ enum XPCDecoder {
     static func decode<T: Decodable>(_ type: T.Type,
                                      from dictionary: xpc_object_t,
                                      forKey key: XPCDictionaryKey,
-                                     userInfo: [CodingUserInfoKey : Any] = [CodingUserInfoKey : Any]()) throws -> T {
+                                     userInfo: [CodingUserInfoKey : Any] = [ : ]) throws -> T {
         try checkXPCDictionary(object: dictionary)
         
         if let value = xpc_dictionary_get_value(dictionary, key) {
@@ -59,7 +59,7 @@ enum XPCDecoder {
     /// - Returns: An instance of the provided type corresponding to the object.
     static func decode<T: Decodable>(_ type: T.Type,
                                      object: xpc_object_t,
-                                     userInfo: [CodingUserInfoKey : Any] = [CodingUserInfoKey : Any]()) throws -> T {
+                                     userInfo: [CodingUserInfoKey : Any] = [ : ]) throws -> T {
         let decoder = XPCDecoderImpl(value: object, codingPath: [CodingKey](), userInfo: userInfo)
         
         return try T(from: decoder)

@@ -119,7 +119,7 @@ public struct XPCRoute {
     /// ``XPCRouteWithoutMessageWithoutReply/withReplyType(_:)`` can be called on the returned route to create a route which is expected to
     /// reply.
     public static func named(_ pathComponents: String...) -> XPCRouteWithoutMessageWithoutReply {
-        XPCRouteWithoutMessageWithoutReply(pathComponents, errorTypes: [(Error & Codable).Type]())
+        XPCRouteWithoutMessageWithoutReply(pathComponents, errorTypes: [])
     }
 }
 
@@ -140,6 +140,7 @@ extension XPCRoute: Codable {
         case messageType
         case replyType
         case expectsReply
+        // It is intentional errorTypes is not coded, see errorTypes declaration for explanation.
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -156,7 +157,7 @@ extension XPCRoute: Codable {
         self.messageType = try container.decode(String?.self, forKey: .messageType)
         self.replyType = try container.decode(String?.self, forKey: .replyType)
         self.expectsReply = try container.decode(Bool.self, forKey: .expectsReply)
-        self.errorTypes = [(Error & Codable).Type]()
+        self.errorTypes = []
     }
 }
 
