@@ -217,8 +217,8 @@ public class XPCClient {
                      onCompletion handler: XPCResponseHandler<Void>?) {
         if let handler = handler {
             do {
-                let encoded = try Request(route: route.route).dictionary
-                sendWithResponse(encoded: encoded, withResponse: handler)
+                let request = try Request(route: route.route)
+                sendRequest(request, withResponse: handler)
             } catch {
                 handler(.failure(.encodingError(String(describing: error))))
             }
@@ -238,7 +238,7 @@ public class XPCClient {
     public func send(route: XPCRouteWithoutMessageWithoutReply) async throws {
         try await withUnsafeThrowingContinuation { continuation in
             send(route: route) { response in
-                continuation.resume(with: response)
+                self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
     }
@@ -254,8 +254,8 @@ public class XPCClient {
                                           onCompletion handler: XPCResponseHandler<Void>?) {
         if let handler = handler {
             do {
-                let encoded = try Request(route: route.route, payload: message).dictionary
-                sendWithResponse(encoded: encoded, withResponse: handler)
+                let request = try Request(route: route.route, payload: message)
+                sendRequest(request, withResponse: handler)
             } catch {
                 handler(.failure(.encodingError(String(describing: error))))
             }
@@ -275,7 +275,7 @@ public class XPCClient {
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) async throws {
         try await withUnsafeThrowingContinuation { continuation in
             sendMessage(message, route: route) { response in
-                continuation.resume(with: response)
+                self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
     }
@@ -288,8 +288,8 @@ public class XPCClient {
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withResponse handler: @escaping XPCResponseHandler<R>) {
         do {
-            let encoded = try Request(route: route.route).dictionary
-            sendWithResponse(encoded: encoded, withResponse: handler)
+            let request = try Request(route: route.route)
+            sendRequest(request, withResponse: handler)
         } catch {
             handler(.failure(.encodingError(String(describing: error))))
         }
@@ -303,7 +303,7 @@ public class XPCClient {
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>) async throws -> R {
         try await withUnsafeThrowingContinuation { continuation in
             send(route: route) { response in
-                continuation.resume(with: response)
+                self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
     }
@@ -318,8 +318,8 @@ public class XPCClient {
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withResponse handler: @escaping XPCResponseHandler<R>) {
         do {
-            let encoded = try Request(route: route.route, payload: message).dictionary
-            sendWithResponse(encoded: encoded, withResponse: handler)
+            let request = try Request(route: route.route, payload: message)
+            sendRequest(request, withResponse: handler)
         } catch {
             handler(.failure(.encodingError(String(describing: error))))
         }
@@ -335,29 +335,29 @@ public class XPCClient {
                                                         route: XPCRouteWithMessageWithReply<M, R>) async throws -> R {
         try await withUnsafeThrowingContinuation { continuation in
             sendMessage(message, route: route) { response in
-                continuation.resume(with: response)
+                self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
     }
     
     /// Does the actual work of sending an XPC message which receives a response.
-    private func sendWithResponse<R: Decodable>(encoded: xpc_object_t,
-                                                withResponse handler: @escaping XPCResponseHandler<R>) {
+    private func sendRequest<R: Decodable>(_ request: Request,
+                                           withResponse handler: @escaping XPCResponseHandler<R>) {
         // Get the connection or inform the handler of failure and return
         let connection: xpc_connection_t
         do {
             connection = try getConnection()
         } catch {
-            handler(.failure(XPCError.asXPCError(error: error, expectingOtherError: false)))
+            handler(.failure(XPCError.asXPCError(error: error)))
             return
         }
         
         // Async send the message over XPC
-        xpc_connection_send_message_with_reply(connection, encoded, nil) { reply in
+        xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
             let result: Result<R, XPCError>
             if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
                 do {
-                    let response = try Response(dictionary: reply)
+                    let response = try Response(dictionary: reply, route: request.route)
                     if response.containsPayload {
                         result = .success(try response.decodePayload(asType: R.self))
                     } else if response.containsError {
@@ -368,7 +368,7 @@ public class XPCClient {
                         result = .failure(.unknown)
                     }
                 } catch {
-                    result = .failure(XPCError.asXPCError(error: error, expectingOtherError: false))
+                    result = .failure(XPCError.asXPCError(error: error))
                 }
             } else {
                 result = .failure(XPCError.fromXPCObject(reply))
@@ -379,8 +379,8 @@ public class XPCClient {
     }
     
     /// Wrapper that handles responses without a payload since `Void` is not `Decodable`
-    private func sendWithResponse(encoded: xpc_object_t, withResponse handler: @escaping XPCResponseHandler<Void>) {
-        self.sendWithResponse(encoded: encoded) { (response: Result<EmptyResponse, XPCError>) -> Void in
+    private func sendRequest(_ request: Request, withResponse handler: @escaping XPCResponseHandler<Void>) {
+        self.sendRequest(request) { (response: Result<EmptyResponse, XPCError>) -> Void in
             switch response {
                 case .success(_):
                     handler(.success(()))
@@ -395,14 +395,19 @@ public class XPCClient {
         case instance
     }
     
-    @available(macOS 10.15.0, *)
-    private func sendWithResponse<R: Decodable>(encoded: xpc_object_t) async throws -> R {
-        try await withCheckedThrowingContinuation { continuation in
-            sendWithResponse(encoded: encoded) { response in
-                continuation.resume(with: response)
-            }
+    /// Resumes the continuation while unwrapping any underlying errors thrown by a server's handler.
+    @available(macOS 10.15, *)
+    private func resumeContinuation<T>(_ contination: UnsafeContinuation<T, Error>,
+                                       unwrappingResponse response: Result<T, XPCError>) {
+        if case let .failure(error) = response,
+           case let .handlerError(handlerError) = error,
+           case let .available(underlyingError) = handlerError.underlyingError {
+            contination.resume(throwing: underlyingError)
+        } else {
+            contination.resume(with: response)
         }
     }
+
     
     private func getConnection() throws -> xpc_connection_t {
         if let existingConnection = self.connection { return existingConnection }

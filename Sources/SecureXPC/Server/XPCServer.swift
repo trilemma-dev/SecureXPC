@@ -61,9 +61,6 @@ import Foundation
 /// }
 /// ```
 ///
-/// If the function or closure throws an error and the route expects a return, then ``XPCError/other(_:)`` will be returned to the client with the `String`
-/// associated type describing the thrown error. It is intentional the thrown error is not marshalled as that type may not be `Codable` and may not exist in the client.
-///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
 /// ```swift
@@ -309,14 +306,14 @@ public class XPCServer {
             request = try Request(dictionary: message)
         } catch {
             var reply = xpc_dictionary_create_reply(message)
-            self.handleError(error, expectingOtherError: false, connection: connection, reply: &reply)
+            self.handleError(error, connection: connection, reply: &reply)
             return
         }
         
         guard let handler = self.routes[request.route] else {
             let error = XPCError.routeNotRegistered(request.route.pathComponents)
             var reply = xpc_dictionary_create_reply(message)
-            self.handleError(error, expectingOtherError: false, connection: connection, reply: &reply)
+            self.handleError(error, connection: connection, reply: &reply)
             return
         }
         
@@ -330,7 +327,7 @@ public class XPCServer {
                     xpc_connection_send_message(connection, reply)
                 }
             } catch {
-                self.handleError(error, expectingOtherError: true, connection: connection, reply: &reply)
+                self.handleError(error, connection: connection, reply: &reply)
             }
             
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
@@ -344,7 +341,7 @@ public class XPCServer {
                         xpc_connection_send_message(connection, reply)
                     }
                 } catch {
-                    self.handleError(error, expectingOtherError: true, connection: connection, reply: &reply)
+                    self.handleError(error, connection: connection, reply: &reply)
                 }
             }
         } else {
@@ -354,10 +351,9 @@ public class XPCServer {
     }
     
     private func handleError(_ error: Error,
-                             expectingOtherError: Bool,
                              connection: xpc_connection_t,
                              reply: inout xpc_object_t?) {
-        let error = XPCError.asXPCError(error: error, expectingOtherError: expectingOtherError)
+        let error = XPCError.asXPCError(error: error)
         self.errorHandler?(error)
         
         // If it's possible to reply, then send the error back to the client
@@ -611,7 +607,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplySync: XPCHandl
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil)
-        try self.handler()
+        try HandlerError.rethrow { try self.handler() }
     }
 }
 
@@ -621,7 +617,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplySync<M: Decodable
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
-        try self.handler(decodedMessage)
+        try HandlerError.rethrow { try self.handler(decodedMessage) }
     }
 }
 
@@ -630,7 +626,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySync<R: Encodable
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self)
-        let payload = try self.handler()
+        let payload = try HandlerError.rethrow { try self.handler() }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
 }
@@ -641,7 +637,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self)
         let decodedMessage = try request.decodePayload(asType: M.self)
-        let payload = try self.handler(decodedMessage)
+        let payload = try HandlerError.rethrow { try self.handler(decodedMessage) }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
 }
@@ -659,7 +655,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync: XPCHand
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil)
-        try await self.handler()
+        try await HandlerError.rethrow { try await self.handler() }
     }
 }
 
@@ -670,7 +666,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplyAsync<M: Decodabl
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
-        try await self.handler(decodedMessage)
+        try await HandlerError.rethrow { try await self.handler(decodedMessage) }
     }
 }
 
@@ -680,7 +676,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplyAsync<R: Encodabl
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self)
-        let payload = try await self.handler()
+        let payload = try await HandlerError.rethrow { try await self.handler() }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
 }
@@ -692,7 +688,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplyAsync<M: Decodable, 
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self)
         let decodedMessage = try request.decodePayload(asType: M.self)
-        let payload = try await self.handler(decodedMessage)
+        let payload = try await HandlerError.rethrow { try await self.handler(decodedMessage) }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
 }

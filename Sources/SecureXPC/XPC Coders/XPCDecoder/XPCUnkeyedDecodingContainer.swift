@@ -11,10 +11,14 @@ enum XPCUnkeyedDecodingContainer {
     /// Returns a container to perform the decoding.
     ///
     /// Depending on how the container was encoded it may either return one that operates on an XPC array or an XPC data instance.
-    static func containerFor(value: xpc_object_t, codingPath: [CodingKey]) throws -> UnkeyedDecodingContainer {
+    static func containerFor(value: xpc_object_t,
+                             codingPath: [CodingKey],
+                             userInfo: [CodingUserInfoKey : Any]) throws -> UnkeyedDecodingContainer {
         let type = xpc_get_type(value)
         if type == XPC_TYPE_ARRAY {
-            return try XPCArrayBackedUnkeyedDecodingContainer(value: value, codingPath: codingPath)
+            return try XPCArrayBackedUnkeyedDecodingContainer(value: value,
+                                                              codingPath: codingPath,
+                                                              userInfo: userInfo)
         } else if type == XPC_TYPE_DATA {
             return try XPCDataBackedUnkeyedDecodingContainer(value: value, codingPath: codingPath)
         } else {
@@ -31,8 +35,9 @@ private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	private let array: [xpc_object_t]
 	var currentIndex: Int
 	var codingPath = [CodingKey]()
+    let userInfo: [CodingUserInfoKey : Any]
 
-	init(value: xpc_object_t, codingPath: [CodingKey]) throws {
+    init(value: xpc_object_t, codingPath: [CodingKey], userInfo: [CodingUserInfoKey : Any]) throws {
 		if xpc_get_type(value) == XPC_TYPE_ARRAY {
 			var array = [xpc_object_t]()
 			let count = xpc_array_get_count(value)
@@ -42,6 +47,7 @@ private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 			self.array = array
 			self.currentIndex = 0
 			self.codingPath = codingPath
+            self.userInfo = userInfo
         } else {
 			let context = DecodingError.Context(codingPath: codingPath,
 												debugDescription: "Not an array",
@@ -159,7 +165,9 @@ private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	}
 
 	func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-		let decodedElement = try T(from: XPCDecoderImpl(value: try nextElement(type), codingPath: self.codingPath))
+		let decodedElement = try T(from: XPCDecoderImpl(value: try nextElement(type),
+                                                        codingPath: self.codingPath,
+                                                        userInfo: self.userInfo))
 		currentIndex += 1
 
 		return decodedElement
@@ -168,7 +176,8 @@ private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
 		let value = try nextElement(UnkeyedDecodingContainer.self)
 		let container = KeyedDecodingContainer<NestedKey>(try XPCKeyedDecodingContainer(value: value,
-																						codingPath: self.codingPath))
+																						codingPath: self.codingPath,
+                                                                                        userInfo: self.userInfo))
 		currentIndex += 1
 
 		return container
@@ -177,14 +186,17 @@ private class XPCArrayBackedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
         let container = try XPCUnkeyedDecodingContainer.containerFor(
             value: try nextElement(UnkeyedDecodingContainer.self),
-            codingPath: self.codingPath)
+            codingPath: self.codingPath,
+            userInfo: self.userInfo)
 		currentIndex += 1
 
 		return container
 	}
 
 	func superDecoder() throws -> Decoder {
-		let decoder = XPCDecoderImpl(value: try nextElement(Decoder.self), codingPath: self.codingPath)
+		let decoder = XPCDecoderImpl(value: try nextElement(Decoder.self),
+                                     codingPath: self.codingPath,
+                                     userInfo: self.userInfo)
 		currentIndex += 1
 
 		return decoder

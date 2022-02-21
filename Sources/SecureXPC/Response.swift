@@ -18,6 +18,8 @@ struct Response {
         static let payload: XPCDictionaryKey = const("__payload")
     }
     
+    /// The route this response came from.
+    let route: XPCRoute
     /// The response encoded as an XPC dictionary.
     let dictionary: xpc_object_t
     /// Whether this response contains a payload.
@@ -28,8 +30,9 @@ struct Response {
     /// Represents a reply that's already been encoded into an XPC dictionary.
     ///
     /// This initializer is expected to be used by the client when receiving a reply which it now needs to decode.
-    init(dictionary: xpc_object_t) throws {
+    init(dictionary: xpc_object_t, route: XPCRoute) throws {
         self.dictionary = dictionary
+        self.route = route
         self.containsPayload = try XPCDecoder.containsKey(ResponseKeys.payload, inDictionary: dictionary)
         self.containsError = try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: dictionary)
     }
@@ -62,6 +65,9 @@ struct Response {
     ///
     /// This is expected to be called from the client.
     func decodeError() throws -> XPCError {
-        return try XPCDecoder.decode(XPCError.self, from: self.dictionary, forKey: ResponseKeys.error)
+        return try XPCDecoder.decode(XPCError.self,
+                                     from: self.dictionary,
+                                     forKey: ResponseKeys.error,
+                                     userInfo: [XPCRoute.codingUserInfoKey : self.route])
     }
 }

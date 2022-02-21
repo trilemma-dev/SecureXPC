@@ -54,9 +54,10 @@ public enum XPCError: Error, Codable {
     ///
     /// The associated string is a descriptive error message.
     case misconfiguredXPCService(String)
-    /// An error occurred that is not part of this framework, for example an error thrown by a handler registered with a ``XPCServer`` route. The associated
-    /// value describes the error.
-    case other(String)
+    /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
+    ///
+    /// The associated value represents, and possibly contains, the error.
+    case handlerError(HandlerError)
     /// Unknown error occurred.
     case unknown
     
@@ -64,18 +65,16 @@ public enum XPCError: Error, Codable {
     ///
     /// - Parameters:
     ///   - error: The error to be represented as an ``XPCError``
-    ///   - expectingNonXPCError: Whether an error which is not an ``XPCError``, `DecodingError`, or `EncodingError` is expected. If it is,
-    ///   then its description will be returned as ``XPCError/other(_:)``, otherwise ``XPCError/unknown`` will be returned.
     /// - Returns: An ``XPCError`` to represent the passed in `error`
-    internal static func asXPCError(error: Error, expectingOtherError: Bool) -> XPCError {
+    internal static func asXPCError(error: Error) -> XPCError {
         if let error = error as? XPCError {
             return error
+        } else if let error = error as? HandlerError {
+            return .handlerError(error)
         } else if let error = error as? DecodingError {
             return .decodingError(String(describing: error))
         } else if let error = error as? EncodingError {
             return .encodingError(String(describing: error))
-        } else if expectingOtherError {
-            return .other(String(describing: error))
         } else {
             return .unknown
         }

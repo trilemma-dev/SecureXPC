@@ -12,8 +12,8 @@ import Foundation
 /// Client to server communication is performed using routes. A route is a sequence of `String`s and if applicable also the message and reply types.
 ///
 /// In practice a route is similar to a function signature or a server path with type safety. Message and reply types must be
-/// [`Codable`](https://developer.apple.com/documentation/swift/codable). Many structs, enums, and classes in the Swift
-/// standard library are already `Codable` and compiler generated conformance is available for simple structs and enums.
+/// [`Codable`](https://developer.apple.com/documentation/swift/codable). Many structs, enums, and classes in the Swift standard library are
+/// already `Codable` and compiler generated conformance is available for simple structs and enums.
 ///
 /// The simplest form of a route is one that contains neither a message nor a reply:
 /// ```swift
@@ -39,8 +39,18 @@ import Foundation
 ///                             .withReplyType(Int.self)
 /// ```
 ///
-/// Routes are distinct based on their names, meaning the last two routes above are considered equivalent. A server will
-/// only allow one handler to be registered for each distinct route.
+/// Routes are distinct based on their names, meaning the last two routes above are considered equivalent. A server will only allow one handler to be registered for
+/// each distinct route.
+///
+/// #### Errors
+/// Errors thrown by the handler registered for the route may optionally be specified:
+/// ```swift
+/// let throttleRoute = XPCRoute.named("thermal", "throttle")
+///                             .withMessageType(Int.self)
+///                             .throwsType(ThermalError.self)
+///                             .throwsType(ConfigurationError.self)                             
+/// ```
+/// Any number of error types which are `Codable` may be specified.
 ///
 /// #### Storing Routes
 /// To ensure consistency, ideally routes are only defined once in code that is shared by both the client and server.
@@ -49,15 +59,18 @@ import Foundation
 /// Once a route has been created, it needs to be registered with an ``XPCServer`` in order for it to be called by an ``XPCClient``.
 ///
 /// #### Updating Routes
-/// If you are using XPC Mach services, take care when updating existing routes because over time you may end up with an
-/// older version of your server installed on a computer with a newer client. You may want to version your routes by
-/// prefixing them with a number:
+/// If you are using XPC Mach services, take care when updating existing routes because over time you may end up with an older version of your server installed on
+/// a computer with a newer client. You may want to version your routes by prefixing them with a number:
 /// ```swift
 /// XPCRoute.named("1", "reset")
 /// ```
 ///
 /// This is also applicable for routes registered with anonymous servers that allow requests from other processes.
-public struct XPCRoute: Codable {
+public struct XPCRoute {
+    
+    /// The key to be used when inserting or accessing an XPC route that's part of the coding process's user info
+    static let codingUserInfoKey = CodingUserInfoKey(rawValue: String(describing: XPCRoute.self))!
+    
     let pathComponents: [String]
     
     // These are intentionally excluded when computing equality and hash values as routes are uniqued only on path
@@ -65,10 +78,21 @@ public struct XPCRoute: Codable {
     let replyType: String?
     /// Whether the route expects the handler registered on the server to have a non-`Void` type.
     ///
-    /// The client may still request a response meaning that completion and any error that occurred can be sent back, but the handler is not expected to return data.
+    /// The client may still request a response meaning that completion and any error that occurred can be sent back, but the server's handler is not expected to
+    /// have a return type.
     let expectsReply: Bool
+    /// Types that the API user claims could be thrown by the server's handler registered with this route.
+    ///
+    /// There's no way to compile time enforce this is actually true; however, at runtime the client will attempt to decode an error to these types.
+    ///
+    /// This array of types is intentionally not encoded/decoded as there is no way to transfer actual Swift types between runtimes and we need the actual types, not
+    /// just textual descriptions of them. Since the server always attempts to encode any error it can, only the client actually needs these types.
+    let errorTypes: [(Error & Codable).Type]
     
-    fileprivate init(pathComponents: [String], messageType: Any.Type?, replyType: Any.Type?) {
+    fileprivate init(pathComponents: [String],
+                     messageType: Any.Type?,
+                     replyType: Any.Type?,
+                     errorTypes: [(Error & Codable).Type]) {
         self.pathComponents = pathComponents
         
         if let messageType = messageType {
@@ -84,6 +108,8 @@ public struct XPCRoute: Codable {
             self.replyType = nil
             self.expectsReply = false
         }
+        
+        self.errorTypes = errorTypes
     }
     
     /// Creates a route that can't receive a message and will not reply.
@@ -94,7 +120,7 @@ public struct XPCRoute: Codable {
     /// ``XPCRouteWithoutMessageWithoutReply/withReplyType(_:)`` can be called on the returned route to create a route which is expected to
     /// reply.
     public static func named(_ pathComponents: String...) -> XPCRouteWithoutMessageWithoutReply {
-        XPCRouteWithoutMessageWithoutReply(pathComponents)
+        XPCRouteWithoutMessageWithoutReply(pathComponents, errorTypes: [])
     }
 }
 
@@ -108,6 +134,34 @@ extension XPCRoute: Hashable {
     }
 }
 
+// Custom codable implementation that exists to prevent encoding `errorTypes`.
+extension XPCRoute: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case pathComponents
+        case messageType
+        case replyType
+        case expectsReply
+        // It is intentional errorTypes is not coded, see errorTypes declaration for explanation.
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.pathComponents, forKey: .pathComponents)
+        try container.encode(self.messageType, forKey: .messageType)
+        try container.encode(self.replyType, forKey: .replyType)
+        try container.encode(self.expectsReply, forKey: .expectsReply)
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.pathComponents = try container.decode([String].self, forKey: .pathComponents)
+        self.messageType = try container.decode(String?.self, forKey: .messageType)
+        self.replyType = try container.decode(String?.self, forKey: .replyType)
+        self.expectsReply = try container.decode(Bool.self, forKey: .expectsReply)
+        self.errorTypes = []
+    }
+}
+
 /// A route that can't receive a message and will not reply.
 ///
 /// See ``XPCRoute`` for how to create a route.
@@ -118,22 +172,43 @@ public struct XPCRouteWithoutMessageWithoutReply {
     ///
     /// - Parameters:
     ///   - _: Zero or more `String`s naming the route.
-    fileprivate init(_ pathComponents: [String]) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, replyType: nil)
+    fileprivate init(_ pathComponents: [String], errorTypes: [(Error & Codable).Type]) {
+        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, replyType: nil, errorTypes: errorTypes)
+    }
+    
+    /// Optionally specifies an `Error` type thrown by the handler registered for this route.
+    ///
+    /// This function may be called multiple times to register multiple potential error types.
+    ///
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
+    ///
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithoutReply {
+        XPCRouteWithoutMessageWithoutReply(self.route.pathComponents,
+                                           errorTypes: self.route.errorTypes + [errorType])
     }
     
     /// Creates a route which receives a message and will not reply.
     ///
     /// ``XPCRouteWithMessageWithoutReply/withReplyType(_:)`` can be called on it to create a route which is expected to reply.
     public func withMessageType<M: Codable>(_ messageType: M.Type) -> XPCRouteWithMessageWithoutReply<M> {
-        XPCRouteWithMessageWithoutReply(self.route.pathComponents, messageType: messageType)
+        XPCRouteWithMessageWithoutReply(self.route.pathComponents,
+                                        messageType: M.self,
+                                        errorTypes: self.route.errorTypes)
     }
     
     /// Creates a route that can't receive a message and is expected to reply.
     ///
     /// ``XPCRouteWithoutMessageWithReply/withMessageType(_:)`` can be called on the returned route to create a route that receives a message.
     public func withReplyType<R: Codable>(_ replyType: R.Type) -> XPCRouteWithoutMessageWithReply<R> {
-        XPCRouteWithoutMessageWithReply(self.route.pathComponents, replyType: replyType)
+        XPCRouteWithoutMessageWithReply(self.route.pathComponents,
+                                        replyType: R.self,
+                                        errorTypes: self.route.errorTypes)
     }
 }
 
@@ -142,21 +217,43 @@ public struct XPCRouteWithoutMessageWithoutReply {
 /// See ``XPCRoute`` for how to create a route.
 public struct XPCRouteWithoutMessageWithReply<R: Codable> {
     let route: XPCRoute
-    private let replyType: R.Type
     
     /// Initializes the route.
     ///
     /// - Parameters:
     ///   - _: Zero or more `String`s naming the route.
     ///   - replyType: The expected type the server will respond with if successful.
-    fileprivate init(_ pathComponents: [String], replyType: R.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: nil, replyType: replyType)
-        self.replyType = replyType
+    fileprivate init(_ pathComponents: [String], replyType: R.Type, errorTypes: [(Error & Codable).Type]) {
+        self.route = XPCRoute(pathComponents: pathComponents,
+                              messageType: nil,
+                              replyType: R.self,
+                              errorTypes: errorTypes)
+    }
+    
+    /// Optionally specifies an `Error` type thrown by the handler registered for this route.
+    ///
+    /// This function may be called multiple times to register multiple potential error types.
+    ///
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
+    ///
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithReply {
+        XPCRouteWithoutMessageWithReply(self.route.pathComponents,
+                                        replyType: R.self,
+                                        errorTypes: self.route.errorTypes + [errorType])
     }
     
     /// Creates a route that receives a message and is expected to reply.
     public func withMessageType<M: Codable>(_ messageType: M.Type) -> XPCRouteWithMessageWithReply<M, R> {
-        XPCRouteWithMessageWithReply(self.route.pathComponents, messageType: messageType, replyType: self.replyType)
+        XPCRouteWithMessageWithReply(self.route.pathComponents,
+                                     messageType: M.self,
+                                     replyType: R.self,
+                                     errorTypes: self.route.errorTypes)
     }
 }
 
@@ -164,7 +261,6 @@ public struct XPCRouteWithoutMessageWithReply<R: Codable> {
 ///
 /// See ``XPCRoute`` for how to create a route.
 public struct XPCRouteWithMessageWithoutReply<M: Codable> {
-    private let messageType: M.Type
     let route: XPCRoute
     
     /// Initializes the route.
@@ -172,14 +268,37 @@ public struct XPCRouteWithMessageWithoutReply<M: Codable> {
     /// - Parameters:
     ///   - _: Zero or more `String`s naming the route.
     ///   - messageType: The expected type the client will be passed when sending a message to this route.
-    fileprivate init(_ pathComponents: [String], messageType: M.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, replyType: nil)
-        self.messageType = messageType
+    fileprivate init(_ pathComponents: [String], messageType: M.Type, errorTypes: [(Error & Codable).Type]) {
+        self.route = XPCRoute(pathComponents: pathComponents,
+                              messageType: M.self,
+                              replyType: nil,
+                              errorTypes: errorTypes)
+    }
+    
+    /// Optionally specifies an `Error` type thrown by the handler registered for this route.
+    ///
+    /// This function may be called multiple times to register multiple potential error types.
+    ///
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
+    ///
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithoutReply {
+        XPCRouteWithMessageWithoutReply(self.route.pathComponents,
+                                        messageType: M.self,
+                                        errorTypes: self.route.errorTypes + [errorType])
     }
     
     /// Creates a route that receives a message and is expected to reply.
     public func withReplyType<R: Codable>(_ replyType: R.Type) -> XPCRouteWithMessageWithReply<M, R> {
-        XPCRouteWithMessageWithReply(self.route.pathComponents, messageType: self.messageType, replyType: replyType)
+        XPCRouteWithMessageWithReply(self.route.pathComponents,
+                                     messageType: M.self,
+                                     replyType: R.self,
+                                     errorTypes: self.route.errorTypes)
     }
 }
 
@@ -195,7 +314,32 @@ public struct XPCRouteWithMessageWithReply<M: Codable, R: Codable> {
     ///   - _: Zero or more `String`s naming the route.
     ///   - messageType: The expected type the client will be passed when sending a message to this route.
     ///   - replyType: The expected type the server will respond with if successful.
-    fileprivate init(_ pathComponents: [String], messageType: M.Type, replyType: R.Type) {
-        self.route = XPCRoute(pathComponents: pathComponents, messageType: messageType, replyType: replyType)
+    fileprivate init(_ pathComponents: [String],
+                     messageType: M.Type,
+                     replyType: R.Type,
+                     errorTypes: [(Error & Codable).Type]) {
+        self.route = XPCRoute(pathComponents: pathComponents,
+                              messageType: M.self,
+                              replyType: R.self,
+                              errorTypes: errorTypes)
+    }
+    
+    /// Optionally specifies an `Error` type thrown by the handler registered for this route.
+    ///
+    /// This function may be called multiple times to register multiple potential error types.
+    ///
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
+    ///
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithReply {
+        XPCRouteWithMessageWithReply(self.route.pathComponents,
+                                     messageType: M.self,
+                                     replyType: R.self,
+                                     errorTypes: self.route.errorTypes + [errorType])
     }
 }

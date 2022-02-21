@@ -10,12 +10,13 @@ import Foundation
 internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerProtocol {
 	typealias Key = K
 
+    let userInfo: [CodingUserInfoKey : Any]
 	var codingPath = [CodingKey]()
 	var allKeys = [K]()
 
 	private let dictionary: [String : xpc_object_t]
 
-	init(value: xpc_object_t, codingPath: [CodingKey]) throws {
+    init(value: xpc_object_t, codingPath: [CodingKey], userInfo: [CodingUserInfoKey : Any]) throws {
 		if xpc_get_type(value) == XPC_TYPE_DICTIONARY {
 			var allKeys = [K]()
 			var dictionary = [String : xpc_object_t]()
@@ -31,6 +32,7 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 			self.allKeys = allKeys
 			self.dictionary = dictionary
 			self.codingPath = codingPath
+            self.userInfo = userInfo
 		} else {
 			let context = DecodingError.Context(codingPath: self.codingPath,
 												debugDescription: "Not a keyed container",
@@ -134,17 +136,20 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 
 	func decode<T>(_ type: T.Type, forKey key: K) throws -> T where T : Decodable {
 		return try type.init(from: XPCDecoderImpl(value: value(forKey: key),
-												  codingPath: self.codingPath + [key]))
+												  codingPath: self.codingPath + [key],
+                                                  userInfo: self.userInfo))
 	}
 
 	func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type, forKey key: K) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
 		return KeyedDecodingContainer(try XPCKeyedDecodingContainer<NestedKey>(value: value(forKey: key),
-																			   codingPath: self.codingPath + [key]))
+																			   codingPath: self.codingPath + [key],
+                                                                               userInfo: self.userInfo))
 	}
 
 	func nestedUnkeyedContainer(forKey key: K) throws -> UnkeyedDecodingContainer {
         return try XPCUnkeyedDecodingContainer.containerFor(value: value(forKey: key),
-                                                            codingPath: self.codingPath + [key])
+                                                            codingPath: self.codingPath + [key],
+                                                            userInfo: self.userInfo)
 	}
 
 	func superDecoder() throws -> Decoder {
@@ -159,7 +164,9 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
 	}
 
 	func superDecoder(forKey key: K) throws -> Decoder {
-		return XPCDecoderImpl(value: try value(forKey: key), codingPath: self.codingPath + [key])
+		return XPCDecoderImpl(value: try value(forKey: key),
+                              codingPath: self.codingPath + [key],
+                              userInfo: userInfo)
 	}
     
     // MARK: XPC specific decoding
