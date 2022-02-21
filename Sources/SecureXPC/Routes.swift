@@ -48,6 +48,7 @@ import Foundation
 /// let throttleRoute = XPCRoute.named("thermal", "throttle")
 ///                             .withMessageType(Int.self)
 ///                             .throwsType(ThermalError.self)
+///                             .throwsType(ConfigurationError.self)                             
 /// ```
 /// Any number of error types which are `Codable` may be specified.
 ///
@@ -179,12 +180,14 @@ public struct XPCRouteWithoutMessageWithoutReply {
     ///
     /// This function may be called multiple times to register multiple potential error types.
     ///
-    /// If an error type is specified using this function and the server throws an error of this, if the client used an `async` function then the specific error will be
-    /// rethrown. If a closure-based function was used, then it will be returned as an ``XPCError/handlerError(_:)`` with
-    /// ``HandlerError/underlyingError`` as the error thrown by the server.
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
     ///
-    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, but
-    /// ``HandlerError/underlyingError`` will be `nil`. This will occur for both the `async` and closure-based functions.
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
     public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithoutReply {
         XPCRouteWithoutMessageWithoutReply(self.route.pathComponents,
                                            errorTypes: self.route.errorTypes + [errorType])
@@ -231,12 +234,14 @@ public struct XPCRouteWithoutMessageWithReply<R: Codable> {
     ///
     /// This function may be called multiple times to register multiple potential error types.
     ///
-    /// If an error type is specified using this function and the server throws an error of this, if the client used an `async` function then the specific error will be
-    /// rethrown. If a closure-based function was used, then it will be returned as an ``XPCError/handlerError(_:)`` with
-    /// ``HandlerError/underlyingError`` as the error thrown by the server.
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
     ///
-    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, but
-    /// ``HandlerError/underlyingError`` will be `nil`. This will occur for both the `async` and closure-based functions.
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
     public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithReply {
         XPCRouteWithoutMessageWithReply(self.route.pathComponents,
                                         replyType: R.self,
@@ -274,12 +279,14 @@ public struct XPCRouteWithMessageWithoutReply<M: Codable> {
     ///
     /// This function may be called multiple times to register multiple potential error types.
     ///
-    /// If an error type is specified using this function and the server throws an error of this, if the client used an `async` function then the specific error will be
-    /// rethrown. If a closure-based function was used, then it will be returned as an ``XPCError/handlerError(_:)`` with
-    /// ``HandlerError/underlyingError`` as the error thrown by the server.
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
     ///
-    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, but
-    /// ``HandlerError/underlyingError`` will be `nil`. This will occur for both the `async` and closure-based functions.
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
     public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithoutReply {
         XPCRouteWithMessageWithoutReply(self.route.pathComponents,
                                         messageType: M.self,
@@ -321,12 +328,14 @@ public struct XPCRouteWithMessageWithReply<M: Codable, R: Codable> {
     ///
     /// This function may be called multiple times to register multiple potential error types.
     ///
-    /// If an error type is specified using this function and the server throws an error of this, if the client used an `async` function then the specific error will be
-    /// rethrown. If a closure-based function was used, then it will be returned as an ``XPCError/handlerError(_:)`` with
-    /// ``HandlerError/underlyingError`` as the error thrown by the server.
+    /// For specified error types, if the client used an `async` function then the specific error will be rethrown. If a closure-based function was used, then it will be
+    /// returned as an ``XPCError/handlerError(_:)`` and ``HandlerError/UnderlyingError-swift.enum/available(_:)`` will contain the
+    /// specific error.
     ///
-    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, but
-    /// ``HandlerError/underlyingError`` will be `nil`. This will occur for both the `async` and closure-based functions.
+    /// If the error type thrown by the server was not specified using this function, then ``HandlerError`` will represent the error, and
+    /// ``HandlerError/underlyingError-swift.property`` will have a value of
+    /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
+    /// closure-based functions.
     public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithReply {
         XPCRouteWithMessageWithReply(self.route.pathComponents,
                                      messageType: M.self,

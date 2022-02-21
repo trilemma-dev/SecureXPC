@@ -14,7 +14,8 @@ public struct HandlerError: Error {
     public enum UnderlyingError {
         /// The underlying error is available and is the associated type of this case.
         ///
-        /// This will always be the case on the server; however, on the client the other cases represented by this ``UnderlyingError`` may occur.
+        /// This will always be the case on the server; however, on the client the other cases represented by this
+        /// ``HandlerError/UnderlyingError-swift.enum`` may occur.
         case available(Error)
         /// The error was not encoded by the server and so there is no possibility of the client decoding it.
         case unavailableNotEncoded
