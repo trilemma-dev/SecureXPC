@@ -296,7 +296,6 @@ public class XPCServer {
             self.errorHandler?(.insecure)
             return
         }
-        
         self.handleMessage(connection: connection, message: event)
     }
     
@@ -318,23 +317,10 @@ public class XPCServer {
         }
         
         if let handler = handler as? XPCHandlerSync {
-            var reply = xpc_dictionary_create_reply(message)
-            do {
-                try handler.handle(request: request, reply: &reply)
-                
-                // If a dictionary reply exists, then the message expects a reply to be sent back
-                if let reply = reply {
-                    xpc_connection_send_message(connection, reply)
-                }
-            } catch {
-                self.handleError(error, connection: connection, reply: &reply)
-            }
-            
-        } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
-            Task {
+            XPCRequestContext.setForCurrentThread(connection: connection, message: message) {
                 var reply = xpc_dictionary_create_reply(message)
                 do {
-                    try await handler.handle(request: request, reply: &reply)
+                    try handler.handle(request: request, reply: &reply)
                     
                     // If a dictionary reply exists, then the message expects a reply to be sent back
                     if let reply = reply {
@@ -342,6 +328,22 @@ public class XPCServer {
                     }
                 } catch {
                     self.handleError(error, connection: connection, reply: &reply)
+                }
+            }
+        } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
+            XPCRequestContext.setForTask(connection: connection, message: message) {
+                Task {
+                    var reply = xpc_dictionary_create_reply(message)
+                    do {
+                        try await handler.handle(request: request, reply: &reply)
+                        
+                        // If a dictionary reply exists, then the message expects a reply to be sent back
+                        if let reply = reply {
+                            xpc_connection_send_message(connection, reply)
+                        }
+                    } catch {
+                        self.handleError(error, connection: connection, reply: &reply)
+                    }
                 }
             }
         } else {
