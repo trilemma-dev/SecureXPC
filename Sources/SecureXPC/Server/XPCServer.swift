@@ -80,15 +80,15 @@ import Foundation
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
 /// ### Registering Routes
-/// - ``registerRoute(_:handler:)-4ttqe``
-/// - ``registerRoute(_:handler:)-9a0x9``
-/// - ``registerRoute(_:handler:)-4fxv0``
-/// - ``registerRoute(_:handler:)-1jw9d``
+/// - ``registerRoute(_:handler:errorHandler:)-7ty7d``
+/// - ``registerRoute(_:handler:errorHandler:)-56ldy``
+/// - ``registerRoute(_:handler:errorHandler:)-557dk``
+/// - ``registerRoute(_:handler:errorHandler:)-5v7pm``
 /// ### Registering Async Routes
-/// - ``registerRoute(_:handler:)-6htah``
-/// - ``registerRoute(_:handler:)-g7ww``
-/// - ``registerRoute(_:handler:)-rw2w``
-/// - ``registerRoute(_:handler:)-2vk6u``
+/// - ``registerRoute(_:handler:errorHandler:)-85wts``
+/// - ``registerRoute(_:handler:errorHandler:)-6b1h0``
+/// - ``registerRoute(_:handler:errorHandler:)-8ut1``
+/// - ``registerRoute(_:handler:errorHandler:)-1e7r2``
 /// ### Configuring a Server
 /// - ``targetQueue``
 /// - ``setErrorHandler(_:)-lex4``
@@ -155,103 +155,126 @@ public class XPCServer {
     
     /// Registers a route that has no message and can't receive a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has no message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
-                              handler: @escaping () throws -> Void) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplySync(handler: handler))
+                              handler: @escaping () throws -> Void,
+                              errorHandler: ((Error) -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithoutMessageWithoutReplySync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has no message and can't receive a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has no message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     @available(macOS 10.15.0, *)
     public func registerRoute(_ route: XPCRouteWithoutMessageWithoutReply,
-                              handler: @escaping () async throws -> Void) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync(handler: handler))
+                              handler: @escaping () async throws -> Void,
+                              errorHandler: ((Error) async -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has a message and can't receive a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has a message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
-                                            handler: @escaping (M) throws -> Void) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplySync(handler: handler))
+                                            handler: @escaping (M) throws -> Void,
+                                            errorHandler: ((Error) -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithMessageWithoutReplySync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has a message and can't receive a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has a message and can't receive a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     @available(macOS 10.15.0, *)
     public func registerRoute<M: Decodable>(_ route: XPCRouteWithMessageWithoutReply<M>,
-                                            handler: @escaping (M) async throws -> Void) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplyAsync(handler: handler))
+                                            handler: @escaping (M) async throws -> Void,
+                                            errorHandler: ((Error) async -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithMessageWithoutReplyAsync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has no message and expects a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has no message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
-                                            handler: @escaping () throws -> R) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplySync(handler: handler))
+                                            handler: @escaping () throws -> R,
+                                            errorHandler: ((Error) -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithoutMessageWithReplySync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has no message and expects a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has no message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     @available(macOS 10.15.0, *)
     public func registerRoute<R: Decodable>(_ route: XPCRouteWithoutMessageWithReply<R>,
-                                            handler: @escaping () async throws -> R) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplyAsync(handler: handler))
+                                            handler: @escaping () async throws -> R,
+                                            errorHandler: ((Error) async -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithoutMessageWithReplyAsync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has a message and expects a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has a message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
-                                                          handler: @escaping (M) throws -> R) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplySync(handler: handler))
+                                                          handler: @escaping (M) throws -> R,
+                                                          errorHandler: ((Error) -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithMessageWithReplySync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     /// Registers a route that has a message and expects a reply.
     ///
-    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    /// > Important: Routes can only be registered once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
     ///   - route: A route that has a message and expects a reply.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    /// - Throws: If this route has already been registered.
+    ///   - errorHandler: (Optional) Receives errors thrown by the `handler`.
     @available(macOS 10.15.0, *)
     public func registerRoute<M: Decodable, R: Encodable>(_ route: XPCRouteWithMessageWithReply<M, R>,
-                                                          handler: @escaping (M) async throws -> R) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler))
+                                                          handler: @escaping (M) async throws -> R,
+                                                          errorHandler: ((Error) async -> Void)? = nil) {
+        let handler = ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler, errorHandler: errorHandler)
+        self.registerRoute(route.route, handler: handler)
     }
     
     internal func startClientConnection(_ connection: xpc_connection_t) {
@@ -288,12 +311,12 @@ public class XPCServer {
         // Note that we're intentionally not checking for message acceptance as errors generated by libxpc can fail to
         // meet the acceptor's criteria because they're not coming from the client.
         guard xpc_get_type(event) == XPC_TYPE_DICTIONARY else {
-            self.errorHandler.handle(XPCError.fromXPCObject(event))
+            self.globalErrorHandler.handle(XPCError.fromXPCObject(event))
             return
         }
         
         guard self.messageAcceptor.acceptMessage(connection: connection, message: event) else {
-            self.errorHandler.handle(.insecure)
+            self.globalErrorHandler.handle(.insecure)
             return
         }
         self.handleMessage(connection: connection, message: event)
@@ -327,6 +350,10 @@ public class XPCServer {
                         xpc_connection_send_message(connection, reply)
                     }
                 } catch {
+                    if let error = error as? HandlerError,
+                       case let .available(underlyingError) = error.underlyingError {
+                        handler.handleError(underlyingError)
+                    }
                     self.handleError(error, connection: connection, reply: &reply)
                 }
             }
@@ -342,6 +369,10 @@ public class XPCServer {
                             xpc_connection_send_message(connection, reply)
                         }
                     } catch {
+                        if let error = error as? HandlerError,
+                           case let .available(underlyingError) = error.underlyingError {
+                            await handler.handleError(underlyingError)
+                        }
                         self.handleError(error, connection: connection, reply: &reply)
                     }
                 }
@@ -354,8 +385,8 @@ public class XPCServer {
     
     // MARK: Error handling
     
-    /// Wrapper around an error handling closure to ensure there's only ever one error handler regardless of whether it's synchronous or asynchronous.
-    fileprivate enum ErrorHandler {
+    /// Wrapper around an error handling closure to ensure there's only ever one global error handler regardless of whether it's synchronous or asynchronous.
+    fileprivate enum GlobalErrorHandler {
         case none
         case sync((XPCError) -> Void)
         case async((XPCError) async -> Void)
@@ -378,31 +409,39 @@ public class XPCServer {
         }
     }
     
-    private var errorHandler = ErrorHandler.none
+    private var globalErrorHandler = GlobalErrorHandler.none
     
-    /// Sets a handler to synchronously receive any errors encountered.
+    /// Sets a handler to synchronously receive errors not associated with any specific route.
     ///
-    /// This will replace any previously set error handler, including an asynchronous one.
+    /// This includes errors such as  ``XPCError/routeNotRegistered(_:)`` and ``XPCError/insecure``.
+    ///
+    /// > Note: This will replace any previously set error handler, including an asynchronous one.
     public func setErrorHandler(_ handler: @escaping (XPCError) -> Void) {
-        self.errorHandler = .sync(handler)
+        self.globalErrorHandler = .sync(handler)
     }
     
-    /// Sets a handler to asynchronously receive any errors encountered.
+    /// Sets a handler to asynchronously receive any errors not associated with any specific route.
     ///
-    /// This will replace any previously set error handler, including a synchronous one.
+    /// This includes errors such as  ``XPCError/routeNotRegistered(_:)`` and ``XPCError/insecure``.
+    ///
+    /// > Note: This will replace any previously set error handler, including a synchronous one.
     @available(macOS 10.15.0, *)
     public func setErrorHandler(_ handler: @escaping (XPCError) async -> Void) {
-        self.errorHandler = .async(handler)
+        self.globalErrorHandler = .async(handler)
     }
     
     private func handleError(_ error: Error, connection: xpc_connection_t, reply: inout xpc_object_t?) {
-        let error = XPCError.asXPCError(error: error)
-        self.errorHandler.handle(error)
+        let xpcError = XPCError.asXPCError(error: error)
+        // HandlerErrors are errors thrown by a handler registered with the server and so should only be sent to
+        // the handler specific error handler (if it exists), never to the global one
+        if !(error is HandlerError) {
+            self.globalErrorHandler.handle(xpcError)
+        }
         
         // If it's possible to reply, then send the error back to the client
         if var reply = reply {
             do {
-                try Response.encodeError(error, intoReply: &reply)
+                try Response.encodeError(xpcError, intoReply: &reply)
                 xpc_connection_send_message(connection, reply)
             } catch {
                 // If encoding the error fails, then there's no way to proceed
@@ -643,10 +682,19 @@ fileprivate extension XPCHandler {
 
 fileprivate protocol XPCHandlerSync: XPCHandler {
     func handle(request: Request, reply: inout xpc_object_t?) throws
+    var errorHandler: ((Error) -> Void)? { get }
+    func handleError(_ error: Error)
+}
+
+extension XPCHandlerSync {
+    func handleError(_ error: Error) {
+        self.errorHandler?(error)
+    }
 }
 
 fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplySync: XPCHandlerSync {
     let handler: () throws -> Void
+    let errorHandler: ((Error) -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil)
@@ -656,6 +704,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplySync: XPCHandl
 
 fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplySync<M: Decodable>: XPCHandlerSync {
     let handler: (M) throws -> Void
+    let errorHandler: ((Error) -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil)
@@ -666,6 +715,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplySync<M: Decodable
 
 fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySync<R: Encodable>: XPCHandlerSync {
     let handler: () throws -> R
+    let errorHandler: ((Error) -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self)
@@ -676,6 +726,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySync<R: Encodable
 
 fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R: Encodable>: XPCHandlerSync {
     let handler: (M) throws -> R
+    let errorHandler: ((Error) -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self)
@@ -690,11 +741,21 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R
 @available(macOS 10.15.0, *)
 fileprivate protocol XPCHandlerAsync: XPCHandler {
     func handle(request: Request, reply: inout xpc_object_t?) async throws
+    var errorHandler: ((Error) async -> Void)? { get }
+    func handleError(_ error: Error) async
+}
+
+@available(macOS 10.15.0, *)
+extension XPCHandlerAsync {
+    func handleError(_ error: Error) async {
+        await self.errorHandler?(error)
+    }
 }
 
 @available(macOS 10.15.0, *)
 fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync: XPCHandlerAsync {
     let handler: () async throws -> Void
+    let errorHandler: ((Error) async -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil)
@@ -705,6 +766,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync: XPCHand
 @available(macOS 10.15.0, *)
 fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplyAsync<M: Decodable>: XPCHandlerAsync {
     let handler: (M) async throws -> Void
+    let errorHandler: ((Error) async -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil)
@@ -716,6 +778,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplyAsync<M: Decodabl
 @available(macOS 10.15.0, *)
 fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplyAsync<R: Encodable>: XPCHandlerAsync {
     let handler: () async throws -> R
+    let errorHandler: ((Error) async -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self)
@@ -727,6 +790,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplyAsync<R: Encodabl
 @available(macOS 10.15.0, *)
 fileprivate struct ConstrainedXPCHandlerWithMessageWithReplyAsync<M: Decodable, R: Encodable>: XPCHandlerAsync {
     let handler: (M) async throws -> R
+    let errorHandler: ((Error) async -> Void)?
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self)
