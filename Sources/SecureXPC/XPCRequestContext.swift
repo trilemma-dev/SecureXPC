@@ -14,8 +14,8 @@ import Foundation
 /// ## Topics
 /// ### Client Information
 /// - ``clientCode``
-/// - ``effectiveUserId``
-/// - ``effectiveGroupId``
+/// - ``effectiveUserID``
+/// - ``effectiveGroupID``
 public class XPCRequestContext {
     private let connection: xpc_connection_t
     private let message: xpc_object_t
@@ -26,7 +26,7 @@ public class XPCRequestContext {
     }
     
     // MARK: task local
-        
+    
     @available(macOS 10.15.0, *)
     @TaskLocal
     private static var currentForTask: XPCRequestContext?
@@ -77,12 +77,12 @@ public class XPCRequestContext {
     // readily result in security vulnerabilities
     
     /// The effective user id of the client process.
-    public static var effectiveUserId: uid_t {
+    public static var effectiveUserID: uid_t {
         xpc_connection_get_euid(current.connection)
     }
     
     /// The effective group id of the client process.
-    public static var effectiveGroupId: gid_t {
+    public static var effectiveGroupID: gid_t {
         xpc_connection_get_egid(current.connection)
     }
     

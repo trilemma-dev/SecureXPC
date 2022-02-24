@@ -11,21 +11,21 @@ import SecureXPC
 
 class XPCRequestContextTest: XCTestCase {
     
-    func testGetEffectiveUserId_async() async throws {
+    func testGetEffectiveUserID_async() async throws {
         let route = XPCRoute.named("does", "nothing")
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveUserId
+            _ = XPCRequestContext.effectiveUserID
         }
         server.start()
         
         try await client.send(route: route)
     }
     
-    func testGetEffectiveUserId_sync() throws {
+    func testGetEffectiveUserID_sync() throws {
         let route = XPCRoute.named("does", "nothing")
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
@@ -34,7 +34,7 @@ class XPCRequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveUserId
+            _ = XPCRequestContext.effectiveUserID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -44,20 +44,20 @@ class XPCRequestContextTest: XCTestCase {
         self.waitForExpectations(timeout: 1)
     }
     
-    func testGetEffectiveGroupId_async() async throws {
+    func testGetEffectiveGroupID_async() async throws {
         let route = XPCRoute.named("does", "nothing")
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCRequestContext.effectiveGroupId)
+            XCTAssertNotNil(XPCRequestContext.effectiveGroupID)
         }
         server.start()
         
         try await client.send(route: route)
     }
     
-    func testGetEffectiveGroupId_sync() throws {
+    func testGetEffectiveGroupID_sync() throws {
         let route = XPCRoute.named("does", "nothing")
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
@@ -66,7 +66,7 @@ class XPCRequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveGroupId
+            _ = XPCRequestContext.effectiveGroupID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -87,13 +87,7 @@ class XPCRequestContextTest: XCTestCase {
             SecCodeCopyStaticCode(XPCRequestContext.clientCode!, [], &staticCode)
             var signingInfo: CFDictionary?
             SecCodeCopySigningInformation(staticCode!, [], &signingInfo)
-            if let signingInfo = signingInfo as NSDictionary?,
-               signingInfo[kSecCodeInfoIdentifier] as? String == "com.apple.xctest" {
-                // success
-                return
-            } else {
-                XCTFail("wrong identifier")
-            }
+            XCTAssertEqual((signingInfo! as NSDictionary)[kSecCodeInfoIdentifier] as? String, "com.apple.xctest")
         }
         server.start()
         
@@ -106,7 +100,6 @@ class XPCRequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         let clientCodeNotNil = self.expectation(description: "Client code should not be nil in this circumstance")
-        let xctestIdentifier = self.expectation(description: "Client code's identifier should be com.apple.xctest")
         
         server.registerRoute(route) {
             if let clientCode = XPCRequestContext.clientCode {
@@ -115,12 +108,8 @@ class XPCRequestContextTest: XCTestCase {
                 SecCodeCopyStaticCode(clientCode, [], &staticCode)
                 var signingInfo: CFDictionary?
                 SecCodeCopySigningInformation(staticCode!, [], &signingInfo)
-                if let signingInfo = signingInfo as NSDictionary?,
-                   signingInfo[kSecCodeInfoIdentifier] as? String == "com.apple.xctest" {
-                    xctestIdentifier.fulfill()
-                }
+                XCTAssertEqual((signingInfo! as NSDictionary)[kSecCodeInfoIdentifier] as? String, "com.apple.xctest")
             }
-            
         }
         server.start()
         
