@@ -361,7 +361,7 @@ public class XPCServer {
         func handle(_ error: XPCError) {
             switch self {
                 case .none:
-                    ()
+                    break
                 case .sync(let handler):
                     handler(error)
                 case .async(let handler):
