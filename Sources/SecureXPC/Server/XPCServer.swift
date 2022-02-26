@@ -79,16 +79,16 @@ import Foundation
 /// - ``forThisMachService(named:clientRequirements:)``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
-/// ### Registering Routes
-/// - ``registerRoute(_:handler:)-4ttqe``
-/// - ``registerRoute(_:handler:)-9a0x9``
-/// - ``registerRoute(_:handler:)-4fxv0``
-/// - ``registerRoute(_:handler:)-1jw9d``
 /// ### Registering Async Routes
 /// - ``registerRoute(_:handler:)-6htah``
 /// - ``registerRoute(_:handler:)-g7ww``
 /// - ``registerRoute(_:handler:)-rw2w``
 /// - ``registerRoute(_:handler:)-2vk6u``
+/// ### Registering Synchronous Routes
+/// - ``registerRoute(_:handler:)-4ttqe``
+/// - ``registerRoute(_:handler:)-9a0x9``
+/// - ``registerRoute(_:handler:)-4fxv0``
+/// - ``registerRoute(_:handler:)-1jw9d``
 /// ### Configuring a Server
 /// - ``targetQueue``
 /// - ``setErrorHandler(_:)-lex4``
@@ -152,8 +152,8 @@ public class XPCServer {
             fatalError("Route \(route.pathComponents) is already registered")
         }
     }
-    
-    /// Registers a route that has no message and can't receive a reply.
+        
+    /// Registers a route for a request without a message that does not receive a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -165,7 +165,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplySync(handler: handler))
     }
     
-    /// Registers a route that has no message and can't receive a reply.
+    /// Registers a route for a request without a message that does not receive a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -178,7 +178,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync(handler: handler))
     }
     
-    /// Registers a route that has a message and can't receive a reply.
+    /// Registers a route for a request with a message that does not receive a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -190,7 +190,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplySync(handler: handler))
     }
     
-    /// Registers a route that has a message and can't receive a reply.
+    /// Registers a route for a request with a message that does not receive a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -203,7 +203,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithoutReplyAsync(handler: handler))
     }
     
-    /// Registers a route that has no message and expects a reply.
+    /// Registers a route for a request without a message that receives a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -215,7 +215,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplySync(handler: handler))
     }
     
-    /// Registers a route that has no message and expects a reply.
+    /// Registers a route for a request without a message that receives a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -228,7 +228,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithoutMessageWithReplyAsync(handler: handler))
     }
     
-    /// Registers a route that has a message and expects a reply.
+    /// Registers a route for a request with a message that receives a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -240,7 +240,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplySync(handler: handler))
     }
     
-    /// Registers a route that has a message and expects a reply.
+    /// Registers a route for a request with a message that receives a reply.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
