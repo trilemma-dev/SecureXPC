@@ -28,14 +28,14 @@ class ServerTerminationIntegrationTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         // Send a message, which will result in the connection being established with the server
-        try await client.send(route: route)
+        try await client.send(toRoute: route)
         
         // Shut down the server, simulating the scenario of the process containing the server terminating
         (server as! XPCAnonymousServer).simulateDisconnectionForTesting()
         
         let interruptedExpectation = self.expectation(description: "Second message results in an interrupted error")
         do {
-            try await client.send(route: route)
+            try await client.send(toRoute: route)
         } catch {
             switch error {
                 case XPCError.connectionInterrupted:
@@ -47,7 +47,7 @@ class ServerTerminationIntegrationTest: XCTestCase {
         
         let cannotBeReestablishedExpectation = self.expectation(description: "Third message can't establish connection")
         do {
-            try await client.send(route: route)
+            try await client.send(toRoute: route)
         } catch {
             switch error {
                 case XPCError.connectionCannotBeReestablished:

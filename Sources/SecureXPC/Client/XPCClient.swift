@@ -50,14 +50,14 @@ import Foundation
 /// Once a client has been retrieved, sending a request is as simple as invoking `send` with a route:
 /// ```swift
 /// let resetRoute = XPCRoute.named("reset")
-/// await client.send(route: resetRoute)
+/// try await client.send(toRoute: resetRoute)
 /// ```
 ///
 /// If the client needs to receive information back from the server, a route with a reply type must be used:
 /// ```swift
 /// let currentRoute = XPCRoute.named("config", "current")
 ///                            .withReplyType(Config.self)
-/// let config = try await client.send(route: currentRoute)
+/// let config = try await client.send(toRoute: currentRoute)
 /// ```
 ///
 /// Routes can also require a message be included in the request:
@@ -66,7 +66,7 @@ import Foundation
 ///                           .withMessageType(Config.self)
 ///                           .withReplyType(Config.self)
 /// let config = <# create Config instance #>
-/// let updatedConfig = try await client.sendMessage(config, route: updateRoute)
+/// let updatedConfig = try await client.sendMessage(config, toRoute: updateRoute)
 /// ```
 ///
 /// ### Sending Requests with Closures
@@ -76,7 +76,7 @@ import Foundation
 ///                           .withMessageType(Config.self)
 ///                           .withReplyType(Config.self)
 /// let config = <# create Config instance #>
-/// client.sendMessage(config, route: updateRoute, withResponse: { response in
+/// client.sendMessage(config, toRoute: updateRoute, withResponse: { response in
 ///     switch response {
 ///          case .success(let reply):
 ///              <# use the reply #>
@@ -97,15 +97,15 @@ import Foundation
 /// - ``forMachService(named:)``
 /// - ``forEndpoint(_:)``
 /// ### Sending Requests with Async
-/// - ``send(route:)-2xpwh``
-/// - ``send(route:)-72u0z``
-/// - ``sendMessage(_:route:)-8jn0q``
-/// - ``sendMessage(_:route:)-45tw9``
+/// - ``send(toRoute:)-1a95b``
+/// - ``send(toRoute:)-3qggw``
+/// - ``sendMessage(_:toRoute:)-5dvj2``
+/// - ``sendMessage(_:toRoute:)-p3zc``
 /// ### Sending Requests with Closures
-/// - ``send(route:onCompletion:)``
-/// - ``send(route:withResponse:)``
-/// - ``sendMessage(_:route:onCompletion:)``
-/// - ``sendMessage(_:route:withResponse:)``
+/// - ``send(toRoute:onCompletion:)``
+/// - ``send(toRoute:withResponse:)``
+/// - ``sendMessage(_:toRoute:onCompletion:)``
+/// - ``sendMessage(_:toRoute:withResponse:)``
 /// ### Receiving Responses
 /// - ``XPCResponseHandler``
 /// ### Client Information
@@ -188,10 +188,12 @@ public class XPCClient {
     /// Sends a request with no message that does not receive a reply.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this request.
+    ///   - toRoute: The server route which will handle this request.
     ///   - onCompletion: An optionally provided closure to receive a response upon successful completion or error.
-    public func send(route: XPCRouteWithoutMessageWithoutReply,
-                     onCompletion handler: XPCResponseHandler<Void>?) {
+    public func send(
+        toRoute route: XPCRouteWithoutMessageWithoutReply,
+        onCompletion handler: XPCResponseHandler<Void>?
+    ) {
         if let handler = handler {
             do {
                 let request = try Request(route: route.route)
@@ -210,11 +212,13 @@ public class XPCClient {
     /// Sends a request with no message that does not receive a reply.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this request.
+    ///   - toRoute: The server route which will handle this request.
     @available(macOS 10.15.0, *)
-    public func send(route: XPCRouteWithoutMessageWithoutReply) async throws {
+    public func send(
+        toRoute route: XPCRouteWithoutMessageWithoutReply
+    ) async throws {
         try await withUnsafeThrowingContinuation { continuation in
-            send(route: route) { response in
+            send(toRoute: route) { response in
                 self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
@@ -224,11 +228,13 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///   - message: Message to be included in the request.
-    ///   - route: The server route which will handle this request.
+    ///   - toRoute: The server route which will handle this request.
     ///   - onCompletion: An optionally provided closure to receive a response upon successful completion or error.
-    public func sendMessage<M: Encodable>(_ message: M,
-                                          route: XPCRouteWithMessageWithoutReply<M>,
-                                          onCompletion handler: XPCResponseHandler<Void>?) {
+    public func sendMessage<M: Encodable>(
+        _ message: M,
+        toRoute route: XPCRouteWithMessageWithoutReply<M>,
+        onCompletion handler: XPCResponseHandler<Void>?
+    ) {
         if let handler = handler {
             do {
                 let request = try Request(route: route.route, payload: message)
@@ -248,11 +254,14 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///   - message: Message to be included in the request.
-    ///   - route: The server route which will handle this request.
+    ///   - toRoute: The server route which will handle this request.
     @available(macOS 10.15.0, *)
-    public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) async throws {
+    public func sendMessage<M: Encodable>(
+        _ message: M,
+        toRoute route: XPCRouteWithMessageWithoutReply<M>
+    ) async throws {
         try await withUnsafeThrowingContinuation { continuation in
-            sendMessage(message, route: route) { response in
+            sendMessage(message, toRoute: route) { response in
                 self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
@@ -261,10 +270,12 @@ public class XPCClient {
     /// Sends a request with no message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this request.
+    ///   - toRoute: The server route which will handle this request.
     ///   - withResponse: A closure to receive the request's response.
-    public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
-                                   withResponse handler: @escaping XPCResponseHandler<R>) {
+    public func send<R: Decodable>(
+        toRoute route: XPCRouteWithoutMessageWithReply<R>,
+        withResponse handler: @escaping XPCResponseHandler<R>
+    ) {
         do {
             let request = try Request(route: route.route)
             sendRequest(request, withResponse: handler)
@@ -276,11 +287,13 @@ public class XPCClient {
     /// Sends a request with no message and receives a reply.
     ///
     /// - Parameters:
-    ///    - route: The server route which will handle this request.
+    ///    - toRoute: The server route which will handle this request.
     @available(macOS 10.15.0, *)
-    public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>) async throws -> R {
+    public func send<R: Decodable>(
+        toRoute route: XPCRouteWithoutMessageWithReply<R>
+    ) async throws -> R {
         try await withUnsafeThrowingContinuation { continuation in
-            send(route: route) { response in
+            send(toRoute: route) { response in
                 self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
@@ -290,11 +303,13 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///    - message: Message to be included in the request.
-    ///    - route: The server route which will handle this request.
+    ///    - toRoute: The server route which will handle this request.
     ///    - withResponse: A closure to receive the request's response.
-    public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
-                                                        route: XPCRouteWithMessageWithReply<M, R>,
-                                                        withResponse handler: @escaping XPCResponseHandler<R>) {
+    public func sendMessage<M: Encodable, R: Decodable>(
+        _ message: M,
+        toRoute route: XPCRouteWithMessageWithReply<M, R>,
+        withResponse handler: @escaping XPCResponseHandler<R>
+    ) {
         do {
             let request = try Request(route: route.route, payload: message)
             sendRequest(request, withResponse: handler)
@@ -307,12 +322,14 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///    - message: Message to be included in the request.
-    ///    - route: The server route which will handle this request.
+    ///    - toRoute: The server route which will handle this request.
     @available(macOS 10.15.0, *)
-    public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
-                                                        route: XPCRouteWithMessageWithReply<M, R>) async throws -> R {
+    public func sendMessage<M: Encodable, R: Decodable>(
+        _ message: M,
+        toRoute route: XPCRouteWithMessageWithReply<M, R>
+    ) async throws -> R {
         try await withUnsafeThrowingContinuation { continuation in
-            sendMessage(message, route: route) { response in
+            sendMessage(message, toRoute: route) { response in
                 self.resumeContinuation(continuation, unwrappingResponse: response)
             }
         }
