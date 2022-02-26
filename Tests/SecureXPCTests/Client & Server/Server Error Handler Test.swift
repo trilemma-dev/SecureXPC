@@ -85,7 +85,7 @@ class ServerErrorHandlerTest: XCTestCase {
         }
         server.start()
         
-        client.send(route: missingRoute, onCompletion: nil)
+        client.send(toRoute: missingRoute, onCompletion: nil)
         
         self.waitForExpectations(timeout: 1)
     }
@@ -132,7 +132,7 @@ class ServerErrorHandlerTest: XCTestCase {
         }
         server.start()
         
-        client.send(route: failureRoute, onCompletion: nil)
+        client.send(toRoute: failureRoute, onCompletion: nil)
         
         self.waitForExpectations(timeout: 0.01)
     }
