@@ -46,31 +46,37 @@ import Foundation
 /// ```
 /// Server endpoints can also be sent across XPC connections.
 ///
-/// ### Calling Routes
-/// Once a client has been retrieved, calling a route is as simple as invoking `send` with a route:
+/// ### Sending Requests with Async
+/// Once a client has been retrieved, sending a request is as simple as invoking `send` with a route:
 /// ```swift
 /// let resetRoute = XPCRoute.named("reset")
-/// client.send(route: resetRoute, onCompletion: nil)
-/// ```
-///
-/// If confirmation that the send was received is needed, then an `onCompletion` handler must be set:
-/// ```swift
-/// let resetRoute = XPCRoute.named("reset")
-/// client.send(route: resetRoute, onCompletion: { response in
-///     switch response {
-///         case .success(_):
-///             <# confirm success #>
-///         case .failure(let error):
-///             <# handle the error #>
-///     }
-/// })
+/// await client.send(route: resetRoute)
 /// ```
 ///
 /// If the client needs to receive information back from the server, a route with a reply type must be used:
 /// ```swift
-/// let currentConfigRoute = XPCRoute.named("config", "current")
-///                                  .withReplyType(Config.self)
-/// client.send(route: currentConfigRoute, withResponse: { response in
+/// let currentRoute = XPCRoute.named("config", "current")
+///                            .withReplyType(Config.self)
+/// let config = try await client.send(route: currentRoute)
+/// ```
+///
+/// Routes can also require a message be included in the request:
+/// ```swift
+/// let updateRoute = XPCRoute.named("config", "update")
+///                           .withMessageType(Config.self)
+///                           .withReplyType(Config.self)
+/// let config = <# create Config instance #>
+/// let updatedConfig = try await client.sendMessage(config, route: updateRoute)
+/// ```
+///
+/// ### Sending Requests with Closures
+/// Closure-based versions of these functions also exist to provide support for macOS 10.14 and earlier:
+/// ```swift
+/// let updateRoute = XPCRoute.named("config", "update")
+///                           .withMessageType(Config.self)
+///                           .withReplyType(Config.self)
+/// let config = <# create Config instance #>
+/// client.sendMessage(config, route: updateRoute, withResponse: { response in
 ///     switch response {
 ///          case .success(let reply):
 ///              <# use the reply #>
@@ -80,57 +86,28 @@ import Foundation
 /// })
 /// ```
 ///
-/// When calling a route, there is also the option to include a message:
-/// ```swift
-/// let updateConfigRoute = XPCRoute.named("config", "update")
-///                                 .withMessageType(Config.self)
-///                                 .withReplyType(Config.self)
-/// let config = <# create Config instance #>
-/// client.sendMessage(config, route: updateConfigRoute, withResponse: {
-///     <# process response #>
-/// })
-/// ```
-///
-/// The ``XPCClient/XPCResponseHandler`` provided to the `withResponse` or `onCompletion` parameter is always passed a
-/// [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's `replyType` (or
-/// `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will be provided as an
-/// ``XPCError`` on failure.
-///
-/// ### Calling Routes Async
-/// While calling routes is always done asynchronously, on macOS 10.15 and later it is possible to call routes using `async`.
-///
-/// Calling a route with no message and no reply:
-/// ```swift
-/// let resetRoute = XPCRoute.named("reset")
-/// try await client.send(route: resetRoute)
-/// ```
-///
-/// Calling a route with a message and a reply:
-/// ```swift
-/// let updateConfigRoute = XPCRoute.named("config", "update")
-///                                 .withMessageType(Config.self)
-///                                 .withReplyType(Config.self)
-/// let config = <# create Config instance #>
-/// let newConfig = try await client.sendMessage(config, route: updateConfigRoute)
-/// ```
+/// For these closure-based functions, the ``XPCClient/XPCResponseHandler`` provided as the `withResponse` or `onCompletion` parameter is
+/// always passed a [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's
+/// `replyType` (or `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will
+/// be provided as an ``XPCError`` on failure.
 ///
 /// ## Topics
 /// ### Retrieving a Client
 /// - ``forXPCService(named:)``
 /// - ``forMachService(named:)``
 /// - ``forEndpoint(_:)``
-/// ### Calling Routes
+/// ### Sending Requests with Async
+/// - ``send(route:)-2xpwh``
+/// - ``send(route:)-72u0z``
+/// - ``sendMessage(_:route:)-8jn0q``
+/// - ``sendMessage(_:route:)-45tw9``
+/// ### Sending Requests with Closures
 /// - ``send(route:onCompletion:)``
 /// - ``send(route:withResponse:)``
 /// - ``sendMessage(_:route:onCompletion:)``
 /// - ``sendMessage(_:route:withResponse:)``
 /// ### Receiving Responses
 /// - ``XPCResponseHandler``
-/// ### Calling Routes Async
-/// - ``send(route:)-2xpwh``
-/// - ``send(route:)-72u0z``
-/// - ``sendMessage(_:route:)-8jn0q``
-/// - ``sendMessage(_:route:)-45tw9``
 /// ### Client Information
 /// - ``serviceName``
 public class XPCClient {
@@ -205,14 +182,14 @@ public class XPCClient {
     
     // MARK: Send
     
-    /// Receives the result of an XPC send. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
+    /// Receives the result of a request. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
     public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
     
-    /// Sends with no message and will not receive a reply.
+    /// Sends a request with no message that does not receive a reply.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this.
-    ///   - onCompletion: An optionally provided function or closure to receive a response upon successful completion or error.
+    ///   - route: The server route which will handle this request.
+    ///   - onCompletion: An optionally provided closure to receive a response upon successful completion or error.
     public func send(route: XPCRouteWithoutMessageWithoutReply,
                      onCompletion handler: XPCResponseHandler<Void>?) {
         if let handler = handler {
@@ -230,10 +207,10 @@ public class XPCClient {
         }
     }
     
-    /// Sends with no message and does not receive a reply.
+    /// Sends a request with no message that does not receive a reply.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this.
+    ///   - route: The server route which will handle this request.
     @available(macOS 10.15.0, *)
     public func send(route: XPCRouteWithoutMessageWithoutReply) async throws {
         try await withUnsafeThrowingContinuation { continuation in
@@ -243,12 +220,12 @@ public class XPCClient {
         }
     }
     
-    /// Sends a message which will not receive a reply.
+    /// Sends a request with a message that does not receive a reply.
     ///
     /// - Parameters:
-    ///   - message: Message to be sent.
-    ///   - route: The server route which should handle this message.
-    ///   - onCompletion: An optionally provided function or closure to receive a response upon successful completion or error.
+    ///   - message: Message to be included in the request.
+    ///   - route: The server route which will handle this request.
+    ///   - onCompletion: An optionally provided closure to receive a response upon successful completion or error.
     public func sendMessage<M: Encodable>(_ message: M,
                                           route: XPCRouteWithMessageWithoutReply<M>,
                                           onCompletion handler: XPCResponseHandler<Void>?) {
@@ -267,10 +244,11 @@ public class XPCClient {
         }
     }
     
-    /// Sends a message and does not receive a reply.
+    /// Sends a request with message that does not receive a reply.
     ///
     /// - Parameters:
-    ///    - route: The server route which should handle this message.
+    ///   - message: Message to be included in the request.
+    ///   - route: The server route which will handle this request.
     @available(macOS 10.15.0, *)
     public func sendMessage<M: Encodable>(_ message: M, route: XPCRouteWithMessageWithoutReply<M>) async throws {
         try await withUnsafeThrowingContinuation { continuation in
@@ -280,11 +258,11 @@ public class XPCClient {
         }
     }
     
-    /// Sends with no message and provides the response as either a reply on success or an error on failure.
+    /// Sends a request with no message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
-    ///   - route: The server route which will handle this.
-    ///   - withResponse: A function or closure to receive the response.
+    ///   - route: The server route which will handle this request.
+    ///   - withResponse: A closure to receive the request's response.
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>,
                                    withResponse handler: @escaping XPCResponseHandler<R>) {
         do {
@@ -295,10 +273,10 @@ public class XPCClient {
         }
     }
     
-    /// Sends with no message and receives a reply.
+    /// Sends a request with no message and receives a reply.
     ///
     /// - Parameters:
-    ///    - route: The server route which should handle this message.
+    ///    - route: The server route which will handle this request.
     @available(macOS 10.15.0, *)
     public func send<R: Decodable>(route: XPCRouteWithoutMessageWithReply<R>) async throws -> R {
         try await withUnsafeThrowingContinuation { continuation in
@@ -308,12 +286,12 @@ public class XPCClient {
         }
     }
     
-    /// Sends a message and provides the response as either a reply on success or an error on failure.
+    /// Sends a request with a message and provides the response as either a reply on success or an error on failure.
     ///
     /// - Parameters:
-    ///    - message: Message to be sent.
-    ///    - route: The server route which should handle this message.
-    ///    - withResponse: A function or closure to receive the message's response.
+    ///    - message: Message to be included in the request.
+    ///    - route: The server route which will handle this request.
+    ///    - withResponse: A closure to receive the request's response.
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>,
                                                         withResponse handler: @escaping XPCResponseHandler<R>) {
@@ -325,11 +303,11 @@ public class XPCClient {
         }
     }
     
-    /// Sends a message which receives a reply.
+    /// Sends a request with a message that receives a reply.
     ///
     /// - Parameters:
-    ///    - message: Message to be sent.
-    ///    - route: The server route which should handle this message.
+    ///    - message: Message to be included in the request.
+    ///    - route: The server route which will handle this request.
     @available(macOS 10.15.0, *)
     public func sendMessage<M: Encodable, R: Decodable>(_ message: M,
                                                         route: XPCRouteWithMessageWithReply<M, R>) async throws -> R {

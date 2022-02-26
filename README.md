@@ -1,9 +1,9 @@
 Use pure Swift to easily and securely communicate with XPC services and XPC Mach services. A client-server model 
 enables you to use your own [`Codable`](https://developer.apple.com/documentation/swift/codable) conforming types to
-send messages to routes you define and receive replies. 
+send requests to routes you define and receive responses. 
 
 SecureXPC uses [Swift concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html) on macOS 10.15 and
-later allowing clients to make non-blocking asynchronous calls to servers. A closure-based API is also available
+later allowing clients to make non-blocking asynchronous requests to servers. A closure-based API is also available
 providing compatibility back to OS X 10.10.
 
 This framework is ideal for communicating with helper tools installed via 
@@ -17,8 +17,8 @@ against the actual calling process instead of relying on PIDs which are known to
 
 # Usage
 The envisioned pattern when using this framework is to define routes in a shared file, create a server in one program
-(such as a helper tool) and register these routes, then from another program (such as an app) create a client and call
-these routes.
+(such as a helper tool) and register these routes, then from another program (such as an app) create a client and send
+requests to these routes.
 
 ## Routes
 In a file shared by the client and server define one or more routes:
@@ -62,7 +62,7 @@ There are multiple types of servers which can be retrieved:
      - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details
 
 ## Client
-In another program retrieve a client, then call one of the registered routes:
+In another program retrieve a client, then send a request to a registered route:
 ```swift
 let client = <# client retrieval here #>
 let reply = try await client.sendMessage("Get Schwifty", route: route)

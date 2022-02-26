@@ -12,8 +12,8 @@ Mach service. Customized support for communicating with helper tools installed v
 
 ## Usage
 The envisioned pattern when using this framework is to define routes in a shared file, retrieve a server in one program
-(such as a helper tool) and register these routes, then from another program (such as an app) retrieve a client and call
-these routes.
+(such as a helper tool) and register these routes, then from another program (such as an app) retrieve a client and send
+requests to these routes.
 
 #### Routes
 
@@ -44,7 +44,7 @@ See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 
 #### Client
 
-In another program retrieve a client, then call one of those routes:
+In another program retrieve a client, then send a request to one of these routes:
 ```swift
 let client = <# client retrieval here #>
 try client.sendMessage("Get Schwifty", route: route, withResponse: { response in
