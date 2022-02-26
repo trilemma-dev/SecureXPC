@@ -30,7 +30,7 @@ class ErrorIntegrationTests: XCTestCase {
         server.start()
         
         do {
-            try await client.send(route: failureRoute)
+            try await client.send(toRoute: failureRoute)
             XCTFail("No error thrown")
         } catch ExampleError.twoOfAKind {
             // success
@@ -52,7 +52,7 @@ class ErrorIntegrationTests: XCTestCase {
         
         let errorExpectation = self.expectation(description: "\(errorToThrow) thrown as underlying error")
 
-        client.send(route: failureRoute) { result in
+        client.send(toRoute: failureRoute) { result in
             do {
                 try result.get()
                 XCTFail("No error thrown")
@@ -83,7 +83,7 @@ class ErrorIntegrationTests: XCTestCase {
         server.start()
         
         do {
-            try await client.send(route: failureRoute)
+            try await client.send(toRoute: failureRoute)
             XCTFail("No error thrown")
         } catch ExampleError.twoOfAKind {
             //success
@@ -103,7 +103,7 @@ class ErrorIntegrationTests: XCTestCase {
         server.start()
         
         do {
-            try await client.send(route: failureRoute)
+            try await client.send(toRoute: failureRoute)
             XCTFail("No error thrown")
         } catch XPCError.handlerError(_) {
             // success

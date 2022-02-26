@@ -22,7 +22,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        try await client.send(route: route)
+        try await client.send(toRoute: route)
     }
     
     func testGetEffectiveUserID_sync() throws {
@@ -39,7 +39,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        client.send(route: route, onCompletion: nil)
+        client.send(toRoute: route, onCompletion: nil)
         
         self.waitForExpectations(timeout: 1)
     }
@@ -54,7 +54,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        try await client.send(route: route)
+        try await client.send(toRoute: route)
     }
     
     func testGetEffectiveGroupID_sync() throws {
@@ -71,7 +71,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        client.send(route: route, onCompletion: nil)
+        client.send(toRoute: route, onCompletion: nil)
         
         self.waitForExpectations(timeout: 1)
     }
@@ -91,7 +91,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        try await client.send(route: route)
+        try await client.send(toRoute: route)
     }
     
     func testGetClientCode_sync() throws {
@@ -113,7 +113,7 @@ class XPCRequestContextTest: XCTestCase {
         }
         server.start()
         
-        client.send(route: route, onCompletion: nil)
+        client.send(toRoute: route, onCompletion: nil)
         
         self.waitForExpectations(timeout: 1)
     }

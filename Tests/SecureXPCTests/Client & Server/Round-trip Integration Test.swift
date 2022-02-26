@@ -30,7 +30,7 @@ class RoundTripIntegrationTest: XCTestCase {
             return "echo: \(msg)"
         }
 
-        self.xpcClient.sendMessage("Hello, world!", route: echoRoute) { result in
+        self.xpcClient.sendMessage("Hello, world!", toRoute: echoRoute) { result in
             XCTAssertNoThrow {
                 let response = try result.get()
                 XCTAssertEqual(response, "echo: Hello, world!")
@@ -45,7 +45,7 @@ class RoundTripIntegrationTest: XCTestCase {
     func testSendWithMessageWithReply_AsyncClient_SyncServer() async throws {
         let echoRoute = XPCRoute.named("echo").withMessageType(String.self).withReplyType(String.self)
         anonymousServer.registerRoute(echoRoute) { msg in "echo: \(msg)" }
-        let result = try await xpcClient.sendMessage("Hello, world!", route: echoRoute)
+        let result = try await xpcClient.sendMessage("Hello, world!", toRoute: echoRoute)
         XCTAssertEqual(result, "echo: Hello, world!")
     }
     
@@ -54,7 +54,7 @@ class RoundTripIntegrationTest: XCTestCase {
         anonymousServer.registerRoute(echoRoute) { (msg: String) async -> String in
             "echo: \(msg)"
         }
-        let result = try await xpcClient.sendMessage("Hello, world!", route: echoRoute)
+        let result = try await xpcClient.sendMessage("Hello, world!", toRoute: echoRoute)
         XCTAssertEqual(result, "echo: Hello, world!")
     }
 
@@ -68,7 +68,7 @@ class RoundTripIntegrationTest: XCTestCase {
             return "pong"
         }
 
-        self.xpcClient.send(route: pingRoute) { result in
+        self.xpcClient.send(toRoute: pingRoute) { result in
             XCTAssertNoThrow {
                 let response = try result.get()
                 XCTAssertEqual(response, "pong")
@@ -83,7 +83,7 @@ class RoundTripIntegrationTest: XCTestCase {
     func testSendWithoutMessageWithReply_AsyncClient_SyncServer() async throws {
         let pingRoute = XPCRoute.named("ping").withReplyType(String.self)
         anonymousServer.registerRoute(pingRoute) { "pong" }
-        let result = try await xpcClient.send(route: pingRoute)
+        let result = try await xpcClient.send(toRoute: pingRoute)
         XCTAssertEqual(result, "pong")
     }
     
@@ -92,7 +92,7 @@ class RoundTripIntegrationTest: XCTestCase {
         anonymousServer.registerRoute(pingRoute) { () async -> String in
             "pong"
         }
-        let result = try await xpcClient.send(route: pingRoute)
+        let result = try await xpcClient.send(toRoute: pingRoute)
         XCTAssertEqual(result, "pong")
     }
 
@@ -105,7 +105,7 @@ class RoundTripIntegrationTest: XCTestCase {
             remoteHandlerWasCalled.fulfill()
         }
 
-        self.xpcClient.sendMessage("Hello, world!", route: msgNoReplyRoute, onCompletion: nil)
+        self.xpcClient.sendMessage("Hello, world!", toRoute: msgNoReplyRoute, onCompletion: nil)
 
         self.waitForExpectations(timeout: 1)
     }
@@ -120,7 +120,7 @@ class RoundTripIntegrationTest: XCTestCase {
             remoteHandlerWasCalled.fulfill()
         }
 
-        self.xpcClient.sendMessage("Hello, world!", route: msgNoReplyRoute) { response in
+        self.xpcClient.sendMessage("Hello, world!", toRoute: msgNoReplyRoute) { response in
             responseBlockWasCalled.fulfill()
             XCTAssertNoThrow {
                 try response.get()
@@ -137,7 +137,7 @@ class RoundTripIntegrationTest: XCTestCase {
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
         }
-        try await xpcClient.sendMessage("Hello, world!", route: msgNoReplyRoute)
+        try await xpcClient.sendMessage("Hello, world!", toRoute: msgNoReplyRoute)
         
         await self.waitForExpectations(timeout: 1)
     }
@@ -149,7 +149,7 @@ class RoundTripIntegrationTest: XCTestCase {
             XCTAssertEqual(msg, "Hello, world!")
             remoteHandlerWasCalled.fulfill()
         }
-        try await xpcClient.sendMessage("Hello, world!", route: msgNoReplyRoute)
+        try await xpcClient.sendMessage("Hello, world!", toRoute: msgNoReplyRoute)
         
         await self.waitForExpectations(timeout: 1)
     }
@@ -162,7 +162,7 @@ class RoundTripIntegrationTest: XCTestCase {
             remoteHandlerWasCalled.fulfill()
         }
 
-        self.xpcClient.send(route: noMsgNoReplyRoute, onCompletion: nil)
+        self.xpcClient.send(toRoute: noMsgNoReplyRoute, onCompletion: nil)
 
         self.waitForExpectations(timeout: 1)
     }
@@ -176,7 +176,7 @@ class RoundTripIntegrationTest: XCTestCase {
             remoteHandlerWasCalled.fulfill()
         }
 
-        self.xpcClient.send(route: noMsgNoReplyRoute) { response in
+        self.xpcClient.send(toRoute: noMsgNoReplyRoute) { response in
             responseBlockWasCalled.fulfill()
             XCTAssertNoThrow {
                 try response.get()
@@ -192,7 +192,7 @@ class RoundTripIntegrationTest: XCTestCase {
         anonymousServer.registerRoute(noMsgNoReplyRoute) {
             remoteHandlerWasCalled.fulfill()
         }
-        try await xpcClient.send(route: noMsgNoReplyRoute)
+        try await xpcClient.send(toRoute: noMsgNoReplyRoute)
         
         await self.waitForExpectations(timeout: 1)
     }
@@ -203,7 +203,7 @@ class RoundTripIntegrationTest: XCTestCase {
         anonymousServer.registerRoute(noMsgNoReplyRoute, handler: { () async -> Void in
             remoteHandlerWasCalled.fulfill()
         })
-        try await xpcClient.send(route: noMsgNoReplyRoute)
+        try await xpcClient.send(toRoute: noMsgNoReplyRoute)
         
         await self.waitForExpectations(timeout: 1)
     }
