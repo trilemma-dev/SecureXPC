@@ -34,9 +34,9 @@ public enum XPCError: Error, Codable {
     ///
     /// The associated value describes this decoding error.
     case decodingError(String)
-    /// The route associated with the incoming XPC request is not registered with the ``XPCServer``.
+    /// The route associated with the incoming request is not registered with the ``XPCServer``.
     case routeNotRegistered([String])
-    /// While the route associated with the incoming XPC request is registered with the ``XPCServer``, the message and/or reply does not match the handler
+    /// While the route associated with the incoming request is registered with the ``XPCServer``, the message and/or reply does not match the handler
     /// registered with the server.
     ///
     /// The first associated value is the route's path components. The second is a descriptive error message.
