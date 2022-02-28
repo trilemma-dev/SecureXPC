@@ -47,7 +47,7 @@ See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 In another program retrieve a client, then send a request to one of these routes:
 ```swift
 let client = <# client retrieval here #>
-try client.sendMessage("Get Schwifty", toRoute: route, withResponse: { response in
+try client.sendMessage("Get Schwifty", to: route, withResponse: { response in
     switch response {
         case .success(let reply):
             <# use the reply #>
