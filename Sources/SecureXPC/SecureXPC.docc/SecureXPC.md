@@ -40,11 +40,19 @@ private func bedazzle(message: String) throws -> Bool {
 }
 ```
 
+On macOS 10.15 and later `async` functions and closures can also be registered as the handler for a route.
+
 See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 
 #### Client
 
 In another program retrieve a client, then send a request to one of these routes:
+```swift
+let client = <# client retrieval here #>
+let reply = try await client.sendMessage("Get Schwifty", to: route)
+```
+
+Closure-based variants are available for macOS 10.14 and earlier:
 ```swift
 let client = <# client retrieval here #>
 try client.sendMessage("Get Schwifty", to: route, withResponse: { response in
