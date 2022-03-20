@@ -65,13 +65,13 @@ There are multiple types of servers which can be retrieved:
 In another program retrieve a client, then send a request to a registered route:
 ```swift
 let client = <# client retrieval here #>
-let reply = try await client.sendMessage("Get Schwifty", route: route)
+let reply = try await client.sendMessage("Get Schwifty", to: route)
 ```
 
 Closure-based variants are available for macOS 10.14 and earlier:
 ```swift
 let client = <# client retrieval here #>
-client.sendMessage("Get Schwifty", route: route, withResponse: { result in
+client.sendMessage("Get Schwifty", to: route, withResponse: { result in
     switch result {
         case .success(let reply):
             <# use the reply #>
