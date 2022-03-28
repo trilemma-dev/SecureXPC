@@ -44,7 +44,7 @@ enum XPCDecoder {
             // Ideally this would throw DecodingError.keyNotFound(...) but that requires providing a CodingKey
             // and there isn't one yet
             let context = DecodingError.Context(codingPath: [CodingKey](),
-                                                debugDescription: "Key not present: \(key)",
+                                                debugDescription: "Key not present: \(String(cString: key))",
                                                 underlyingError: nil)
             throw DecodingError.valueNotFound(type, context)
         }
