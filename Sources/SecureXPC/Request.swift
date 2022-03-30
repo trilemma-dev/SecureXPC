@@ -15,10 +15,13 @@ struct Request {
     private enum RequestKeys {
         static let route: XPCDictionaryKey = const("__route")
         static let payload: XPCDictionaryKey = const("__payload")
+        static let requestID: XPCDictionaryKey = const("__request_id")
     }
     
     /// The route represented by this request.
     let route: XPCRoute
+    /// The unique identifier for this request.
+    let requestID: UUID
     /// Whether this request contains a payload.
     let containsPayload: Bool
     /// This request encoded as an XPC dictionary.
@@ -32,6 +35,7 @@ struct Request {
     init(dictionary: xpc_object_t) throws {
         self.dictionary = dictionary
         self.route = try XPCDecoder.decode(XPCRoute.self, from: dictionary, forKey: RequestKeys.route)
+        self.requestID = try XPCDecoder.decode(UUID.self, from: dictionary, forKey: RequestKeys.requestID)
         self.containsPayload = try XPCDecoder.containsKey(RequestKeys.payload, inDictionary: self.dictionary)
     }
     
@@ -40,10 +44,12 @@ struct Request {
     /// This initializer is expected to be used by the client in order to send a request across the XPC connection.
     init(route: XPCRoute) throws {
         self.route = route
+        self.requestID = UUID()
         self.containsPayload = false
         
         self.dictionary = xpc_dictionary_create(nil, nil, 0)
         xpc_dictionary_set_value(self.dictionary, RequestKeys.route, try XPCEncoder.encode(route))
+        xpc_dictionary_set_value(self.dictionary, RequestKeys.requestID, try XPCEncoder.encode(requestID))
     }
     
     /// Represents a request with a payload which has yet to be encoded into an XPC dictionary.
@@ -51,10 +57,12 @@ struct Request {
     /// This initializer is expected to be used by the client in order to send a request across the XPC connection.
     init<P: Encodable>(route: XPCRoute, payload: P) throws {
         self.route = route
+        self.requestID = UUID()
         self.containsPayload = true
         
         self.dictionary = xpc_dictionary_create(nil, nil, 0)
         xpc_dictionary_set_value(self.dictionary, RequestKeys.route, try XPCEncoder.encode(self.route))
+        xpc_dictionary_set_value(self.dictionary, RequestKeys.requestID, try XPCEncoder.encode(requestID))
         xpc_dictionary_set_value(dictionary, RequestKeys.payload, try XPCEncoder.encode(payload))
     }
     

@@ -16,10 +16,13 @@ struct Response {
     private enum ResponseKeys {
         static let error: XPCDictionaryKey = const("__error")
         static let payload: XPCDictionaryKey = const("__payload")
+        static let requestID: XPCDictionaryKey = const("__request_id")
     }
     
     /// The route this response came from.
     let route: XPCRoute
+    /// The unique identifier of the request which this response corresponds to.
+    let requestID: UUID
     /// The response encoded as an XPC dictionary.
     let dictionary: xpc_object_t
     /// Whether this response contains a payload.
@@ -33,11 +36,12 @@ struct Response {
     init(dictionary: xpc_object_t, route: XPCRoute) throws {
         self.dictionary = dictionary
         self.route = route
+        self.requestID = try XPCDecoder.decode(UUID.self, from: dictionary, forKey: ResponseKeys.requestID)
         self.containsPayload = try XPCDecoder.containsKey(ResponseKeys.payload, inDictionary: dictionary)
         self.containsError = try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: dictionary)
     }
     
-    /// Create a response by directly encoding the payload into the provided XPC reply dictionary.
+    /// Creates a partial response by directly encoding the payload into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
     /// it cannot be copied by value and therefore a `Response` instance can't be constructed.
@@ -45,13 +49,17 @@ struct Response {
         xpc_dictionary_set_value(reply, ResponseKeys.payload, try XPCEncoder.encode(payload))
     }
     
-    /// Create a response by directly encoding the error into the provided XPC reply dictionary.
+    /// Creates a partial response by directly encoding the error into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,
     /// it cannot be copied by value and therefore a `Response` instance can't be constructed.
     static func encodeError(_ error: XPCError, intoReply reply: inout xpc_object_t) throws {
-        let encodedError = try XPCEncoder.encode(error)
-        xpc_dictionary_set_value(reply, ResponseKeys.error, encodedError)
+        xpc_dictionary_set_value(reply, ResponseKeys.error, try XPCEncoder.encode(error))
+    }
+    
+    /// Creates the remaining portion of a response by directly encoding the request ID into the XPC reply dictionary.
+    static func encodeRequestID(_ requestID: UUID, intoReply reply: inout xpc_object_t) throws {
+        xpc_dictionary_set_value(reply, ResponseKeys.requestID, try XPCEncoder.encode(requestID))
     }
     
     /// Decodes the reply as the provided type.

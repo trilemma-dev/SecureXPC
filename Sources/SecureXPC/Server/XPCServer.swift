@@ -305,14 +305,14 @@ public class XPCServer {
             request = try Request(dictionary: message)
         } catch {
             var reply = xpc_dictionary_create_reply(message)
-            self.handleError(error, connection: connection, reply: &reply)
+            self.handleError(error, request: nil, connection: connection, reply: &reply)
             return
         }
         
         guard let handler = self.routes[request.route] else {
             let error = XPCError.routeNotRegistered(request.route.pathComponents)
             var reply = xpc_dictionary_create_reply(message)
-            self.handleError(error, connection: connection, reply: &reply)
+            self.handleError(error, request: request, connection: connection, reply: &reply)
             return
         }
         
@@ -321,13 +321,9 @@ public class XPCServer {
                 var reply = xpc_dictionary_create_reply(message)
                 do {
                     try handler.handle(request: request, reply: &reply)
-                    
-                    // If a dictionary reply exists, then the message expects a reply to be sent back
-                    if let reply = reply {
-                        xpc_connection_send_message(connection, reply)
-                    }
+                    try maybeSendReply(&reply, request: request, connection: connection)
                 } catch {
-                    self.handleError(error, connection: connection, reply: &reply)
+                    self.handleError(error, request: request, connection: connection, reply: &reply)
                 }
             }
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
@@ -336,13 +332,9 @@ public class XPCServer {
                     var reply = xpc_dictionary_create_reply(message)
                     do {
                         try await handler.handle(request: request, reply: &reply)
-                        
-                        // If a dictionary reply exists, then the message expects a reply to be sent back
-                        if let reply = reply {
-                            xpc_connection_send_message(connection, reply)
-                        }
+                        try maybeSendReply(&reply, request: request, connection: connection)
                     } catch {
-                        self.handleError(error, connection: connection, reply: &reply)
+                        self.handleError(error, request: request, connection: connection, reply: &reply)
                     }
                 }
             }
@@ -395,18 +387,31 @@ public class XPCServer {
         self.errorHandler = .async(handler)
     }
     
-    private func handleError(_ error: Error, connection: xpc_connection_t, reply: inout xpc_object_t?) {
+    private func handleError(
+        _ error: Error,
+        request: Request?,
+        connection: xpc_connection_t,
+        reply: inout xpc_object_t?
+    ) {
         let error = XPCError.asXPCError(error: error)
         self.errorHandler.handle(error)
         
         // If it's possible to reply, then send the error back to the client
-        if var reply = reply {
+        if var nonNilReply = reply {
             do {
-                try Response.encodeError(error, intoReply: &reply)
-                xpc_connection_send_message(connection, reply)
+                try Response.encodeError(error, intoReply: &nonNilReply)
+                try maybeSendReply(&reply, request: request, connection: connection)
             } catch {
-                // If encoding the error fails, then there's no way to proceed
+                // If these actions fail, then there's no way to proceed
             }
+        }
+    }
+    
+    /// Tries to send a reply if the `reply` and `request` objects aren't nil.
+    private func maybeSendReply(_ reply: inout xpc_object_t?, request: Request?, connection: xpc_connection_t) throws {
+        if var reply = reply, let request = request {
+            try Response.encodeRequestID(request.requestID, intoReply: &reply)
+            xpc_connection_send_message(connection, reply)
         }
     }
 
