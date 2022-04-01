@@ -77,4 +77,39 @@ class ServerErrorHandlerTest: XCTestCase {
         
         self.waitForExpectations(timeout: 1)
     }
+    
+    func testErrorHandler_ReplySequence_Sync() throws {
+        
+        let errorToThrow = ExampleError.completeAndUtterFailure
+        let errorExpectation = self.expectation(description: "\(errorToThrow) should be provided to error handler")
+        
+        let failureRoute = XPCRoute.named("eventually", "throws")
+                                   .withMessageType(String.self)
+                                   .withReplySequenceType(String.self)
+        let server = XPCServer.makeAnonymous()
+        let client = XPCClient.forEndpoint(server.endpoint)
+        
+        server.registerRoute(failureRoute) { (_: String, provider: XPCServer.SequenceProvider<String>) -> Void in
+            provider.fail(error: errorToThrow)
+        }
+        server.setErrorHandler { error in
+            switch error {
+                case .handlerError(let error):
+                    if case let .available(underlyingError) = error.underlyingError,
+                       underlyingError as? ExampleError == errorToThrow {
+                        errorExpectation.fulfill()
+                    } else {
+                        XCTFail("Unexpected underlying error: \(error)")
+                    }
+                default:
+                    XCTFail("Unexpected error: \(error)")
+            }
+        }
+        
+        server.start()
+        
+        client.sendMessage("hello", to: failureRoute, withPartialResponse: { _ in })
+        
+        self.waitForExpectations(timeout: 1)
+    }
 }

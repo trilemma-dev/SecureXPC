@@ -26,6 +26,8 @@ public enum XPCError: Error, Codable {
     /// A request was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
     /// client.
     case insecure
+    /// A response cannot be sent because the client is no longer connected.
+    case clientNotConnected
     /// Failed to encode a request or response in order to send it across the XPC connection.
     ///
     /// The associated value describes this encoding error.

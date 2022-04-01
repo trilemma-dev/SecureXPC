@@ -169,14 +169,10 @@ public class XPCClient {
 
     private var connection: xpc_connection_t? = nil
     
-    /// Creates a client which will attempt to send messages to the specified mach service.
-    ///
-    /// - Parameters:
-    ///   - serviceName: The name of the XPC service; no validation is performed on this.
     internal init(connection: xpc_connection_t? = nil) {
         self.connection = connection
         if let connection = connection {
-            xpc_connection_set_event_handler(connection, self.handleConnectionErrors(event:))
+            xpc_connection_set_event_handler(connection, self.handleEvent(event:))
         }
     }
     
@@ -184,6 +180,11 @@ public class XPCClient {
     
     /// Receives the result of a request. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
     public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
+    
+    /// Receives the partial result of a request. The partial result is an instance of the reply sequence type on success, an ``XPCError`` on failure, or
+    /// ``PartialResult/finished`` if the sequence has been terminated.
+    public typealias XPCPartialResponseHandler<S> = (PartialResult<S, XPCError>) -> Void
+    
     
     /// Sends a request with no message that does not receive a reply.
     ///
@@ -335,6 +336,45 @@ public class XPCClient {
         }
     }
     
+    public func sendMessage<M: Encodable, S: Decodable>(
+        _ message: M,
+        to route: XPCRouteWithMessageWithReplySequence<M, S>,
+        withPartialResponse handler: @escaping XPCPartialResponseHandler<S>
+    ) {
+        do {
+            let request = try Request(route: route.route, payload: message)
+            sendRequest(request, withPartialResponse: handler)
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+        }
+    }
+    
+    private func sendRequest<S: Decodable>(_ request: Request,
+                                           withPartialResponse handler: @escaping XPCPartialResponseHandler<S>) {
+        // Get the connection or inform the handler of failure and return
+        let connection: xpc_connection_t
+        do {
+            connection = try getConnection()
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+            return
+        }
+        
+        // Wrap the handler such that it captures `S` which enables the payload to be decoded
+        let wrappedHandler = { (response: Response) throws -> Void in
+            if response.containsPayload {
+                handler(.success(try response.decodePayload(asType: S.self)))
+            } else if response.containsError {
+                handler(.failure(try response.decodeError()))
+            } else {
+                handler(.finished)
+            }
+        }
+        InProgressReplySequences.instance.registerHandler(wrappedHandler, forRequest: request)
+        
+        xpc_connection_send_message(connection, request.dictionary)
+    }
+    
     /// Does the actual work of sending an XPC message which receives a response.
     private func sendRequest<R: Decodable>(_ request: Request,
                                            withResponse handler: @escaping XPCResponseHandler<R>) {
@@ -368,7 +408,7 @@ public class XPCClient {
             } else {
                 result = .failure(XPCError.fromXPCObject(reply))
             }
-            self.handleConnectionErrors(event: reply)
+            self.handleError(event: reply)
             handler(result)
         }
     }
@@ -410,13 +450,36 @@ public class XPCClient {
         let newConnection = try self.createConnection()
         self.connection = newConnection
 
-        xpc_connection_set_event_handler(newConnection, self.handleConnectionErrors(event:))
+        xpc_connection_set_event_handler(newConnection, self.handleEvent(event:))
         xpc_connection_resume(newConnection)
 
         return newConnection
     }
+    
+    private func handleEvent(event: xpc_object_t) {
+        if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
+            do {
+                try self.handleMessage(event)
+            } catch {
+                // TODO: where should these errors be reported?
+            }
+        } else if xpc_get_type(event) == XPC_TYPE_ERROR {
+            self.handleError(event: event)
+        } else {
+            // This is unexpected behavior
+        }
+    }
+    
+    private func handleMessage(_ message: xpc_object_t) throws {
+        let requestID = try Response.decodeRequestID(dictionary: message)
+        guard let route = InProgressReplySequences.instance.routeForRequestID(requestID) else {
+            return
+        }
+        let response = try Response(dictionary: message, route: route)
+        try InProgressReplySequences.instance.provideResponse(response)
+    }
 
-    private func handleConnectionErrors(event: xpc_object_t) {
+    private func handleError(event: xpc_object_t) {
         if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
             // Paraphrasing from Apple documentation:
             //   If the named service provided could not be found in the XPC service namespace. The connection is
@@ -460,5 +523,56 @@ public class XPCClient {
     /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() throws -> xpc_connection_t {
         fatalError("Abstract Method")
+    }
+}
+
+/// Encapsulates all in progress requests which were made to the server that could still receive more out-of-band message sends which need to be reassociated
+/// with their requests in order to become reply sequences.
+fileprivate class InProgressReplySequences {
+    static let instance = InProgressReplySequences()
+    
+    typealias ResponseHandler = (Response) throws -> Void
+    
+    private var handlers = [UUID : ResponseHandler]()
+    private var routes = [UUID : XPCRoute]()
+    private let serialQueue = DispatchQueue(label: String(describing: InProgressReplySequences.self))
+    
+    private init() { }
+    
+    func registerHandler(_ handler: @escaping ResponseHandler, forRequest request: Request) {
+        serialQueue.sync {
+            handlers[request.requestID] = handler
+            routes[request.requestID] = request.route
+        }
+    }
+    
+    func routeForRequestID(_ requestID: UUID) -> XPCRoute? {
+        serialQueue.sync {
+            routes[requestID]
+        }
+    }
+    
+    func provideResponse(_ response: Response) throws {
+        let handler = serialQueue.sync { () -> ResponseHandler in
+            let handler: ResponseHandler?
+            /// Remove the handler if the sequence has finished or errored out
+            if response.containsPayload {
+                handler = handlers[response.requestID]
+            } else if response.containsError {
+                handler = handlers.removeValue(forKey: response.requestID)
+                routes.removeValue(forKey: response.requestID)
+            } else { // Finished
+                handler = handlers.removeValue(forKey: response.requestID)
+                routes.removeValue(forKey: response.requestID)
+            }
+            guard let handler = handler else {
+                fatalError("Partial result was received for an unregistered requestID: \(response.requestID)")
+            }
+            
+            return handler
+        }
+        
+        // TODO: Allow for the user to specify a DispatchQueue for this to run on?
+        try handler(response)
     }
 }
