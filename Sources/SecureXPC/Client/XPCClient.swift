@@ -167,6 +167,8 @@ public class XPCClient {
 
     // MARK: Implementation
 
+    private let inProgressReplySequences = InProgressReplySequences()
+    
     private var connection: xpc_connection_t? = nil
     
     internal init(connection: xpc_connection_t? = nil) {
@@ -336,6 +338,29 @@ public class XPCClient {
         }
     }
     
+    /// Sends a request with no message and provides partial response to the provide closure.
+    ///
+    /// - Parameters:
+    ///   - route: The server route which will handle this request.
+    ///   - handler: A closure to receive zero or more of request's responses.
+    public func send<S: Decodable>(
+        to route: XPCRouteWithoutMessageWithReplySequence<S>,
+        withPartialResponse handler: @escaping XPCPartialResponseHandler<S>
+    ) {
+        do {
+            let request = try Request(route: route.route)
+            sendRequest(request, withPartialResponse: handler)
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+        }
+    }
+    
+    /// Sends a request with a message and provides partial response to the provide closure.
+    ///
+    /// - Parameters:
+    ///   - message: Message to be included in the request.
+    ///   - route: The server route which will handle this request.
+    ///   - handler: A closure to receive zero or more of request's responses.
     public func sendMessage<M: Encodable, S: Decodable>(
         _ message: M,
         to route: XPCRouteWithMessageWithReplySequence<M, S>,
@@ -349,6 +374,7 @@ public class XPCClient {
         }
     }
     
+    /// Does the actual work of sending an XPC request which receives zero or more partial responses.
     private func sendRequest<S: Decodable>(_ request: Request,
                                            withPartialResponse handler: @escaping XPCPartialResponseHandler<S>) {
         // Get the connection or inform the handler of failure and return
@@ -370,12 +396,12 @@ public class XPCClient {
                 handler(.finished)
             }
         }
-        InProgressReplySequences.instance.registerHandler(wrappedHandler, forRequest: request)
+        self.inProgressReplySequences.registerHandler(wrappedHandler, forRequest: request)
         
         xpc_connection_send_message(connection, request.dictionary)
     }
     
-    /// Does the actual work of sending an XPC message which receives a response.
+    /// Does the actual work of sending an XPC request which receives a response.
     private func sendRequest<R: Decodable>(_ request: Request,
                                            withResponse handler: @escaping XPCResponseHandler<R>) {
         // Get the connection or inform the handler of failure and return
@@ -472,11 +498,11 @@ public class XPCClient {
     
     private func handleMessage(_ message: xpc_object_t) throws {
         let requestID = try Response.decodeRequestID(dictionary: message)
-        guard let route = InProgressReplySequences.instance.routeForRequestID(requestID) else {
+        guard let route = self.inProgressReplySequences.routeForRequestID(requestID) else {
             return
         }
         let response = try Response(dictionary: message, route: route)
-        try InProgressReplySequences.instance.provideResponse(response)
+        try self.inProgressReplySequences.provideResponse(response)
     }
 
     private func handleError(event: xpc_object_t) {
@@ -529,15 +555,11 @@ public class XPCClient {
 /// Encapsulates all in progress requests which were made to the server that could still receive more out-of-band message sends which need to be reassociated
 /// with their requests in order to become reply sequences.
 fileprivate class InProgressReplySequences {
-    static let instance = InProgressReplySequences()
-    
     typealias ResponseHandler = (Response) throws -> Void
     
     private var handlers = [UUID : ResponseHandler]()
     private var routes = [UUID : XPCRoute]()
     private let serialQueue = DispatchQueue(label: String(describing: InProgressReplySequences.self))
-    
-    private init() { }
     
     func registerHandler(_ handler: @escaping ResponseHandler, forRequest request: Request) {
         serialQueue.sync {

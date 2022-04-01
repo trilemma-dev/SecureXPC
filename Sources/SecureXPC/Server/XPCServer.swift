@@ -254,12 +254,33 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler))
     }
     
-    public func registerRoute<M: Decodable, S: Encodable>(_ route: XPCRouteWithMessageWithReplySequence<M, S>,
-                                                          handler: @escaping (M, SequenceProvider<S>) -> Void) {
-        self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplySequenceSync(handler: handler))
+    /// Registers a route for a request without a message that can provide zero or more partial replies.
+    ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has no message and can provide zero or more partial responses.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    public func registerRoute<S: Encodable>(_ route: XPCRouteWithoutMessageWithReplySequence<S>,
+                                            handler: @escaping (PartialResponseProvider<S>) -> Void) {
+        let constrainedHandler = ConstrainedXPCHandlerWithoutMessageWithReplySequenceSync(handler: handler)
+        self.registerRoute(route.route, handler: constrainedHandler)
     }
     
-    public struct SequenceProvider<S: Encodable> {
+    /// Registers a route for a request with a message that can provide zero or more partial replies.
+    ///
+    /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
+    ///
+    /// - Parameters:
+    ///   - route: A route that has a message and can provide zero or more partial responses.
+    ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
+    public func registerRoute<M: Decodable, S: Encodable>(_ route: XPCRouteWithMessageWithReplySequence<M, S>,
+                                                          handler: @escaping (M, PartialResponseProvider<S>) -> Void) {
+        let constrainedHandler = ConstrainedXPCHandlerWithMessageWithReplySequenceSync(handler: handler)
+        self.registerRoute(route.route, handler: constrainedHandler)
+    }
+    
+    public struct PartialResponseProvider<S: Encodable> {
         private let requestID: UUID
         private weak var server: XPCServer?
         private weak var connection: xpc_connection_t?
@@ -785,11 +806,21 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R
     }
 }
 
-fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySequenceSync<M: Decodable, S: Encodable>: XPCHandlerSync {
-    let handler: (M, XPCServer.SequenceProvider<S>) -> Void
+fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySequenceSync<S: Encodable>: XPCHandlerSync {
+    let handler: (XPCServer.PartialResponseProvider<S>) -> Void
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        let sequenceProvider = XPCServer.SequenceProvider<S>(request: request, server: server, connection: connection)
+        let sequenceProvider = XPCServer.PartialResponseProvider<S>(request: request, server: server, connection: connection)
+        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil, replySequenceType: S.self)
+        self.handler(sequenceProvider)
+    }
+}
+
+fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySequenceSync<M: Decodable, S: Encodable>: XPCHandlerSync {
+    let handler: (M, XPCServer.PartialResponseProvider<S>) -> Void
+    
+    func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
+        let sequenceProvider = XPCServer.PartialResponseProvider<S>(request: request, server: server, connection: connection)
         try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil, replySequenceType: S.self)
         let decodedMessage = try request.decodePayload(asType: M.self)
         self.handler(decodedMessage, sequenceProvider)

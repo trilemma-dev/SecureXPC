@@ -92,27 +92,6 @@ public struct XPCRoute {
     let replyType: String?
     let replySequenceType: String?
     
-    enum ExpectedResponse {
-        /// No response at all is expected from the server.
-        ///     OR
-        /// The server is expected to reply without a value on handler completion or with an error if one was thrown.
-        case noneOrCompletion
-        /// The server is expected to reply with the route's reply type on handler completion or with an error if one was thrown.
-        case reply
-        /// The server is expected to send zero or more out-of-band "replies" of the specified type or if an error occurred.
-        case replySequence
-    }
-    
-    var expectedResponse: ExpectedResponse {
-        if replyType != nil {
-            return .reply
-        } else if replySequenceType != nil {
-            return .replySequence
-        } else {
-            return .noneOrCompletion
-        }
-    }
-    
     /// Represents all valid route configurations.
     ///
     /// Using an enum to enumerate these cases is intended to prevent invalid configurations such as having both a reply and reply sequence.

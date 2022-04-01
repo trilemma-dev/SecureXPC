@@ -79,17 +79,15 @@ class ServerErrorHandlerTest: XCTestCase {
     }
     
     func testErrorHandler_ReplySequence_Sync() throws {
-        
         let errorToThrow = ExampleError.completeAndUtterFailure
         let errorExpectation = self.expectation(description: "\(errorToThrow) should be provided to error handler")
         
         let failureRoute = XPCRoute.named("eventually", "throws")
-                                   .withMessageType(String.self)
                                    .withReplySequenceType(String.self)
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         
-        server.registerRoute(failureRoute) { (_: String, provider: XPCServer.SequenceProvider<String>) -> Void in
+        server.registerRoute(failureRoute) { (provider: XPCServer.PartialResponseProvider<String>) -> Void in
             provider.fail(error: errorToThrow)
         }
         server.setErrorHandler { error in
@@ -108,7 +106,7 @@ class ServerErrorHandlerTest: XCTestCase {
         
         server.start()
         
-        client.sendMessage("hello", to: failureRoute, withPartialResponse: { _ in })
+        client.send(to: failureRoute, withPartialResponse: { _ in })
         
         self.waitForExpectations(timeout: 1)
     }

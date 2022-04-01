@@ -208,6 +208,41 @@ class RoundTripIntegrationTest: XCTestCase {
         await self.waitForExpectations(timeout: 1)
     }
     
+    
+    func testSendWithoutMessageWithReplySequence_SyncClient_SyncServer() throws {
+        let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
+        
+        let noMessageWithReplySequenceRoute = XPCRoute.named("noMsgWithReplySequence")
+                                                      .withReplySequenceType(Int.self)
+        let valuesExpected = 5
+        anonymousServer.registerRoute(noMessageWithReplySequenceRoute) {
+            (provider: XPCServer.PartialResponseProvider<Int>) -> Void in
+            
+            for n in 1...valuesExpected {
+                provider.providePartialValue(n)
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            
+            provider.finish()
+        }
+        
+        var valuesReceived = 0
+        xpcClient.send(to: noMessageWithReplySequenceRoute) { partialResult in
+            switch partialResult {
+                case .success(_):
+                    valuesReceived += 1
+                case .failure(let error):
+                    XCTFail("Unexpected error: \(error)")
+                case .finished:
+                    if valuesExpected == valuesReceived {
+                        fullSequenceReceived.fulfill()
+                    }
+            }
+        }
+        
+        self.waitForExpectations(timeout: 1)
+    }
+    
     func testSendWithMessageWithReplySequence_SyncClient_SyncServer() throws {
         let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
         
@@ -215,7 +250,7 @@ class RoundTripIntegrationTest: XCTestCase {
                                                     .withMessageType(Int.self)
                                                     .withReplySequenceType(Int.self)
         anonymousServer.registerRoute(messageWithReplySequenceRoute) {
-            (upperLimit: Int, provider: XPCServer.SequenceProvider<Int>) -> Void in
+            (upperLimit: Int, provider: XPCServer.PartialResponseProvider<Int>) -> Void in
             
             for n in 1...upperLimit {
                 provider.providePartialValue(n)
