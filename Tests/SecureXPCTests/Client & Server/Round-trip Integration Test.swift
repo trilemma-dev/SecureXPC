@@ -217,7 +217,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in            
             for n in 1...valuesExpected {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()
@@ -247,7 +247,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in
             for n in 1...valuesExpected {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()
@@ -272,7 +272,7 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider async in
             for n in 1...valuesExpected {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()
@@ -298,7 +298,7 @@ class RoundTripIntegrationTest: XCTestCase {
                                                     .withSequentialReplyType(Int.self)
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
             for n in 1...upperLimit {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()
@@ -331,7 +331,7 @@ class RoundTripIntegrationTest: XCTestCase {
         var valuesReceived = 0
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
             for n in 1...upperLimit {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()
@@ -357,7 +357,7 @@ class RoundTripIntegrationTest: XCTestCase {
         var valuesReceived = 0
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider async in
             for n in 1...upperLimit {
-                provider.yield(n)
+                provider.replyWithValue(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
             provider.finishSuccesfully()

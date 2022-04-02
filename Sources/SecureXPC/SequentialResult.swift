@@ -5,7 +5,7 @@
 //  Created by Josh Kaplan on 2022-03-31.
 //
 
-/// A value that represents a success, a failure, or completion of the sequence along with an associated value.
+/// A value that represents a success, a failure, or completion of the sequence.
 ///
 /// `SequentialResult` is similar to [`Result`](https://developer.apple.com/documentation/swift/result), but represents one of arbitrarily
 /// many results that are returned in response to a request.

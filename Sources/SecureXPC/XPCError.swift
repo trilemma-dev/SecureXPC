@@ -28,8 +28,6 @@ public enum XPCError: Error, Codable {
     case insecure
     /// A response cannot be sent because the client is no longer connected.
     case clientNotConnected
-    /// A response cannot be sent because the sequence has already been finished.
-    case sequenceFinished
     /// Failed to encode a request or response in order to send it across the XPC connection.
     ///
     /// The associated value describes this encoding error.

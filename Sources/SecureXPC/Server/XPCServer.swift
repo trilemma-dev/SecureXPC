@@ -902,6 +902,19 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySequenceAsync<M: Dec
 
 // MARK: SequentialResultProvider
 
+/// Sends responses to an XPC client for a specific route.
+///
+/// Instances of this class are provided to handlers registered with an ``XPCServer`` for routes with sequential reply types. It is valid to use an instance of this
+/// class outside of the closure it was provided to and it will continue to send responses so long as the client remains connected.
+///
+/// ## Topics
+/// ### Replying
+/// - ``reply(_:)``
+/// - ``reply(result:)``
+/// - ``replyWithValue(_:)``
+/// ### Finishing
+/// - ``finishSuccesfully()``
+/// - ``finishWithError(_:)``
 public class SequentialResultProvider<S: Encodable> {
     private let requestID: UUID
     private var isFinished = false
@@ -914,23 +927,35 @@ public class SequentialResultProvider<S: Encodable> {
         self.connection = connection
     }
     
-    /// Provide a closure whose output will result in either a successful reply if a value was returned or finish the sequence if an error was thrown.
+    /// Replies to the client with a value or error based on the result of running the provided closure.
     ///
-    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
-    /// handler and no reply sent to the client.
-    public func yield(_ workItem:() throws -> S) {
+    /// > Note: Calling this function after a sequence has finished is a programming error.
+    public func reply(_ closure:() throws -> S) {
         do {
-            self.yield(try workItem())
+            self.replyWithValue(try closure())
         } catch {
             self.finishWithError(error)
         }
     }
     
+    /// Replies to the client with the provided result.
+    ///
+    /// > Note: Calling this function after a sequence has finished is a programming error.
+    public func reply(result: SequentialResult<S, Error>) {
+        switch result {
+            case .success(let value):
+                self.replyWithValue(value)
+            case .failure(let error):
+                self.finishWithError(error)
+            case .finished:
+                self.finishSuccesfully()
+        }
+    }
+    
     /// Replies to the client with the provided value.
     ///
-    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
-    /// handler and no reply sent to the client.
-    public func yield(_ value: S) {
+    /// > Note: Calling this function after a sequence has finished is a programming error.
+    public func replyWithValue(_ value: S) {
         self.sendResponse { response in
             try Response.encodePayload(value, intoReply: &response)
         }
@@ -938,8 +963,7 @@ public class SequentialResultProvider<S: Encodable> {
     
     /// Replies to the client with the provided error and finishes the sequence.
     ///
-    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
-    /// handler and no reply sent to the client.
+    /// > Note: Calling this function after a sequence has finished is a programming error.
     public func finishWithError(_ error: Error) {
         let handlerError = XPCError.handlerError(HandlerError(error: error))
         if let server = server {
@@ -953,8 +977,7 @@ public class SequentialResultProvider<S: Encodable> {
     
     /// Replies to the client indicating the sequence is now finished.
     ///
-    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
-    /// handler and no reply sent to the client.
+    /// > Note: Calling this function after a sequence has finished is a programming error.
     public func finishSuccesfully() {
         // An "empty" response indicates it's finished
         self.sendResponse { _ in }
@@ -963,9 +986,7 @@ public class SequentialResultProvider<S: Encodable> {
     
     private func sendResponse(encodingWork: (inout xpc_object_t) throws -> Void) {
         if self.isFinished {
-            if let server = server {
-                server.errorHandler.handle(XPCError.sequenceFinished)
-            }
+            fatalError("Sequence is already finished")
         } else if let connection = connection {
             var response = xpc_dictionary_create(nil, nil, 0)
             do {
