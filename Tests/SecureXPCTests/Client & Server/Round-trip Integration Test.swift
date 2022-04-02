@@ -213,17 +213,14 @@ class RoundTripIntegrationTest: XCTestCase {
         let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
         
         let noMessageWithReplySequenceRoute = XPCRoute.named("noMsgWithReplySequence")
-                                                      .withReplySequenceType(Int.self)
+                                                      .withSequentialReplyType(Int.self)
         let valuesExpected = 5
-        anonymousServer.registerRoute(noMessageWithReplySequenceRoute) {
-            (provider: XPCServer.SequentialResultProvider<Int>) -> Void in
-            
+        anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in            
             for n in 1...valuesExpected {
-                provider.providePartialValue(n)
+                provider.yield(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            
-            provider.finish()
+            provider.finishSuccesfully()
         }
         
         var valuesReceived = 0
@@ -243,21 +240,44 @@ class RoundTripIntegrationTest: XCTestCase {
         self.waitForExpectations(timeout: 1)
     }
     
+    func testSendWithoutMessageWithReplySequence_AsyncClient_SyncServer() async throws {
+        let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
+        let noMessageWithReplySequenceRoute = XPCRoute.named("noMsgWithReplySequence")
+                                                      .withSequentialReplyType(Int.self)
+        let valuesExpected = 5
+        anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in
+            for n in 1...valuesExpected {
+                provider.yield(n)
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            provider.finishSuccesfully()
+        }
+        
+        
+        var valuesReceived = 0
+        let sequence = xpcClient.send(to: noMessageWithReplySequenceRoute)
+        for try await _ in sequence {
+            valuesReceived += 1
+        }
+        if valuesReceived == valuesExpected {
+            fullSequenceReceived.fulfill()
+        }
+        
+        await self.waitForExpectations(timeout: 1)
+    }
+    
     func testSendWithMessageWithReplySequence_SyncClient_SyncServer() throws {
         let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
         
         let messageWithReplySequenceRoute = XPCRoute.named("msgWithReplySequence")
                                                     .withMessageType(Int.self)
-                                                    .withReplySequenceType(Int.self)
-        anonymousServer.registerRoute(messageWithReplySequenceRoute) {
-            (upperLimit: Int, provider: XPCServer.SequentialResultProvider<Int>) -> Void in
-            
+                                                    .withSequentialReplyType(Int.self)
+        anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
             for n in 1...upperLimit {
-                provider.providePartialValue(n)
+                provider.yield(n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            
-            provider.finish()
+            provider.finishSuccesfully()
         }
         
         let valuesExpected = 5
@@ -276,5 +296,31 @@ class RoundTripIntegrationTest: XCTestCase {
         }
         
         self.waitForExpectations(timeout: 1)
+    }
+    
+    func testSendWithMessageWithReplySequence_AsyncClient_SyncServer() async throws {
+        let fullSequenceReceived = self.expectation(description: "The client received the full sequence")
+        let messageWithReplySequenceRoute = XPCRoute.named("msgWithReplySequence")
+                                                    .withMessageType(Int.self)
+                                                    .withSequentialReplyType(Int.self)
+        let valuesExpected = 5
+        var valuesReceived = 0
+        anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
+            for n in 1...upperLimit {
+                provider.yield(n)
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            provider.finishSuccesfully()
+        }
+        
+        let sequence = xpcClient.sendMessage(valuesExpected, to: messageWithReplySequenceRoute)
+        for try await _ in sequence {
+            valuesReceived += 1
+        }
+        if valuesReceived == valuesExpected {
+            fullSequenceReceived.fulfill()
+        }
+        
+        await self.waitForExpectations(timeout: 1)
     }
 }

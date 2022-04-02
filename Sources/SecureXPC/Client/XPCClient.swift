@@ -99,15 +99,20 @@ import Foundation
 /// ### Sending Requests with Async
 /// - ``send(to:)-5b1ar``
 /// - ``send(to:)-18k1k``
+/// - ``send(to:)-7rreg``
 /// - ``sendMessage(_:to:)-9t25c``
 /// - ``sendMessage(_:to:)-68i1h``
+/// - ``sendMessage(_:to:)-5vdys``
 /// ### Sending Requests with Closures
 /// - ``send(to:onCompletion:)``
 /// - ``send(to:withResponse:)``
+/// - ``send(to:withSequentialResponse:)``
 /// - ``sendMessage(_:to:onCompletion:)``
 /// - ``sendMessage(_:to:withResponse:)``
-/// ### Receiving Responses
+/// - ``sendMessage(_:to:withSequentialResponse:)``
+/// ### Receiving Responses with Closures
 /// - ``XPCResponseHandler``
+/// - ``XPCSequentialResponseHandler``
 /// ### Client Information
 /// - ``serviceName``
 public class XPCClient {
@@ -180,10 +185,14 @@ public class XPCClient {
     
     // MARK: Send
     
-    /// Receives the result of a request. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
+    /// Receives the result of a request.
+    ///
+    /// The result is either an instance of the reply type on success or an ``XPCError`` on failure.
     public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
     
-    /// Receives the sequential result of a request. The result is an instance of the sequential reply type on success, an ``XPCError`` on failure, or
+    /// Receives the sequential result of a request.
+    ///
+    /// The result is an instance of the sequential reply type on success, an ``XPCError`` on failure, or
     /// ``SequentialResult/finished`` if the sequence has been completed.
     public typealias XPCSequentialResponseHandler<S> = (SequentialResult<S, XPCError>) -> Void
     
@@ -337,7 +346,7 @@ public class XPCClient {
         }
     }
     
-    /// Sends a request with no message and provides sequential responses to the provide closure.
+    /// Sends a request with no message and provides sequential responses to the provided closure.
     ///
     /// - Parameters:
     ///   - route: The server route which will handle this request.
@@ -354,7 +363,22 @@ public class XPCClient {
         }
     }
     
-    /// Sends a request with a message and provides sequential response to the provide closure.
+    /// Sends a request with no message and asynchronously populates the returned stream with responses.
+    ///
+    /// - Parameters:
+    ///   - route: The server route which will handle this request.
+    @available(macOS 10.15.0, *)
+    public func send<S: Decodable>(
+        to route: XPCRouteWithoutMessageWithSequentialReply<S>
+    ) -> AsyncThrowingStream<S, Error> {
+        AsyncThrowingStream<S, Error> { continuation in
+            self.send(to: route) { result in
+                self.populateAsyncThrowingStreamContinuation(continuation, result: result)
+            }
+        }
+    }
+    
+    /// Sends a request with a message and provides sequential response to the provided closure.
     ///
     /// - Parameters:
     ///   - message: Message to be included in the request.
@@ -373,9 +397,27 @@ public class XPCClient {
         }
     }
     
+    /// Sends a request with a message and asynchronously populates the returned stream with responses.
+    ///
+    /// - Parameters:
+    ///   - message: Message to be included in the request.
+    ///   - route: The server route which will handle this request.
+    @available(macOS 10.15.0, *)
+    public func sendMessage<M: Encodable, S: Decodable>(
+        _ message: M,
+        to route: XPCRouteWithMessageWithSequentialReply<M, S>
+    ) -> AsyncThrowingStream<S, Error> {
+        AsyncThrowingStream<S, Error> { continuation in
+            self.sendMessage(message, to: route) { result in
+                self.populateAsyncThrowingStreamContinuation(continuation, result: result)
+            }
+        }
+    }
+    
+    // MARK: Send (private internals)
+    
     /// Does the actual work of sending an XPC request which receives zero or more sequential responses.
-    private func sendRequest<S: Decodable>(_ request: Request,
-                                        handler: @escaping XPCSequentialResponseHandler<S>) {
+    private func sendRequest<S: Decodable>(_ request: Request, handler: @escaping XPCSequentialResponseHandler<S>) {
         // Get the connection or inform the handler of failure and return
         let connection: xpc_connection_t
         do {
@@ -465,6 +507,28 @@ public class XPCClient {
             contination.resume(throwing: underlyingError)
         } else {
             contination.resume(with: response)
+        }
+    }
+    
+    /// Populates the continuation while unwrapping any underlying errors thrown by a server's handler.
+    @available(macOS 10.15.0, *)
+    private func populateAsyncThrowingStreamContinuation<S: Decodable>(
+        _ continuation: AsyncThrowingStream<S, Error>.Continuation,
+        result: SequentialResult<S, XPCError>
+    ) {
+        switch result {
+            case .success(let value):
+                continuation.yield(value)
+            case .failure(let error):
+                if case .handlerError(let handlerError) = error,
+                   case .available(let underlyingError) = handlerError.underlyingError {
+                    continuation.finish(throwing: underlyingError)
+                } else {
+                    continuation.finish(throwing: error)
+                }
+                continuation.finish(throwing: error)
+            case .finished:
+                continuation.finish(throwing: nil)
         }
     }
 

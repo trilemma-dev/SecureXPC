@@ -83,12 +83,12 @@ class ServerErrorHandlerTest: XCTestCase {
         let errorExpectation = self.expectation(description: "\(errorToThrow) should be provided to error handler")
         
         let failureRoute = XPCRoute.named("eventually", "throws")
-                                   .withReplySequenceType(String.self)
+                                   .withSequentialReplyType(String.self)
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         
-        server.registerRoute(failureRoute) { (provider: XPCServer.SequentialResultProvider<String>) -> Void in
-            provider.fail(error: errorToThrow)
+        server.registerRoute(failureRoute) { provider in
+            provider.finishWithError(errorToThrow)
         }
         server.setErrorHandler { error in
             switch error {
@@ -106,7 +106,7 @@ class ServerErrorHandlerTest: XCTestCase {
         
         server.start()
         
-        client.send(to: failureRoute, withPartialResponse: { _ in })
+        client.send(to: failureRoute, withSequentialResponse: { _ in })
         
         self.waitForExpectations(timeout: 1)
     }
