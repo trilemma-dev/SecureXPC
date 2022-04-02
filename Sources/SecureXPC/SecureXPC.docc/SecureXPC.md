@@ -77,14 +77,18 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCRoute``
 - ``XPCRouteWithoutMessageWithoutReply``
 - ``XPCRouteWithoutMessageWithReply``
-- ``XPCRouteWithoutMessageWithReplySequence``
+- ``XPCRouteWithoutMessageWithSequentialReply``
 - ``XPCRouteWithMessageWithoutReply``
 - ``XPCRouteWithMessageWithReply``
-- ``XPCRouteWithMessageWithReplySequence``
+- ``XPCRouteWithMessageWithSequentialReply``
 
 ### Errors
 - ``XPCError``
 - ``HandlerError``
+
+### Sequential Results
+- ``SequentialResult``
+- ``SequentialResultProvider``
 
 ### Other
 - ``XPCRequestContext``

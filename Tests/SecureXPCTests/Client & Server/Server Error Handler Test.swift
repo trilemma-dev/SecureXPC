@@ -87,7 +87,7 @@ class ServerErrorHandlerTest: XCTestCase {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         
-        server.registerRoute(failureRoute) { (provider: XPCServer.PartialResponseProvider<String>) -> Void in
+        server.registerRoute(failureRoute) { (provider: XPCServer.SequentialResultProvider<String>) -> Void in
             provider.fail(error: errorToThrow)
         }
         server.setErrorHandler { error in

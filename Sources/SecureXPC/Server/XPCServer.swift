@@ -254,109 +254,33 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler))
     }
     
-    /// Registers a route for a request without a message that can provide zero or more partial replies.
+    /// Registers a route for a request without a message that can provide zero or more sequential replies.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
-    ///   - route: A route that has no message and can provide zero or more partial responses.
+    ///   - route: A route that has no message and can provide zero or more sequential responses.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    public func registerRoute<S: Encodable>(_ route: XPCRouteWithoutMessageWithReplySequence<S>,
-                                            handler: @escaping (PartialResponseProvider<S>) -> Void) {
+    public func registerRoute<S: Encodable>(_ route: XPCRouteWithoutMessageWithSequentialReply<S>,
+                                            handler: @escaping (SequentialResultProvider<S>) -> Void) {
         let constrainedHandler = ConstrainedXPCHandlerWithoutMessageWithReplySequenceSync(handler: handler)
         self.registerRoute(route.route, handler: constrainedHandler)
     }
     
-    /// Registers a route for a request with a message that can provide zero or more partial replies.
+    /// Registers a route for a request with a message that can provide zero or more sequential replies.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
-    ///   - route: A route that has a message and can provide zero or more partial responses.
+    ///   - route: A route that has a message and can provide zero or more sequential responses.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
-    public func registerRoute<M: Decodable, S: Encodable>(_ route: XPCRouteWithMessageWithReplySequence<M, S>,
-                                                          handler: @escaping (M, PartialResponseProvider<S>) -> Void) {
+    public func registerRoute<M: Decodable, S: Encodable>(_ route: XPCRouteWithMessageWithSequentialReply<M, S>,
+                                                          handler: @escaping (M, SequentialResultProvider<S>) -> Void) {
         let constrainedHandler = ConstrainedXPCHandlerWithMessageWithReplySequenceSync(handler: handler)
         self.registerRoute(route.route, handler: constrainedHandler)
     }
     
-    public struct PartialResponseProvider<S: Encodable> {
-        private let requestID: UUID
-        private weak var server: XPCServer?
-        private weak var connection: xpc_connection_t?
-        
-        fileprivate init(request: Request, server: XPCServer, connection: xpc_connection_t) {
-            self.requestID = request.requestID
-            self.server = server
-            self.connection = connection
-        }
-        
-        public func provide(_ partialWork:() throws -> S) {
-            do {
-                self.providePartialValue(try partialWork())
-            } catch {
-                self.fail(error: error)
-            }
-        }
-        
-        public func providePartialValue(_ value: S) {
-            self.sendResponse { response in
-                try Response.encodePayload(value, intoReply: &response)
-            }
-        }
-        
-        public func fail(error: Error) {
-            let handlerError = XPCError.handlerError(HandlerError(error: error))
-            
-            if let server = server {
-                server.errorHandler.handle(handlerError)
-            }
-            
-            self.sendResponse { response in
-                try Response.encodeError(handlerError, intoReply: &response)
-            }
-        }
-        
-        public func finish() {
-            // An "empty" response indicates it's finished
-            self.sendResponse { _ in }
-        }
-        
-        private func sendResponse(encodingWork: (inout xpc_object_t) throws -> Void) {
-            if let connection = connection {
-                var response = xpc_dictionary_create(nil, nil, 0)
-                do {
-                    try Response.encodeRequestID(requestID, intoReply: &response)
-                } catch {
-                    // If we're not able to encode the requestID, there's no point sending back a response as the client
-                    // wouldn't be able to make use of it
-                    if let server = server {
-                        server.errorHandler.handle(XPCError.asXPCError(error: error))
-                    }
-                    return
-                }
-                
-                do {
-                    try encodingWork(&response)
-                    xpc_connection_send_message(connection, response)
-                } catch {
-                    let errorResponse = xpc_dictionary_create(nil, nil, 0)
-                    do {
-                        try Response.encodeRequestID(requestID, intoReply: &response)
-                        try Response.encodeError(XPCError.asXPCError(error: error), intoReply: &response)
-                    } catch {
-                        // Unable to send back the error, so just bail
-                        return
-                    }
-                    xpc_connection_send_message(connection, errorResponse)
-                }
-            } else {
-                if let server = server {
-                    server.errorHandler.handle(XPCError.clientNotConnected)
-                }
-            }
-        }
-    }
+    
     
     internal func startClientConnection(_ connection: xpc_connection_t) {
         // Listen for events (messages or errors) coming from this connection
@@ -474,7 +398,7 @@ public class XPCServer {
         }
     }
     
-    private var errorHandler = ErrorHandler.none
+    fileprivate var errorHandler = ErrorHandler.none
     
     /// Sets a handler to synchronously receive any errors encountered.
     ///
@@ -709,7 +633,7 @@ fileprivate protocol XPCHandler {}
 
 fileprivate extension XPCHandler {
     
-    /// Validates that the incoming request matches the handler in terms of the presence of a message and reply.
+    /// Validates that the incoming request matches the handler in terms of the presence of a message, reply, and/or sequential reply.
     ///
     /// The actual validation of the types themselves is performed as part of encoding/decoding and is intentionally not checked by this function.
     ///
@@ -718,13 +642,15 @@ fileprivate extension XPCHandler {
     ///   - reply: The XPC reply object, if one exists.
     ///   - messageType: The parameter type of the registered handler, if applicable.
     ///   - replyType: The return type of the registered handler, if applicable.
-    ///   - replySequenceType: The type used to provide partial results as part of the reply sequence, if applicable.
+    ///   - sequentialReplyType: The type used to provide sequential replies, if applicable.
     /// - Throws: If the check fails.
-    func checkMatchesRequest(_ request: Request,
-                             reply: inout xpc_object_t?,
-                             messageType: Any.Type?,
-                             replyType: Any.Type?,
-                             replySequenceType: Any.Type?) throws {
+    func checkRequest(
+        _ request: Request,
+        reply: inout xpc_object_t?,
+        messageType: Any.Type?,
+        replyType: Any.Type?,
+        sequentialReplyType: Any.Type?
+    ) throws {
         var errorMessages = [String]()
         // Message
         if messageType == nil, request.containsPayload {
@@ -745,13 +671,13 @@ fileprivate extension XPCHandler {
         }
         
         // Reply sequence
-        if replySequenceType != nil && request.route.replySequenceType == nil {
-            errorMessages.append("Request expects a reply sequence of type " +
-                                 String(describing: request.route.replySequenceType) + ", but the handler registered " +
-                                 "with the server does not generate a reply sequence.")
-        } else if replySequenceType == nil, let replySequenceType = request.route.replySequenceType {
-            errorMessages.append("Request does not expect a reply sequence, but the handler registered with the " +
-                                 "server has a reply sequence of type \(replySequenceType).")
+        if sequentialReplyType != nil && request.route.sequentialReplyType == nil {
+            errorMessages.append("Request expects a sequential reply of type " +
+                                 String(describing: request.route.sequentialReplyType) + ", but the handler registered " +
+                                 "with the server does not generate a sequential reply.")
+        } else if sequentialReplyType == nil, let replySequenceType = request.route.sequentialReplyType {
+            errorMessages.append("Request does not expect a sequential reply, but the handler registered with the " +
+                                 "server has a sequential reply of type \(replySequenceType).")
         }
         
         if !errorMessages.isEmpty {
@@ -770,7 +696,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplySync: XPCHandl
     let handler: () throws -> Void
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: nil, replyType: nil, sequentialReplyType: nil)
         try HandlerError.rethrow { try self.handler() }
     }
 }
@@ -779,7 +705,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplySync<M: Decodable
     let handler: (M) throws -> Void
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: M.self, replyType: nil, sequentialReplyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
         try HandlerError.rethrow { try self.handler(decodedMessage) }
     }
@@ -789,7 +715,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySync<R: Encodable
     let handler: () throws -> R
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: nil, replyType: R.self, sequentialReplyType: nil)
         let payload = try HandlerError.rethrow { try self.handler() }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
@@ -799,7 +725,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R
     let handler: (M) throws -> R
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: M.self, replyType: R.self, sequentialReplyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
         let payload = try HandlerError.rethrow { try self.handler(decodedMessage) }
         try Response.encodePayload(payload, intoReply: &reply!)
@@ -807,21 +733,21 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySync<M: Decodable, R
 }
 
 fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplySequenceSync<S: Encodable>: XPCHandlerSync {
-    let handler: (XPCServer.PartialResponseProvider<S>) -> Void
+    let handler: (SequentialResultProvider<S>) -> Void
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        let sequenceProvider = XPCServer.PartialResponseProvider<S>(request: request, server: server, connection: connection)
-        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil, replySequenceType: S.self)
+        try checkRequest(request, reply: &reply, messageType: nil, replyType: nil, sequentialReplyType: S.self)
+        let sequenceProvider = SequentialResultProvider<S>(request: request, server: server, connection: connection)
         self.handler(sequenceProvider)
     }
 }
 
 fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySequenceSync<M: Decodable, S: Encodable>: XPCHandlerSync {
-    let handler: (M, XPCServer.PartialResponseProvider<S>) -> Void
+    let handler: (M, SequentialResultProvider<S>) -> Void
     
     func handle(request: Request, server: XPCServer, connection: xpc_connection_t, reply: inout xpc_object_t?) throws {
-        let sequenceProvider = XPCServer.PartialResponseProvider<S>(request: request, server: server, connection: connection)
-        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil, replySequenceType: S.self)
+        try checkRequest(request, reply: &reply, messageType: M.self, replyType: nil, sequentialReplyType: S.self)
+        let sequenceProvider = SequentialResultProvider<S>(request: request, server: server, connection: connection)
         let decodedMessage = try request.decodePayload(asType: M.self)
         self.handler(decodedMessage, sequenceProvider)
     }
@@ -839,7 +765,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithoutReplyAsync: XPCHand
     let handler: () async throws -> Void
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: nil, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: nil, replyType: nil, sequentialReplyType: nil)
         try await HandlerError.rethrow { try await self.handler() }
     }
 }
@@ -849,7 +775,7 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithoutReplyAsync<M: Decodabl
     let handler: (M) async throws -> Void
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: nil, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: M.self, replyType: nil, sequentialReplyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
         try await HandlerError.rethrow { try await self.handler(decodedMessage) }
     }
@@ -860,7 +786,7 @@ fileprivate struct ConstrainedXPCHandlerWithoutMessageWithReplyAsync<R: Encodabl
     let handler: () async throws -> R
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: nil, replyType: R.self, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: nil, replyType: R.self, sequentialReplyType: nil)
         let payload = try await HandlerError.rethrow { try await self.handler() }
         try Response.encodePayload(payload, intoReply: &reply!)
     }
@@ -871,9 +797,110 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplyAsync<M: Decodable, 
     let handler: (M) async throws -> R
     
     func handle(request: Request, reply: inout xpc_object_t?) async throws {
-        try checkMatchesRequest(request, reply: &reply, messageType: M.self, replyType: R.self, replySequenceType: nil)
+        try checkRequest(request, reply: &reply, messageType: M.self, replyType: R.self, sequentialReplyType: nil)
         let decodedMessage = try request.decodePayload(asType: M.self)
         let payload = try await HandlerError.rethrow { try await self.handler(decodedMessage) }
         try Response.encodePayload(payload, intoReply: &reply!)
+    }
+}
+
+// MARK: SequentialResultProvider
+
+public class SequentialResultProvider<S: Encodable> {
+    private let requestID: UUID
+    private var isFinished = false
+    private weak var server: XPCServer?
+    private weak var connection: xpc_connection_t?
+    
+    fileprivate init(request: Request, server: XPCServer, connection: xpc_connection_t) {
+        self.requestID = request.requestID
+        self.server = server
+        self.connection = connection
+    }
+    
+    /// Provide a closure whose output will result in either a successful reply if a value was returned or finish the sequence if an error was thrown.
+    ///
+    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
+    /// handler and no reply sent to the client.
+    public func yield(_ workItem:() throws -> S) {
+        do {
+            self.yield(try workItem())
+        } catch {
+            self.finishWithError(error)
+        }
+    }
+    
+    /// Replies to the client with the provided value.
+    ///
+    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
+    /// handler and no reply sent to the client.
+    public func yield(_ value: S) {
+        self.sendResponse { response in
+            try Response.encodePayload(value, intoReply: &response)
+        }
+    }
+    
+    /// Replies to the client with the provided error and finishes the sequence.
+    ///
+    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
+    /// handler and no reply sent to the client.
+    public func finishWithError(_ error: Error) {
+        let handlerError = XPCError.handlerError(HandlerError(error: error))
+        if let server = server {
+            server.errorHandler.handle(handlerError)
+        }
+        self.sendResponse { response in
+            try Response.encodeError(handlerError, intoReply: &response)
+        }
+        self.isFinished = true
+    }
+    
+    /// Replies to the client indicating the sequence is now finished.
+    ///
+    /// > Note: Calling this function after a sequence has finished will result in ``XPCError/sequenceFinished`` being reported to the server's error
+    /// handler and no reply sent to the client.
+    public func finishSuccesfully() {
+        // An "empty" response indicates it's finished
+        self.sendResponse { _ in }
+        self.isFinished = true
+    }
+    
+    private func sendResponse(encodingWork: (inout xpc_object_t) throws -> Void) {
+        if self.isFinished {
+            if let server = server {
+                server.errorHandler.handle(XPCError.sequenceFinished)
+            }
+        } else if let connection = connection {
+            var response = xpc_dictionary_create(nil, nil, 0)
+            do {
+                try Response.encodeRequestID(requestID, intoReply: &response)
+            } catch {
+                // If we're not able to encode the requestID, there's no point sending back a response as the client
+                // wouldn't be able to make use of it
+                if let server = server {
+                    server.errorHandler.handle(XPCError.asXPCError(error: error))
+                }
+                return
+            }
+            
+            do {
+                try encodingWork(&response)
+                xpc_connection_send_message(connection, response)
+            } catch {
+                let errorResponse = xpc_dictionary_create(nil, nil, 0)
+                do {
+                    try Response.encodeRequestID(requestID, intoReply: &response)
+                    try Response.encodeError(XPCError.asXPCError(error: error), intoReply: &response)
+                } catch {
+                    // Unable to send back the error, so just bail
+                    return
+                }
+                xpc_connection_send_message(connection, errorResponse)
+            }
+        } else {
+            if let server = server {
+                server.errorHandler.handle(XPCError.clientNotConnected)
+            }
+        }
     }
 }

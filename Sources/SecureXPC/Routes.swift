@@ -90,18 +90,18 @@ public struct XPCRoute {
     
     let messageType: String?
     let replyType: String?
-    let replySequenceType: String?
+    let sequentialReplyType: String?
     
     /// Represents all valid route configurations.
     ///
-    /// Using an enum to enumerate these cases is intended to prevent invalid configurations such as having both a reply and reply sequence.
+    /// Using an enum to enumerate these cases is intended to prevent invalid configurations such as having both a reply and a sequential reply.
     enum RouteConfig {
         case withoutMessageWithoutReply
         case withoutMessageWithReply(Any.Type)
-        case withoutMessageWithReplySequence(Any.Type)
+        case withoutMessageWithSequentialReply(Any.Type)
         case withMessageWithoutReply(Any.Type)
         case withMessageWithReply(Any.Type, Any.Type)
-        case withMessageWithReplySequence(Any.Type, Any.Type)
+        case withMessageWithSequentialReply(Any.Type, Any.Type)
     }
     
     fileprivate init(pathComponents: [String],
@@ -115,32 +115,32 @@ public struct XPCRoute {
                 self.messageType = nil
                 self.replyType = nil
                 self.expectsReply = false
-                self.replySequenceType = nil
+                self.sequentialReplyType = nil
             case .withoutMessageWithReply(let replyType):
                 self.messageType = nil
                 self.replyType = String(describing: replyType)
                 self.expectsReply = replyType != Void.self
-                self.replySequenceType = nil
-            case .withoutMessageWithReplySequence(let replySequenceType):
+                self.sequentialReplyType = nil
+            case .withoutMessageWithSequentialReply(let sequentialReplyType):
                 self.messageType = nil
                 self.replyType = nil
                 self.expectsReply = false
-                self.replySequenceType = String(describing: replySequenceType)
+                self.sequentialReplyType = String(describing: sequentialReplyType)
             case .withMessageWithoutReply(let messageType):
                 self.messageType = String(describing: messageType)
                 self.replyType = nil
                 self.expectsReply = false
-                self.replySequenceType = nil
+                self.sequentialReplyType = nil
             case .withMessageWithReply(let messageType, let replyType):
                 self.messageType = String(describing: messageType)
                 self.replyType = String(describing: replyType)
                 self.expectsReply = replyType != Void.self
-                self.replySequenceType = nil
-            case .withMessageWithReplySequence(let messageType, let replySequenceType):
+                self.sequentialReplyType = nil
+            case .withMessageWithSequentialReply(let messageType, let sequentialReplyType):
                 self.messageType = String(describing: messageType)
                 self.replyType = nil
                 self.expectsReply = false
-                self.replySequenceType = String(describing: replySequenceType)
+                self.sequentialReplyType = String(describing: sequentialReplyType)
         }
     }
     
@@ -172,7 +172,7 @@ extension XPCRoute: Codable {
         case pathComponents
         case messageType
         case replyType
-        case replySequenceType
+        case sequentialReplyType
         case expectsReply
         // It is intentional errorTypes is not coded, see errorTypes declaration for explanation.
     }
@@ -182,7 +182,7 @@ extension XPCRoute: Codable {
         try container.encode(self.pathComponents, forKey: .pathComponents)
         try container.encode(self.messageType, forKey: .messageType)
         try container.encode(self.replyType, forKey: .replyType)
-        try container.encode(self.replySequenceType, forKey: .replySequenceType)
+        try container.encode(self.sequentialReplyType, forKey: .sequentialReplyType)
         try container.encode(self.expectsReply, forKey: .expectsReply)
     }
     
@@ -191,7 +191,7 @@ extension XPCRoute: Codable {
         self.pathComponents = try container.decode([String].self, forKey: .pathComponents)
         self.messageType = try container.decode(String?.self, forKey: .messageType)
         self.replyType = try container.decode(String?.self, forKey: .replyType)
-        self.replySequenceType = try container.decode(String?.self, forKey: .replySequenceType)
+        self.sequentialReplyType = try container.decode(String?.self, forKey: .sequentialReplyType)
         self.expectsReply = try container.decode(Bool.self, forKey: .expectsReply)
         self.errorTypes = []
     }
@@ -250,12 +250,12 @@ public struct XPCRouteWithoutMessageWithoutReply {
     
     /// Creates a route that can't receive a message and may reply with zero or more values.
     ///
-    /// ``XPCRouteWithoutMessageWithReplySequence/withMessageType(_:)`` can be called on the returned route to create a route that receives a
-    /// message.
-    public func withReplySequenceType<S: Codable>(_ replyType: S.Type) -> XPCRouteWithoutMessageWithReplySequence<S> {
-        XPCRouteWithoutMessageWithReplySequence(self.route.pathComponents,
-                                                replySequenceType: S.self,
-                                                errorTypes: self.route.errorTypes)
+    /// ``XPCRouteWithoutMessageWithSequentialReply/withMessageType(_:)`` can be called on the returned route to create a route that
+    /// receives a message.
+    public func withSequentialReplyType<S: Codable>(_ replyType: S.Type) -> XPCRouteWithoutMessageWithSequentialReply<S> {
+        XPCRouteWithoutMessageWithSequentialReply(self.route.pathComponents,
+                                                  sequentialReplyType: S.self,
+                                                  errorTypes: self.route.errorTypes)
     }
 }
 
@@ -347,13 +347,13 @@ public struct XPCRouteWithMessageWithoutReply<M: Codable> {
     }
     
     /// Creates a route that receives a message and may reply with zero or more values.
-    public func withReplySequenceType<S: Codable>(
-        _ replySequenceType: S.Type
-    ) -> XPCRouteWithMessageWithReplySequence<M, S> {
-        XPCRouteWithMessageWithReplySequence(self.route.pathComponents,
-                                             messageType: M.self,
-                                             replySequenceType: S.self,
-                                             errorTypes: self.route.errorTypes)
+    public func withSequentialReplyType<S: Codable>(
+        _ sequentialReplyType: S.Type
+    ) -> XPCRouteWithMessageWithSequentialReply<M, S> {
+        XPCRouteWithMessageWithSequentialReply(self.route.pathComponents,
+                                               messageType: M.self,
+                                               sequentialReplyType: S.self,
+                                               errorTypes: self.route.errorTypes)
     }
 }
 
@@ -402,19 +402,19 @@ public struct XPCRouteWithMessageWithReply<M: Codable, R: Codable> {
 ///
 /// See ``XPCRoute`` for how to create a route.
 
-public struct XPCRouteWithoutMessageWithReplySequence<S: Codable> {
+public struct XPCRouteWithoutMessageWithSequentialReply<S: Codable> {
     let route: XPCRoute
     
     /// Initializes the route.
     ///
     /// - Parameters:
     ///   - _: Zero or more `String`s naming the route.
-    ///   - replySequenceType: The expected type the server will respond with if successful.
+    ///   - sequentialReplyType: The expected type the server will respond with if successful.
     fileprivate init(_ pathComponents: [String],
-                     replySequenceType: S.Type,
+                     sequentialReplyType: S.Type,
                      errorTypes: [(Error & Codable).Type]) {
         self.route = XPCRoute(pathComponents: pathComponents,
-                              routeConfig: .withoutMessageWithReplySequence(S.self),
+                              routeConfig: .withoutMessageWithSequentialReply(S.self),
                               errorTypes: errorTypes)
     }
     
@@ -430,25 +430,25 @@ public struct XPCRouteWithoutMessageWithReplySequence<S: Codable> {
     /// ``HandlerError/underlyingError-swift.property`` will have a value of
     /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
     /// closure-based functions.
-    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithReplySequence {
-        XPCRouteWithoutMessageWithReplySequence(self.route.pathComponents,
-                                                replySequenceType: S.self,
-                                                errorTypes: self.route.errorTypes + [errorType])
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithoutMessageWithSequentialReply {
+        XPCRouteWithoutMessageWithSequentialReply(self.route.pathComponents,
+                                                  sequentialReplyType: S.self,
+                                                  errorTypes: self.route.errorTypes + [errorType])
     }
     
     /// Creates a route that receives a message and may reply with zero or more values.
-    public func withMessageType<M: Codable>(_ messageType: M.Type) -> XPCRouteWithMessageWithReplySequence<M, S> {
-        XPCRouteWithMessageWithReplySequence(self.route.pathComponents,
-                                             messageType: M.self,
-                                             replySequenceType: S.self,
-                                             errorTypes: self.route.errorTypes)
+    public func withMessageType<M: Codable>(_ messageType: M.Type) -> XPCRouteWithMessageWithSequentialReply<M, S> {
+        XPCRouteWithMessageWithSequentialReply(self.route.pathComponents,
+                                               messageType: M.self,
+                                               sequentialReplyType: S.self,
+                                               errorTypes: self.route.errorTypes)
     }
 }
 
 /// A route that receives a message and replies with one or more values.
 ///
 /// See ``XPCRoute`` for how to create a route.
-public struct XPCRouteWithMessageWithReplySequence<M: Codable, S: Codable> {
+public struct XPCRouteWithMessageWithSequentialReply<M: Codable, S: Codable> {
     let route: XPCRoute
     
     /// Initializes the route.
@@ -456,13 +456,13 @@ public struct XPCRouteWithMessageWithReplySequence<M: Codable, S: Codable> {
     /// - Parameters:
     ///   - _: Zero or more `String`s naming the route.
     ///   - messageType: The expected type the client will be passed when sending a message to this route.
-    ///   - replySequenceType: The expected type the server will respond with if successful.
+    ///   - sequentialReplyType: The expected type the server will respond with if successful.
     fileprivate init(_ pathComponents: [String],
                      messageType: M.Type,
-                     replySequenceType: S.Type,
+                     sequentialReplyType: S.Type,
                      errorTypes: [(Error & Codable).Type]) {
         self.route = XPCRoute(pathComponents: pathComponents,
-                              routeConfig: .withMessageWithReplySequence(M.self, S.self),
+                              routeConfig: .withMessageWithSequentialReply(M.self, S.self),
                               errorTypes: errorTypes)
     }
     
@@ -478,10 +478,10 @@ public struct XPCRouteWithMessageWithReplySequence<M: Codable, S: Codable> {
     /// ``HandlerError/underlyingError-swift.property`` will have a value of
     /// ``HandlerError/UnderlyingError-swift.enum/unavailableNoDecodingPossible``. This will occur for both the `async` and
     /// closure-based functions.
-    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithReplySequence {
-        XPCRouteWithMessageWithReplySequence(self.route.pathComponents,
-                                             messageType: M.self,
-                                             replySequenceType: S.self,
-                                             errorTypes: self.route.errorTypes + [errorType])
+    public func throwsType<E: Error & Codable>(_ errorType: E.Type) -> XPCRouteWithMessageWithSequentialReply {
+        XPCRouteWithMessageWithSequentialReply(self.route.pathComponents,
+                                               messageType: M.self,
+                                               sequentialReplyType: S.self,
+                                               errorTypes: self.route.errorTypes + [errorType])
     }
 }

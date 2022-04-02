@@ -183,10 +183,9 @@ public class XPCClient {
     /// Receives the result of a request. The result is either an instance of the reply type on success or an ``XPCError`` on failure.
     public typealias XPCResponseHandler<R> = (Result<R, XPCError>) -> Void
     
-    /// Receives the partial result of a request. The partial result is an instance of the reply sequence type on success, an ``XPCError`` on failure, or
-    /// ``PartialResult/finished`` if the sequence has been terminated.
-    public typealias XPCPartialResponseHandler<S> = (PartialResult<S, XPCError>) -> Void
-    
+    /// Receives the sequential result of a request. The result is an instance of the sequential reply type on success, an ``XPCError`` on failure, or
+    /// ``SequentialResult/finished`` if the sequence has been completed.
+    public typealias XPCSequentialResponseHandler<S> = (SequentialResult<S, XPCError>) -> Void
     
     /// Sends a request with no message that does not receive a reply.
     ///
@@ -338,24 +337,24 @@ public class XPCClient {
         }
     }
     
-    /// Sends a request with no message and provides partial response to the provide closure.
+    /// Sends a request with no message and provides sequential responses to the provide closure.
     ///
     /// - Parameters:
     ///   - route: The server route which will handle this request.
     ///   - handler: A closure to receive zero or more of request's responses.
     public func send<S: Decodable>(
-        to route: XPCRouteWithoutMessageWithReplySequence<S>,
-        withPartialResponse handler: @escaping XPCPartialResponseHandler<S>
+        to route: XPCRouteWithoutMessageWithSequentialReply<S>,
+        withSequentialResponse handler: @escaping XPCSequentialResponseHandler<S>
     ) {
         do {
             let request = try Request(route: route.route)
-            sendRequest(request, withPartialResponse: handler)
+            sendRequest(request, handler: handler)
         } catch {
             handler(.failure(XPCError.asXPCError(error: error)))
         }
     }
     
-    /// Sends a request with a message and provides partial response to the provide closure.
+    /// Sends a request with a message and provides sequential response to the provide closure.
     ///
     /// - Parameters:
     ///   - message: Message to be included in the request.
@@ -363,20 +362,20 @@ public class XPCClient {
     ///   - handler: A closure to receive zero or more of request's responses.
     public func sendMessage<M: Encodable, S: Decodable>(
         _ message: M,
-        to route: XPCRouteWithMessageWithReplySequence<M, S>,
-        withPartialResponse handler: @escaping XPCPartialResponseHandler<S>
+        to route: XPCRouteWithMessageWithSequentialReply<M, S>,
+        withSequentialResponse handler: @escaping XPCSequentialResponseHandler<S>
     ) {
         do {
             let request = try Request(route: route.route, payload: message)
-            sendRequest(request, withPartialResponse: handler)
+            sendRequest(request, handler: handler)
         } catch {
             handler(.failure(XPCError.asXPCError(error: error)))
         }
     }
     
-    /// Does the actual work of sending an XPC request which receives zero or more partial responses.
+    /// Does the actual work of sending an XPC request which receives zero or more sequential responses.
     private func sendRequest<S: Decodable>(_ request: Request,
-                                           withPartialResponse handler: @escaping XPCPartialResponseHandler<S>) {
+                                        handler: @escaping XPCSequentialResponseHandler<S>) {
         // Get the connection or inform the handler of failure and return
         let connection: xpc_connection_t
         do {
@@ -469,7 +468,6 @@ public class XPCClient {
         }
     }
 
-    
     private func getConnection() throws -> xpc_connection_t {
         if let existingConnection = self.connection { return existingConnection }
 
@@ -588,7 +586,7 @@ fileprivate class InProgressReplySequences {
                 routes.removeValue(forKey: response.requestID)
             }
             guard let handler = handler else {
-                fatalError("Partial result was received for an unregistered requestID: \(response.requestID)")
+                fatalError("Sequential result was received for an unregistered requestID: \(response.requestID)")
             }
             
             return handler

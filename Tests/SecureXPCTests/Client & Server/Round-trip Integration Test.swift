@@ -216,7 +216,7 @@ class RoundTripIntegrationTest: XCTestCase {
                                                       .withReplySequenceType(Int.self)
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) {
-            (provider: XPCServer.PartialResponseProvider<Int>) -> Void in
+            (provider: XPCServer.SequentialResultProvider<Int>) -> Void in
             
             for n in 1...valuesExpected {
                 provider.providePartialValue(n)
@@ -250,7 +250,7 @@ class RoundTripIntegrationTest: XCTestCase {
                                                     .withMessageType(Int.self)
                                                     .withReplySequenceType(Int.self)
         anonymousServer.registerRoute(messageWithReplySequenceRoute) {
-            (upperLimit: Int, provider: XPCServer.PartialResponseProvider<Int>) -> Void in
+            (upperLimit: Int, provider: XPCServer.SequentialResultProvider<Int>) -> Void in
             
             for n in 1...upperLimit {
                 provider.providePartialValue(n)
