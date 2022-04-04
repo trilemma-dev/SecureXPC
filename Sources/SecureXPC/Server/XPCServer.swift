@@ -50,16 +50,32 @@ import Foundation
 /// providing a route and a compatible closure or function. For example:
 /// ```swift
 ///     ...
-///     let updateConfigRoute = XPCRoute.named("update", "config")
-///                                     .withMessageType(Config.self)
-///                                     .withReplyType(Config.self)
-///     server.registerRoute(updateConfigRoute, handler: updateConfig)
+///     let updateRoute = XPCRoute.named("config", "update")
+///                               .withMessageType(Config.self)
+///                               .withReplyType(Config.self)
+///     server.registerRoute(updateRoute, handler: updateConfig)
 /// }
 ///
 /// private func updateConfig(_ config: Config) throws -> Config {
 ///     <# implementation here #>
 /// }
 /// ```
+///
+/// Routes with sequential reply types can respond to the client arbitrarily many times and therefore must explicitly provide responses to a
+/// ``SequentialResultProvider``:
+/// ```swift
+///     ...
+///     let changesRoute = XPCRoute.named("config", "changes")
+///                                .withSequentialReplyType(Config.self)
+///     server.registerRoute(changesRoute, handler: configChanges)
+/// }
+///
+/// private func configChanges(provider: SequentialResultProvider<Config>) {
+///     <# implementation here #>
+/// }
+/// ```
+///
+/// On macOS 10.15 and later async functions and closures can also be registered as the handler for a route.
 ///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
@@ -411,31 +427,7 @@ public class XPCServer {
     
     // MARK: Error handling
     
-    /// Wrapper around an error handling closure to ensure there's only ever one error handler regardless of whether it's synchronous or asynchronous.
-    fileprivate enum ErrorHandler {
-        case none
-        case sync((XPCError) -> Void)
-        case async((XPCError) async -> Void)
-        
-        func handle(_ error: XPCError) {
-            switch self {
-                case .none:
-                    break
-                case .sync(let handler):
-                    handler(error)
-                case .async(let handler):
-                    if #available(macOS 10.15, *) {
-                        Task {
-                            await handler(error)
-                        }
-                    } else {
-                        fatalError("async error handler was set on macOS prior to 10.15, this should not be possible")
-                    }
-            }
-        }
-    }
-    
-    fileprivate var errorHandler = ErrorHandler.none
+    var errorHandler = ErrorHandler.none
     
     /// Sets a handler to synchronously receive any errors encountered.
     ///
@@ -900,124 +892,28 @@ fileprivate struct ConstrainedXPCHandlerWithMessageWithReplySequenceAsync<M: Dec
 }
 
 
-// MARK: SequentialResultProvider
+// MARK: Error Handler
 
-/// Sends responses to an XPC client for a specific route.
-///
-/// Instances of this class are provided to handlers registered with an ``XPCServer`` for routes with sequential reply types. It is valid to use an instance of this
-/// class outside of the closure it was provided to and it will continue to send responses so long as the client remains connected.
-///
-/// ## Topics
-/// ### Replying
-/// - ``reply(_:)``
-/// - ``reply(result:)``
-/// - ``replyWithValue(_:)``
-/// ### Finishing
-/// - ``finishSuccesfully()``
-/// - ``finishWithError(_:)``
-public class SequentialResultProvider<S: Encodable> {
-    private let requestID: UUID
-    private var isFinished = false
-    private weak var server: XPCServer?
-    private weak var connection: xpc_connection_t?
+/// Wrapper around an error handling closure to ensure there's only ever one error handler regardless of whether it's synchronous or asynchronous.
+enum ErrorHandler {
+    case none
+    case sync((XPCError) -> Void)
+    case async((XPCError) async -> Void)
     
-    fileprivate init(request: Request, server: XPCServer, connection: xpc_connection_t) {
-        self.requestID = request.requestID
-        self.server = server
-        self.connection = connection
-    }
-    
-    /// Replies to the client with a value or error based on the result of running the provided closure.
-    ///
-    /// > Note: Calling this function after a sequence has finished is a programming error.
-    public func reply(_ closure:() throws -> S) {
-        do {
-            self.replyWithValue(try closure())
-        } catch {
-            self.finishWithError(error)
-        }
-    }
-    
-    /// Replies to the client with the provided result.
-    ///
-    /// > Note: Calling this function after a sequence has finished is a programming error.
-    public func reply(result: SequentialResult<S, Error>) {
-        switch result {
-            case .success(let value):
-                self.replyWithValue(value)
-            case .failure(let error):
-                self.finishWithError(error)
-            case .finished:
-                self.finishSuccesfully()
-        }
-    }
-    
-    /// Replies to the client with the provided value.
-    ///
-    /// > Note: Calling this function after a sequence has finished is a programming error.
-    public func replyWithValue(_ value: S) {
-        self.sendResponse { response in
-            try Response.encodePayload(value, intoReply: &response)
-        }
-    }
-    
-    /// Replies to the client with the provided error and finishes the sequence.
-    ///
-    /// > Note: Calling this function after a sequence has finished is a programming error.
-    public func finishWithError(_ error: Error) {
-        let handlerError = XPCError.handlerError(HandlerError(error: error))
-        if let server = server {
-            server.errorHandler.handle(handlerError)
-        }
-        self.sendResponse { response in
-            try Response.encodeError(handlerError, intoReply: &response)
-        }
-        self.isFinished = true
-    }
-    
-    /// Replies to the client indicating the sequence is now finished.
-    ///
-    /// > Note: Calling this function after a sequence has finished is a programming error.
-    public func finishSuccesfully() {
-        // An "empty" response indicates it's finished
-        self.sendResponse { _ in }
-        self.isFinished = true
-    }
-    
-    private func sendResponse(encodingWork: (inout xpc_object_t) throws -> Void) {
-        if self.isFinished {
-            fatalError("Sequence is already finished")
-        } else if let connection = connection {
-            var response = xpc_dictionary_create(nil, nil, 0)
-            do {
-                try Response.encodeRequestID(requestID, intoReply: &response)
-            } catch {
-                // If we're not able to encode the requestID, there's no point sending back a response as the client
-                // wouldn't be able to make use of it
-                if let server = server {
-                    server.errorHandler.handle(XPCError.asXPCError(error: error))
+    func handle(_ error: XPCError) {
+        switch self {
+            case .none:
+                break
+            case .sync(let handler):
+                handler(error)
+            case .async(let handler):
+                if #available(macOS 10.15, *) {
+                    Task {
+                        await handler(error)
+                    }
+                } else {
+                    fatalError("async error handler was set on macOS prior to 10.15, this should not be possible")
                 }
-                return
-            }
-            
-            do {
-                try encodingWork(&response)
-                xpc_connection_send_message(connection, response)
-            } catch {
-                let errorResponse = xpc_dictionary_create(nil, nil, 0)
-                do {
-                    try Response.encodeRequestID(requestID, intoReply: &response)
-                    try Response.encodeError(XPCError.asXPCError(error: error), intoReply: &response)
-                } catch {
-                    // Unable to send back the error, so just bail
-                    return
-                }
-                xpc_connection_send_message(connection, errorResponse)
-            }
-        } else {
-            if let server = server {
-                server.errorHandler.handle(XPCError.clientNotConnected)
-            }
         }
     }
 }

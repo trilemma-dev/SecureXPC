@@ -69,6 +69,17 @@ import Foundation
 /// let updatedConfig = try await client.sendMessage(config, to: updateRoute)
 /// ```
 ///
+/// Alternatively, routes can return an asynchronous sequence of replies:
+/// ```swift
+/// let changesRoute = XPCRoute.named("config", "changes")
+///                            .withSequentialReplyType(Config.self)
+/// let configStream = client.send(to: changesRoute)
+/// for try await latestConfig in configStream {
+///     <#do something with Config instance #>
+/// }
+/// ```
+/// Whether a sequence ever finishes is determined by the implementation registered with the server.
+///
 /// ### Sending Requests with Closures
 /// Closure-based versions of these functions also exist to provide support for macOS 10.14 and earlier:
 /// ```swift
@@ -90,6 +101,27 @@ import Foundation
 /// always passed a [`Result`](https://developer.apple.com/documentation/swift/result) with the `Success` value matching the route's
 /// `replyType` (or `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will
 /// be provided as an ``XPCError`` on failure.
+///
+/// Closure-based functions also existing for sequential responses:
+///```swift
+/// let changesRoute = XPCRoute.named("config", "changes")
+///                            .withSequentialReplyType(Config.self)
+/// let configStream = client.send(to: changesRoute, withSequentialResponse: { response in
+///     switch response {
+///         case .success(let reply):
+///             <# use the reply #>
+///         case .failure(let error):
+///             <# handle the error #>
+///         case .finished:
+///             <# maybe do something on completion #>
+///     }
+/// })
+/// ```
+///
+/// For these  closure-based functions that use ``XPCClient/XPCSequentialResponseHandler``, they will be passed a ``SequentialResult`` with the
+/// `Success` value matching the route's `sequentialReplyType`. If the sequence fails then a `Failure` of type ``XPCError`` will be passed and this
+/// will terminate the sequence. If the sequence completed succesfully then ``SequentialResult/finished`` will be passed. Whether a sequence ever
+/// completes is determined by the implementation registered with the server.
 ///
 /// ## Topics
 /// ### Retrieving a Client
@@ -633,15 +665,18 @@ fileprivate protocol InternalXPCSequentialResponseHandler {
 fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: InternalXPCSequentialResponseHandler {
     private var failedToDecode = false
     private let handler: XPCClient.XPCSequentialResponseHandler<S>
-    private let dispatchQueue: DispatchQueue
+    
+    /// All responses for a given request need to be run serially in the order they were received and we don't want deserialization or the user's handler closure to
+    /// block anything else from happening.
+    private let serialQueue: DispatchQueue
     
     fileprivate init(request: Request, handler: @escaping XPCClient.XPCSequentialResponseHandler<S>) {
         self.handler = handler
-        self.dispatchQueue = DispatchQueue(label: "response-handler-\(request.requestID)")
+        self.serialQueue = DispatchQueue(label: "response-handler-\(request.requestID)")
     }
     
     fileprivate func handleResponse(_ response: Response) {
-        self.dispatchQueue.async {
+        self.serialQueue.async {
             if !self.failedToDecode {
                 do {
                     if response.containsPayload {

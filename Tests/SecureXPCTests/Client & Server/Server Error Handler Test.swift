@@ -88,7 +88,7 @@ class ServerErrorHandlerTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(failureRoute) { provider in
-            provider.finishWithError(errorToThrow)
+            provider.failure(error: errorToThrow)
         }
         server.setErrorHandler { error in
             switch error {
@@ -120,7 +120,7 @@ class ServerErrorHandlerTest: XCTestCase {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         server.registerRoute(failureRoute) { provider in
-            provider.finishWithError(errorToThrow)
+            provider.failure(error: errorToThrow)
         }
         server.setErrorHandler { error async -> Void in
             switch error {

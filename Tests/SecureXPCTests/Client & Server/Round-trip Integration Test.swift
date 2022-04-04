@@ -217,10 +217,10 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in            
             for n in 1...valuesExpected {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         var valuesReceived = 0
@@ -247,10 +247,10 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider in
             for n in 1...valuesExpected {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         var valuesReceived = 0
@@ -272,10 +272,10 @@ class RoundTripIntegrationTest: XCTestCase {
         let valuesExpected = 5
         anonymousServer.registerRoute(noMessageWithReplySequenceRoute) { provider async in
             for n in 1...valuesExpected {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         var valuesReceived = 0
@@ -298,10 +298,10 @@ class RoundTripIntegrationTest: XCTestCase {
                                                     .withSequentialReplyType(Int.self)
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
             for n in 1...upperLimit {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         let valuesExpected = 5
@@ -331,10 +331,10 @@ class RoundTripIntegrationTest: XCTestCase {
         var valuesReceived = 0
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider in
             for n in 1...upperLimit {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         let sequence = xpcClient.sendMessage(valuesExpected, to: messageWithReplySequenceRoute)
@@ -357,10 +357,10 @@ class RoundTripIntegrationTest: XCTestCase {
         var valuesReceived = 0
         anonymousServer.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider async in
             for n in 1...upperLimit {
-                provider.replyWithValue(n)
+                provider.success(value: n)
                 Thread.sleep(forTimeInterval: 0.01)
             }
-            provider.finishSuccesfully()
+            provider.finished()
         }
         
         let sequence = xpcClient.sendMessage(valuesExpected, to: messageWithReplySequenceRoute)
