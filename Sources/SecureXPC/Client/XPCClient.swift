@@ -459,31 +459,11 @@ public class XPCClient {
             return
         }
         
-        /*
-        // Wrap the handler such that it captures `S` which enables the payload to be decoded
-        let wrappedHandler = { (response: Response) -> Void in
-            do {
-                if response.containsPayload {
-                    handler(.success(try response.decodePayload(asType: S.self)))
-                } else if response.containsError {
-                    handler(.failure(try response.decodeError()))
-                } else {
-                    handler(.finished)
-                }
-            } catch {
-                // TODO: how to handle these decoding errors? it they're passed to the handler that'd end the sequence
-                // but the server doesn't know that and more responses can keep being received. do we need an additional
-                // type of failure state? ... that sounds overly complicated.
-            }
-        }*/
         let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
         self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
         
         xpc_connection_send_message(connection, request.dictionary)
     }
-    
-    
-    
     
     /// Does the actual work of sending an XPC request which receives a response.
     private func sendRequest<R: Decodable>(_ request: Request,
