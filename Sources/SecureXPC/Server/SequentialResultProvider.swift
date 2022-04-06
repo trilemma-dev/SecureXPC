@@ -76,13 +76,11 @@ public class SequentialResultProvider<S: Encodable> {
     ///
     /// This error will also be passed to the ``XPCServer``'s error handler if one has been set.
     public func failure(error: Error) {
-        let handlerError = XPCError.handlerError(HandlerError(error: error))
-        if let server = server {
-            server.errorHandler.handle(handlerError)
-        }
+        let handlerError = HandlerError(error: error)
+        self.sendToServerErrorHandler(handlerError)
+        
         self.sendResponse(isFinished: true) { response in
-            let handlerError = XPCError.handlerError(HandlerError(error: error))
-            try Response.encodeError(handlerError, intoReply: &response)
+            try Response.encodeError(XPCError.handlerError(handlerError), intoReply: &response)
         }
     }
     
@@ -95,7 +93,7 @@ public class SequentialResultProvider<S: Encodable> {
     private func sendResponse(isFinished: Bool, encodingWork: @escaping (inout xpc_object_t) throws -> Void) {
         self.serialQueue.async {
             if self.isFinished {
-                handleErrorIfPossible(XPCError.sequenceFinished)
+                self.sendToServerErrorHandler(XPCError.sequenceFinished)
                 return
             }
             
@@ -108,7 +106,7 @@ public class SequentialResultProvider<S: Encodable> {
                 } catch {
                     // If we're not able to encode the requestID, there's no point sending back a response as the client
                     // wouldn't be able to make use of it
-                    handleErrorIfPossible(error)
+                    self.sendToServerErrorHandler(error)
                     return
                 }
                 
@@ -116,7 +114,7 @@ public class SequentialResultProvider<S: Encodable> {
                     try encodingWork(&response)
                     xpc_connection_send_message(connection, response)
                 } catch {
-                    handleErrorIfPossible(error)
+                    self.sendToServerErrorHandler(error)
                     
                     do {
                         let errorResponse = xpc_dictionary_create(nil, nil, 0)
@@ -130,14 +128,14 @@ public class SequentialResultProvider<S: Encodable> {
                     }
                 }
             } else {
-                handleErrorIfPossible(XPCError.clientNotConnected)
+                self.sendToServerErrorHandler(XPCError.clientNotConnected)
             }
         }
-        
-        func handleErrorIfPossible(_ error: Error) {
-            if let server = server {
-                server.errorHandler.handle(XPCError.asXPCError(error: error))
-            }
+    }
+    
+    func sendToServerErrorHandler(_ error: Error) {
+        if let server = server {
+            server.errorHandler.handle(XPCError.asXPCError(error: error))
         }
     }
 }
