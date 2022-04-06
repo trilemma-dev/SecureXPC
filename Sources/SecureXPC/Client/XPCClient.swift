@@ -186,7 +186,7 @@ public class XPCClient {
 
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
     ///
-    /// A server's endpoint is accesible via ``NonBlockingServer/endpoint``. The endpoint can be sent across an XPC connection.
+    /// A server's endpoint is accesible via ``XPCNonBlockingServer/endpoint``. The endpoint can be sent across an XPC connection.
 	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
         let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
 

@@ -58,7 +58,7 @@ internal class XPCMachServer: XPCServer {
     }
 }
 
-extension XPCMachServer: NonBlockingServer {
+extension XPCMachServer: XPCNonBlockingServer {
     public func start() {
         self.listenerQueue.sync {
             self.started = true

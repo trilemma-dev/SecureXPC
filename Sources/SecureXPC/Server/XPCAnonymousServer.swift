@@ -51,7 +51,7 @@ internal class XPCAnonymousServer: XPCServer {
     }
 }
 
-extension XPCAnonymousServer: NonBlockingServer {
+extension XPCAnonymousServer: XPCNonBlockingServer {
     public func start() {
         self.listenerQueue.sync {
             self.started = true

@@ -41,8 +41,8 @@ import Foundation
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program. Use cases for making one include:
 ///  - Allowing two processes which are not XPC services to communicate over XPC with each other. This is done by having one of those processes make an
-///    anonymous server and send its ``NonBlockingServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that endpoint
-///    from the XPC Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
+///    anonymous server and send its ``XPCNonBlockingServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that
+///    endpoint from the XPC Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
 ///  - Testing code that would otherwise run as part of an XPC Mach service without needing to install a helper tool. However, note that this code won't run as root.
 ///
 /// ### Registering & Handling Routes
@@ -83,7 +83,7 @@ import Foundation
 /// server.startAndBlock()
 /// ```
 ///
-/// Returned server instances which conform to ``NonBlockingServer`` can also be started in a non-blocking manner:
+/// Returned server instances which conform to ``XPCNonBlockingServer`` can also be started in a non-blocking manner:
 /// ```swift
 /// server.start()
 /// ```
@@ -115,10 +115,10 @@ import Foundation
 /// - ``setErrorHandler(_:)-1r3up``
 /// ### Starting a Server
 /// - ``startAndBlock()``
-/// - ``NonBlockingServer/start()``
+/// - ``XPCNonBlockingServer/start()``
 /// ### Server State
 /// - ``serviceName``
-/// - ``NonBlockingServer/endpoint``
+/// - ``XPCNonBlockingServer/endpoint``
 public class XPCServer {
     
     /// Set of weak references to connections, used to update their dispatch queues.
@@ -504,7 +504,7 @@ public class XPCServer {
 /// An ``XPCServer`` which can be started in a non-blocking manner.
 ///
 /// > Warning: Do not implement this protocol. Additions made to this protocol will not be considered a breaking change for SemVer purposes.
-public protocol NonBlockingServer {
+public protocol XPCNonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
     
@@ -513,14 +513,14 @@ public protocol NonBlockingServer {
     /// Endpoints can be sent across an XPC connection.
     var endpoint: XPCServerEndpoint { get }
     
-    // Internal implementation note: `endpoint` is part of the `NonBlockingServer` protocol instead of `XPCServer` as
+    // Internal implementation note: `endpoint` is part of the `XPCNonBlockingServer` protocol instead of `XPCServer` as
     // `XPCServiceServer` can't have an endpoint created for it.
     
     // From a technical perspective this is because endpoints are only created from connection listeners, which an XPC
-    // service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From
-    // a security point of view, it makes sense that it's not possible to create an endpoint for an XPC service because
-    // they're designed to only allow communication between the main app and .xpc bundles contained within the same
-    // main app's bundle. As such there's no valid use case for creating such an endpoint.
+    // service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From a
+    // security point of view, it makes sense that it's not possible to create an endpoint for an XPC service because
+    // they're designed to only allow communication between the main app and .xpc bundles contained within the same main
+    // app's bundle. As such there's no valid use case for creating such an endpoint.
 }
 
 // MARK: public factories
@@ -540,24 +540,25 @@ extension XPCServer {
     /// Creates a new anonymous server that accepts requests from the same process it's running in.
     ///
     /// Only a client created from an anonymous server's endpoint can communicate with that server. Do this by retrieving the server's
-    /// ``NonBlockingServer/endpoint`` and then creating a client with it:
+    /// ``XPCNonBlockingServer/endpoint`` and then creating a client with it:
     /// ```swift
     /// let server = XPCServer.makeAnonymous()
     /// let client = XPCClient.fromEndpoint(server.endpoint)
     /// ```
     ///
-    /// > Important: No requests will be processed until ``NonBlockingServer/start()`` or ``startAndBlock()`` is called.
+    /// > Important: No requests will be processed until ``XPCNonBlockingServer/start()`` or ``startAndBlock()`` is called.
     ///
-    /// > Note: If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)`` instead.
-    public static func makeAnonymous() -> XPCServer & NonBlockingServer {
+    /// > Note: If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)``
+    /// instead.
+    public static func makeAnonymous() -> XPCServer & XPCNonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
     }
 
     /// Creates a new anonymous server that accepts requests from clients which meet the security requirements.
     ///
-    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``NonBlockingServer/endpoint`` and
-    /// send it across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required
-    /// that you specifiy the
+    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``XPCNonBlockingServer/endpoint``
+    /// and send it across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is
+    /// required that you specifiy the
     /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
     /// of any connecting clients:
     /// ```swift
@@ -573,7 +574,7 @@ extension XPCServer {
     /// }
     /// ```
     ///
-    /// > Important: No requests will be processed until ``NonBlockingServer/start()`` or ``startAndBlock()`` is called.
+    /// > Important: No requests will be processed until ``XPCNonBlockingServer/start()`` or ``startAndBlock()`` is called.
     ///
     /// ## Requirements Checking
     /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
@@ -584,7 +585,7 @@ extension XPCServer {
     ///
     /// - Parameters:
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
-    public static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & NonBlockingServer {
+    public static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & XPCNonBlockingServer {
         XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
     }
     
@@ -602,11 +603,11 @@ extension XPCServer {
     ///
     /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
     ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
     ///
     /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & NonBlockingServer {
+    public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
     }
 
@@ -630,7 +631,7 @@ extension XPCServer {
     ///    <# configure and start server #>
     /// }
     /// ```
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``NonBlockingServer/start()`` is called.
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
     ///
     /// ## Requirements Checking
     ///
@@ -648,7 +649,7 @@ extension XPCServer {
     public static func forThisMachService(
         named machServiceName: String,
         clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & NonBlockingServer {
+    ) throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
     }
 }
