@@ -78,7 +78,7 @@ import Foundation
 ///     <#do something with Config instance #>
 /// }
 /// ```
-/// Whether a sequence ever finishes is determined by the implementation registered with the server.
+/// Whether a sequence ever finishes is determined by the implementation registered with the server or if a client side error occurs during decoding.
 ///
 /// ### Sending Requests with Closures
 /// Closure-based versions of these functions also exist to provide support for macOS 10.14 and earlier:
@@ -118,10 +118,10 @@ import Foundation
 /// })
 /// ```
 ///
-/// For these  closure-based functions that use ``XPCClient/XPCSequentialResponseHandler``, they will be passed a ``SequentialResult`` with the
+/// For these closure-based functions that use ``XPCClient/XPCSequentialResponseHandler``, they will be passed a ``SequentialResult`` with the
 /// `Success` value matching the route's `sequentialReplyType`. If the sequence fails then a `Failure` of type ``XPCError`` will be passed and this
-/// will terminate the sequence. If the sequence completed succesfully then ``SequentialResult/finished`` will be passed. Whether a sequence ever
-/// completes is determined by the implementation registered with the server.
+/// will terminate the sequence. If the sequence completed successfully then ``SequentialResult/finished`` will be passed. Whether a sequence ever
+/// completes is determined by the implementation registered with the server or if a client side error occurs during decoding.
 ///
 /// ## Topics
 /// ### Retrieving a Client
