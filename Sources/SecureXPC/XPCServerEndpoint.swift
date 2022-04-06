@@ -9,7 +9,7 @@ import Foundation
 
 /// An endpoint is used to create clients which can communicate with their associated server.
 ///
-/// Endpoints are retrieved from a server's ``NonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing XPC
+/// Endpoints are retrieved from a server's ``XPCNonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing XPC
 /// connection.
 ///
 /// > Warning: While ``XPCServerEndpoint`` conforms to `Codable` it can only be encoded and decoded by the `SecureXPC` framework.

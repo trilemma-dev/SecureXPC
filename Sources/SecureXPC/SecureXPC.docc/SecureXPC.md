@@ -70,7 +70,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 ### Client and Server
 - ``XPCClient``
 - ``XPCServer``
-- ``NonBlockingServer``
+- ``XPCNonBlockingServer``
 - ``XPCServerEndpoint``
 
 ### Routes
