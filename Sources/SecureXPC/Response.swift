@@ -41,6 +41,14 @@ struct Response {
         self.containsError = try XPCDecoder.containsKey(ResponseKeys.error, inDictionary: dictionary)
     }
     
+    /// Decodes the requestID inside of what is expected to be a response.
+    ///
+    /// This functionality is needed by the client when it receives an out-of-band response from the server and therefore doesn't know what route it corresponds
+    /// to. By returning the requestID it's able to figure out what route it came from and then initialize a Response object.
+    static func decodeRequestID(dictionary: xpc_object_t) throws -> UUID {
+        try XPCDecoder.decode(UUID.self, from: dictionary, forKey: ResponseKeys.requestID)
+    }
+    
     /// Creates a partial response by directly encoding the payload into the provided XPC reply dictionary.
     ///
     /// This is expected to be used by the server. Due to how the XPC C API works the exact instance of reply dictionary provided by the API must be populated,

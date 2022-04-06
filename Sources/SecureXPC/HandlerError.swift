@@ -36,7 +36,7 @@ public struct HandlerError: Error {
     /// Used to disambiguate enum case name conflicts when decoding.
     private let typeName: String
     
-    private init(error: Error) {
+    init(error: Error) {
         self.underlyingError = .available(error)
         self.localizedDescription = error.localizedDescription
         self.typeName = String(describing: type(of: error))

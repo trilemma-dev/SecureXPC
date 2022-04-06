@@ -57,7 +57,7 @@ class ServerErrorHandlerTest: XCTestCase {
         server.registerRoute(failureRoute) {
             throw ExampleError.completeAndUtterFailure
         }
-        server.setErrorHandler { (error: XPCError) async -> Void in
+        server.setErrorHandler { error async -> Void in
             switch error {
                 case .handlerError(let error):
                     if case let .available(underlyingError) = error.underlyingError,
@@ -74,6 +74,71 @@ class ServerErrorHandlerTest: XCTestCase {
         server.start()
         
         client.send(to: failureRoute, onCompletion: nil)
+        
+        self.waitForExpectations(timeout: 1)
+    }
+    
+    func testErrorHandler_SequentialReply_Sync() throws {
+        let errorToThrow = ExampleError.completeAndUtterFailure
+        let errorExpectation = self.expectation(description: "\(errorToThrow) should be provided to error handler")
+        
+        let failureRoute = XPCRoute.named("eventually", "throws")
+                                   .withSequentialReplyType(String.self)
+        let server = XPCServer.makeAnonymous()
+        let client = XPCClient.forEndpoint(server.endpoint)
+        
+        server.registerRoute(failureRoute) { provider in
+            provider.failure(error: errorToThrow)
+        }
+        server.setErrorHandler { error in
+            switch error {
+                case .handlerError(let error):
+                    if case let .available(underlyingError) = error.underlyingError,
+                       underlyingError as? ExampleError == errorToThrow {
+                        errorExpectation.fulfill()
+                    } else {
+                        XCTFail("Unexpected underlying error: \(error)")
+                    }
+                default:
+                    XCTFail("Unexpected error: \(error)")
+            }
+        }
+        
+        server.start()
+        
+        client.send(to: failureRoute, withSequentialResponse: { _ in })
+        
+        self.waitForExpectations(timeout: 1)
+    }
+    
+    func testErrorHandler_SequentialReply_Async() throws {
+        let errorToThrow = ExampleError.completeAndUtterFailure
+        let errorExpectation = self.expectation(description: "\(errorToThrow) should be provided to error handler")
+        
+        let failureRoute = XPCRoute.named("eventually", "throws")
+                                   .withSequentialReplyType(String.self)
+        let server = XPCServer.makeAnonymous()
+        let client = XPCClient.forEndpoint(server.endpoint)
+        server.registerRoute(failureRoute) { provider in
+            provider.failure(error: errorToThrow)
+        }
+        server.setErrorHandler { error async -> Void in
+            switch error {
+                case .handlerError(let error):
+                    if case let .available(underlyingError) = error.underlyingError,
+                       underlyingError as? ExampleError == errorToThrow {
+                        errorExpectation.fulfill()
+                    } else {
+                        XCTFail("Unexpected underlying error: \(error)")
+                    }
+                default:
+                    XCTFail("Unexpected error: \(error)")
+            }
+        }
+        
+        server.start()
+        
+        client.send(to: failureRoute, withSequentialResponse: { _ in })
         
         self.waitForExpectations(timeout: 1)
     }

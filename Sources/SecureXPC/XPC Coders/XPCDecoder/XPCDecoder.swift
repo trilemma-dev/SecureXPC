@@ -62,7 +62,14 @@ enum XPCDecoder {
                                      userInfo: [CodingUserInfoKey : Any] = [ : ]) throws -> T {
         let decoder = XPCDecoderImpl(value: object, codingPath: [CodingKey](), userInfo: userInfo)
         
-        return try T(from: decoder)
+        do {
+            return try T(from: decoder)
+        } catch {
+            let context = DecodingError.Context(codingPath: [CodingKey](),
+                                                debugDescription: "\(T.self) initializer threw an error",
+                                                underlyingError: error)
+            throw DecodingError.dataCorrupted(context)
+        }
     }
     
     /// Throws an error if the provided XPC object is not an XPC dictionary.
