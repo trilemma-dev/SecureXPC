@@ -39,8 +39,13 @@ import Foundation
 ///                             .withReplyType(Int.self)
 /// ```
 ///
-/// Routes are distinct based on their names, meaning the last two routes above are considered equivalent. A server will only allow one handler to be registered for
-/// each distinct route.
+/// Or routes can receive multiple replies for the same request:
+/// ```swift
+/// let currentLimit = XPCRoute.named("thermal", "currentLimit")
+///                            .withSequentialReplyType(Int.self)
+/// ```
+///
+/// Routes are distinct based only on their names, not their types. A server will only allow one handler to be registered for each distinct route.
 ///
 /// #### Errors
 /// Errors thrown by the handler registered for the route may optionally be specified:
