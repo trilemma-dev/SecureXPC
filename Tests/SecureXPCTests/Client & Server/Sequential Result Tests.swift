@@ -8,8 +8,7 @@
 import XCTest
 @testable import SecureXPC
 
-
-class SequentailResultTests: XCTestCase {
+class SequentialResultTests: XCTestCase {
     
     var client: XPCClient! = nil
     let server = XPCServer.makeAnonymous()

@@ -32,7 +32,7 @@ import Foundation
 /// - ``failure(error:)``
 /// - ``isFinished``
 public class SequentialResultProvider<S: Encodable> {
-    private let requestID: UUID
+    private let request: Request
     private weak var server: XPCServer?
     private weak var connection: xpc_connection_t?
     private let serialQueue: DispatchQueue
@@ -46,7 +46,7 @@ public class SequentialResultProvider<S: Encodable> {
     public private(set) var isFinished: Bool
     
     init(request: Request, server: XPCServer, connection: xpc_connection_t) {
-        self.requestID = request.requestID
+        self.request = request
         self.server = server
         self.connection = connection
         self.isFinished = false
@@ -99,16 +99,14 @@ public class SequentialResultProvider<S: Encodable> {
             
             self.isFinished = isFinished
             
-            if let connection = self.connection {
+            guard let connection = self.connection else {
+                self.sendToServerErrorHandler(XPCError.clientNotConnected)
+                return
+            }
+
+            do {
                 var response = xpc_dictionary_create(nil, nil, 0)
-                do {
-                    try Response.encodeRequestID(self.requestID, intoReply: &response)
-                } catch {
-                    // If we're not able to encode the requestID, there's no point sending back a response as the client
-                    // wouldn't be able to make use of it
-                    self.sendToServerErrorHandler(error)
-                    return
-                }
+                try Response.encodeRequestID(self.request.requestID, intoReply: &response)
                 
                 do {
                     try encodingWork(&response)
@@ -118,24 +116,39 @@ public class SequentialResultProvider<S: Encodable> {
                     
                     do {
                         let errorResponse = xpc_dictionary_create(nil, nil, 0)
-                        try Response.encodeRequestID(self.requestID, intoReply: &response)
+                        try Response.encodeRequestID(self.request.requestID, intoReply: &response)
                         try Response.encodeError(XPCError.asXPCError(error: error), intoReply: &response)
                         xpc_connection_send_message(connection, errorResponse)
                         self.isFinished = true
                     } catch {
-                        // Unable to send back the error, so just bail
-                        return
+                        // Unable to send back the error, so there's nothing more to be done
                     }
                 }
-            } else {
-                self.sendToServerErrorHandler(XPCError.clientNotConnected)
+            } catch {
+                // If we're not able to encode the requestID, there's no point sending back a response as the client
+                // wouldn't be able to make use of it
+                self.sendToServerErrorHandler(error)
+            }
+            
+            if isFinished {
+                self.endTransaction()
             }
         }
     }
     
-    func sendToServerErrorHandler(_ error: Error) {
+    private func sendToServerErrorHandler(_ error: Error) {
         if let server = server {
             server.errorHandler.handle(XPCError.asXPCError(error: error))
+        }
+    }
+    
+    /// Sends an empty reply to the client such that it ends the transaction
+    private func endTransaction() {
+        if let connection = connection {
+            guard let reply = xpc_dictionary_create_reply(self.request.dictionary) else {
+                fatalError("Unable to create reply for request \(request.requestID)")
+            }
+            xpc_connection_send_message(connection, reply)
         }
     }
 }

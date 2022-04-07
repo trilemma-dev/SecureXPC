@@ -448,23 +448,6 @@ public class XPCClient {
     
     // MARK: Send (private internals)
     
-    /// Does the actual work of sending an XPC request which receives zero or more sequential responses.
-    private func sendRequest<S: Decodable>(_ request: Request, handler: @escaping XPCSequentialResponseHandler<S>) {
-        // Get the connection or inform the handler of failure and return
-        let connection: xpc_connection_t
-        do {
-            connection = try getConnection()
-        } catch {
-            handler(.failure(XPCError.asXPCError(error: error)))
-            return
-        }
-        
-        let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
-        self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
-        
-        xpc_connection_send_message(connection, request.dictionary)
-    }
-    
     /// Does the actual work of sending an XPC request which receives a response.
     private func sendRequest<R: Decodable>(_ request: Request,
                                            withResponse handler: @escaping XPCResponseHandler<R>) {
@@ -533,6 +516,43 @@ public class XPCClient {
         }
     }
     
+    /// Does the actual work of sending an XPC request which receives zero or more sequential responses.
+    private func sendRequest<S: Decodable>(_ request: Request, handler: @escaping XPCSequentialResponseHandler<S>) {
+        // Get the connection or inform the handler of failure and return
+        let connection: xpc_connection_t
+        do {
+            connection = try getConnection()
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+            return
+        }
+        
+        let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
+        self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
+        
+        // Sending with reply means the server ought to be kept alive until the reply is sent back
+        // From https://developer.apple.com/documentation/xpc/1505586-xpc_transaction_begin:
+        //    A service with no outstanding transactions may automatically exit due to inactivity as determined by the
+        //    system... If a reply message is created, the transaction will end when the reply message is sent or
+        //    released.
+        xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
+            // From xpc_connection_send_message documentation:
+            //   If this API is used to send a message that is in reply to another message, there is no guarantee of
+            //   ordering between the invocations of the connection's event handler and the reply handler for that
+            //   message, even if they are targeted to the same queue.
+            //
+            // The net effect of this is we can't do much with the reply such as terminating the sequence because this
+            // reply can arrive before some of the out-of-band sends from the server to client do. (This was attempted
+            // and it caused unit tests to fail non-deterministically.)
+            //
+            // But if this is an internal XPC error (for example because the server shut down), we can use this to
+            // update the connection's state.
+            if xpc_get_type(reply) == XPC_TYPE_ERROR {
+                self.handleError(event: reply)
+            }
+        }
+    }
+    
     /// Populates the continuation while unwrapping any underlying errors thrown by a server's handler.
     @available(macOS 10.15.0, *)
     private func populateAsyncThrowingStreamContinuation<S: Decodable>(
@@ -567,27 +587,14 @@ public class XPCClient {
         return newConnection
     }
     
+    // MARK: Incoming event handling
+    
     private func handleEvent(event: xpc_object_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
-            do {
-                try self.handleMessage(event)
-            } catch {
-                // In theory these could be reported to some sort of error handler set on the client, but it's an
-                // intentional choice to not introduce that additional conceptual complexity for API users since
-                // in all other cases errors are associated with the specific send/sendMessage call.
-            }
+            self.inProgressSequentialReplies.handleMessage(event)
         } else if xpc_get_type(event) == XPC_TYPE_ERROR {
             self.handleError(event: event)
         }
-    }
-    
-    private func handleMessage(_ message: xpc_object_t) throws {
-        let requestID = try Response.decodeRequestID(dictionary: message)
-        guard let route = self.inProgressSequentialReplies.routeForRequestID(requestID) else {
-            return
-        }
-        let response = try Response(dictionary: message, route: route)
-        self.inProgressSequentialReplies.handleResponse(response)
     }
 
     private func handleError(event: xpc_object_t) {
@@ -637,12 +644,16 @@ public class XPCClient {
     }
 }
 
+// MARK: Sequential reply helpers
+
 /// This allows for type erasure
 fileprivate protocol InternalXPCSequentialResponseHandler {
+    var route: XPCRoute { get }
     func handleResponse(_ response: Response)
 }
 
 fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: InternalXPCSequentialResponseHandler {
+    let route: XPCRoute
     private var failedToDecode = false
     private let handler: XPCClient.XPCSequentialResponseHandler<S>
     
@@ -651,35 +662,39 @@ fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: Intern
     private let serialQueue: DispatchQueue
     
     fileprivate init(request: Request, handler: @escaping XPCClient.XPCSequentialResponseHandler<S>) {
+        self.route = request.route
         self.handler = handler
         self.serialQueue = DispatchQueue(label: "response-handler-\(request.requestID)")
     }
     
     fileprivate func handleResponse(_ response: Response) {
         self.serialQueue.async {
-            if !self.failedToDecode {
-                do {
-                    if response.containsPayload {
-                        self.handler(.success(try response.decodePayload(asType: S.self)))
-                    } else if response.containsError {
-                        self.handler(.failure(try response.decodeError()))
-                    } else {
-                        self.handler(.finished)
-                    }
-                } catch {
-                    /// If we failed to decode then we need to terminate the sequence; however, the server won't know this happened. (Even if we were
-                    /// to inform the server it'd only be an optimization because the server could've already sent more replies in the interim.) We need to now
-                    /// ignore any future replies to prevent adding to the now terminated sequence. This requirements comes from how iterating over an
-                    /// async sequence works where if a call to `next()` throws then the iteration terminates an this is reflected in the documentation for
-                    /// `AsyncThrowingStream`:
-                    ///     In contrast to AsyncStream, this type can throw an error from the awaited next(), which terminates the stream with the thrown
-                    ///     error.
-                    ///
-                    /// While in theory we don't have to enforce this for the closure-based implementation, in principle and practice we want the closure and
-                    /// async implementations to be as consistent as possible.
-                    self.handler(.failure(XPCError.asXPCError(error: error)))
-                    self.failedToDecode = true
+            if self.failedToDecode {
+                return
+            }
+            
+            do {
+                if response.containsPayload {
+                    self.handler(.success(try response.decodePayload(asType: S.self)))
+                } else if response.containsError {
+                    self.handler(.failure(try response.decodeError()))
+                } else {
+                    self.handler(.finished)
                 }
+            } catch {
+                // If we failed to decode then we need to terminate the sequence; however, the server won't know this
+                // happened. (Even if we were to inform the server it'd only be an optimization because the server
+                // could've already sent more replies in the interim.) We need to now ignore any future replies to
+                // prevent adding to the now terminated sequence. This requirement comes from how iterating over an
+                // async sequence works where if a call to `next()` throws then the iteration terminates. This is
+                // reflected in the documentation for `AsyncThrowingStream`:
+                //     In contrast to AsyncStream, this type can throw an error from the awaited next(), which
+                //     terminates the stream with the thrown error.
+                //
+                // While in theory we don't have to enforce this for the closure-based implementation, in principle and
+                // practice we want the closure and async implementations to be as consistent as possible.
+                self.handler(.failure(XPCError.asXPCError(error: error)))
+                self.failedToDecode = true
             }
         }
     }
@@ -690,36 +705,39 @@ fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: Intern
 fileprivate class InProgressSequentialReplies {
     /// Mapping of requestIDs to handlers.
     private var handlers = [UUID : InternalXPCSequentialResponseHandler]()
-    /// Mapping of requestIDs to routes.
-    private var routes = [UUID : XPCRoute]()
-    /// This queue is used to serialize access to the above dictionaries.
+    /// This queue is used to serialize access to the above dictionary.
     private let serialQueue = DispatchQueue(label: String(describing: InProgressSequentialReplies.self))
     
     func registerHandler(_ handler: InternalXPCSequentialResponseHandler, forRequest request: Request) {
-        serialQueue.sync {
-            handlers[request.requestID] = handler
-            routes[request.requestID] = request.route
-        }
-    }
-    
-    func routeForRequestID(_ requestID: UUID) -> XPCRoute? {
-        serialQueue.sync {
-            routes[requestID]
-        }
-    }
-    
-    func handleResponse(_ response: Response) {
         serialQueue.async {
+            self.handlers[request.requestID] = handler
+        }
+    }
+    
+    func handleMessage(_ message: xpc_object_t) {
+        serialQueue.async {
+            let response: Response
+            do {
+                let requestID = try Response.decodeRequestID(dictionary: message)
+                guard let route = self.handlers[requestID]?.route else {
+                    return
+                }
+                response = try Response(dictionary: message, route: route)
+            } catch {
+                // In theory these could be reported to some sort of error handler set on the client, but it's an
+                // intentional choice to not introduce that additional conceptual complexity for API users because in
+                // all other cases errors are associated with the specific send/sendMessage call.
+                return
+            }
+            
+            // Retrieve the handler, removing it if the sequence has finished or errored out
             let handler: InternalXPCSequentialResponseHandler?
-            /// Remove the handler if the sequence has finished or errored out
             if response.containsPayload {
                 handler = self.handlers[response.requestID]
             } else if response.containsError {
                 handler = self.handlers.removeValue(forKey: response.requestID)
-                self.routes.removeValue(forKey: response.requestID)
             } else { // Finished
                 handler = self.handlers.removeValue(forKey: response.requestID)
-                self.routes.removeValue(forKey: response.requestID)
             }
             guard let handler = handler else {
                 fatalError("Sequential result was received for an unregistered requestID: \(response.requestID)")
