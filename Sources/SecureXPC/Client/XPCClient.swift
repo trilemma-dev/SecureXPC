@@ -541,9 +541,10 @@ public class XPCClient {
             //   ordering between the invocations of the connection's event handler and the reply handler for that
             //   message, even if they are targeted to the same queue.
             //
-            // The net effect of this is we can't do much with the reply such as terminating the sequence because this
-            // reply can arrive before some of the out-of-band sends from the server to client do. (This was attempted
-            // and it caused unit tests to fail non-deterministically.)
+            // The net effect of this is we can't do much with the reply such as terminating the sequence or
+            // deregistering the handler because this reply will sometimes arrive before some of the out-of-band sends
+            // from the server to client are received. (This was attempted and it caused unit tests to fail
+            // non-deterministically.)
             //
             // But if this is an internal XPC error (for example because the server shut down), we can use this to
             // update the connection's state.

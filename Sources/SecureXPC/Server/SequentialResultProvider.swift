@@ -15,10 +15,13 @@ import Foundation
 /// - Synchronous without a message — ``XPCServer/registerRoute(_:handler:)-7r1hv``
 /// - Synchronous with a message — ``XPCServer/registerRoute(_:handler:)-qcox``
 ///
-/// > Important: It is valid to use an instance of this class outside of the closure it was provided to. Responses will be sent so long as the client remains connected.
+/// It is valid to use an instance of this class outside of the closure it was provided to. Responses will be sent so long as the client remains connected.
 ///
-/// Any errors generated while using this provider will be passed to the ``XPCServer``'s error handler. Once a sequence has been either explicitly finished or
-/// finishes because of an encoding error, any subsequent operations will not be sent and ``XPCError/sequenceFinished`` will be passed to the error handler.
+/// Any errors generated while using this provider will be passed to the ``XPCServer``'s error handler.
+///
+/// Once a sequence has been either explicitly finished or finishes because of an encoding error, any subsequent operations will not be sent and
+/// ``XPCError/sequenceFinished`` will be passed to the error handler. If a sequence was not already finished, it will be finished upon deinitialization of this
+/// provider instance.
 ///
 /// While provider instances are thread-safe, attempting concurrent responses is likely to lead to inconsistent ordering on the client side. If exact ordering is
 /// necessary, it is recommended that callers synchronize access to a provider instance.
@@ -53,7 +56,28 @@ public class SequentialResultProvider<S: Encodable> {
         self.serialQueue = DispatchQueue(label: "response-provider-\(request.requestID)")
     }
     
+    /// Finishes the sequence if it hasn't already been.
+    deinit {
+        // There's no need to run this on the serial queue as deinit does not run concurrently with anything else
+        if !self.isFinished, let connection = connection {
+            // This intentionally doesn't call finished() because that would run async and by the time ir ran
+            // deinitialization may have (and in practice typically will have) already completed
+            do {
+                var response = xpc_dictionary_create(nil, nil, 0)
+                try Response.encodeRequestID(self.request.requestID, intoReply: &response)
+                xpc_connection_send_message(connection, response)
+            } catch {
+                self.sendToServerErrorHandler(error)
+                
+                // There's no point trying to send the encoding error to the client because encoding the requestID
+                // failed and that's needed by the client in order to properly reassociate the error with the request
+            }
+        }
+    }
+    
     /// Responds to the client with the provided result.
+    ///
+    /// - Parameter result: The sequential result to respond with.
     public func respond(withResult result: SequentialResult<S, Error>) {
         switch result {
             case .success(let value):
@@ -66,6 +90,8 @@ public class SequentialResultProvider<S: Encodable> {
     }
     
     /// Responds to the client with the provided value.
+    ///
+    /// - Parameter value: The value to be sent.
     public func success(value: S) {
         self.sendResponse(isFinished: false) { response in
             try Response.encodePayload(value, intoReply: &response)
@@ -75,6 +101,8 @@ public class SequentialResultProvider<S: Encodable> {
     /// Responds to the client with the provided error and finishes the sequence.
     ///
     /// This error will also be passed to the ``XPCServer``'s error handler if one has been set.
+    ///
+    /// - Parameter error: The error to be sent to the client and passed to the server's error handler.
     public func failure(error: Error) {
         let handlerError = HandlerError(error: error)
         self.sendToServerErrorHandler(handlerError)
@@ -85,6 +113,8 @@ public class SequentialResultProvider<S: Encodable> {
     }
     
     /// Responds to the client indicating the sequence is now finished.
+    ///
+    /// If a sequence was not already finished, it will be finished upon deinitialization of this provider.
     public func finished() {
         // An "empty" response indicates it's finished
         self.sendResponse(isFinished: true) { _ in }
