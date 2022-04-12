@@ -91,4 +91,5 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``SequentialResultProvider``
 
 ### Other
+- ``XPCFileDescriptorContainer``
 - ``XPCRequestContext``

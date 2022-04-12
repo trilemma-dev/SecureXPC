@@ -20,6 +20,15 @@ func const(_ input: UnsafePointer<CChar>!) -> UnsafePointer<CChar>! {
 	return UnsafePointer(mutableCopy) // The result should never actually be mutated
 }
 
+/// Thrown by a "fake" `Codable` instance such as ``XPCServerEndpoint`` or ``XPCFileDescriptorContainer`` which are only capable of being
+/// encoded or decoded by the XPC coders, not an arbitrary coder.
+///
+/// This error is intentionally internal to the framework as we don't want API users to be trying to explicitly handle this specific case.
+enum XPCCoderError: Error {
+    case onlyDecodableBySecureXPCFramework
+    case onlyEncodableBySecureXPCFramework
+}
+
 /// Determines the `SecCode` corresponding to an XPC connection and/or message.
 ///
 /// Uses undocumented functionality prior to macOS 11.

@@ -100,4 +100,10 @@ internal class XPCSingleValueEncodingContainer: SingleValueEncodingContainer, XP
 
 		try value.encode(to: encoder)
 	}
+    
+    // MARK: XPC specific encoding
+    
+    func setAlreadyEncodedValue(_ value: xpc_object_t) {
+        self.setValue(value)
+    }
 }
