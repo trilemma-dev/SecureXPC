@@ -49,9 +49,9 @@ internal class XPCEncoderImpl: Encoder, XPCContainer {
         return container
     }
 
-	func singleValueContainer() -> SingleValueEncodingContainer {
+    func singleValueContainer() -> SingleValueEncodingContainer {
         return xpcSingleValueContainer()
-	}
+    }
 
 	internal func encodedValue() throws -> xpc_object_t? {
 		return try container?.encodedValue()
