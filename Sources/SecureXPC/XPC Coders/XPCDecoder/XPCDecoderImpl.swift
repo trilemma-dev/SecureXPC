@@ -37,9 +37,15 @@ internal class XPCDecoderImpl: Decoder {
                                                      userInfo: self.userInfo)
 	}
 
-	func singleValueContainer() throws -> SingleValueDecodingContainer {
+    // Internal implementation so that XPC-specific functions of the container can be accessed
+    func xpcSingleValueContainer() -> XPCSingleValueDecodingContainer {
         XPCSingleValueDecodingContainer(value: self.value,
                                         codingPath: self.codingPath,
                                         userInfo: self.userInfo)
+    }
+
+    
+	func singleValueContainer() throws -> SingleValueDecodingContainer {
+        xpcSingleValueContainer()
 	}
 }

@@ -40,13 +40,18 @@ internal class XPCEncoderImpl: Encoder, XPCContainer {
 
 		return container
 	}
+    
+    // Internal implementation so that XPC-specific functions of the container can be accessed
+    func xpcSingleValueContainer() -> XPCSingleValueEncodingContainer {
+        let container = XPCSingleValueEncodingContainer(codingPath: self.codingPath)
+        self.container = container
 
-	func singleValueContainer() -> SingleValueEncodingContainer {
-		let container = XPCSingleValueEncodingContainer(codingPath: self.codingPath)
-		self.container = container
+        return container
+    }
 
-		return container
-	}
+    func singleValueContainer() -> SingleValueEncodingContainer {
+        return xpcSingleValueContainer()
+    }
 
 	internal func encodedValue() throws -> xpc_object_t? {
 		return try container?.encodedValue()

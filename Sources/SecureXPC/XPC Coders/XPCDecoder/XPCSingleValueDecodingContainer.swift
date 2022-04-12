@@ -102,4 +102,10 @@ internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
                                                   codingPath: self.codingPath,
                                                   userInfo: self.userInfo))
 	}
+    
+    // MARK: XPC specific decoding
+    
+    func accessAsEncodedValue(xpcType: xpc_type_t) throws -> xpc_object_t {
+        return try decode(xpcType: xpcType, transform: {$0})
+    }
 }
