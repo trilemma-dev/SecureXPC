@@ -92,6 +92,7 @@ import Foundation
 /// ### Retrieving a Server
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
+/// - ``forThisLoginItem()``
 /// - ``forThisMachService(named:clientRequirements:)``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
@@ -150,6 +151,9 @@ public class XPCServer {
         }
     }
     
+    /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
+    internal let messageAcceptor: MessageAcceptor
+    
     /// The queue used to run the handlers associated with registered routes.
     ///
     /// Applying the target queue is asynchronous and non-preemptive and therefore will not interrupt the execution of an already-running handler. The queue
@@ -158,6 +162,10 @@ public class XPCServer {
         willSet {
             connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
         }
+    }
+    
+    internal init(messageAcceptor: MessageAcceptor) {
+        self.messageAcceptor = messageAcceptor
     }
     
     // MARK: Route registration
@@ -494,11 +502,6 @@ public class XPCServer {
     public var serviceName: String? {
         fatalError("Abstract Property")
     }
-    
-    /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal var messageAcceptor: MessageAcceptor {
-        fatalError("Abstract Property")
-    }
 }
 
 // MARK: public server protocols
@@ -553,7 +556,7 @@ extension XPCServer {
     /// > Note: If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(clientRequirements:)``
     /// instead.
     public static func makeAnonymous() -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
+        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor.instance)
     }
 
     /// Creates a new anonymous server that accepts requests from clients which meet the security requirements.
@@ -588,7 +591,7 @@ extension XPCServer {
     /// - Parameters:
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
     public static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
+        XPCAnonymousServer(messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
     }
     
     /// Provides a server for this helper tool if it was installed with
@@ -611,6 +614,18 @@ extension XPCServer {
     /// - Returns: A server instance configured with the embedded property list entries.
     public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
+    }
+    
+    /// Provides a server for this login item installed with
+    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+    ///
+    /// Incoming requests will only be accepted from the main app containing this login item.
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
+    ///
+    /// - Returns: A server instance configured to communicate with its main containing app.
+    public static func forThisLoginItem() throws -> XPCServer & XPCNonBlockingServer {
+        try XPCMachServer._forThisLoginItem()
     }
 
     /// Provides a server for this XPC Mach service that accepts requests from clients which meet the security requirements.
@@ -652,7 +667,8 @@ extension XPCServer {
         named machServiceName: String,
         clientRequirements: [SecRequirement]
     ) throws -> XPCServer & XPCNonBlockingServer {
-        try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
+        try XPCMachServer.getXPCMachServer(named: machServiceName,
+                                           messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
     }
 }
 
