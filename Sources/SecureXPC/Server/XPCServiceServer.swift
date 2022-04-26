@@ -11,7 +11,7 @@ import Foundation
 ///
 /// In the case of this framework, the XPC service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
-	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor.instance)
+	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
     
     internal static func _forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details

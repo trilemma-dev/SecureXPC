@@ -15,30 +15,19 @@ internal protocol MessageAcceptor {
     func isEqual(to acceptor: MessageAcceptor) -> Bool
 }
 
-extension MessageAcceptor {
-    // Default implementation is based purely on matching types
-    func isEqual(to acceptor: MessageAcceptor) -> Bool {
-        return type(of: acceptor) == Self.self
-    }
-}
-
-/// This should only be used by XPC services which are application-scoped, so it's safe to assume they're inheritently safe.
+/// This should only be used by XPC services which are application-scoped, so it's acceptable to assume they're inheritently safe.
 internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
-    static let instance = AlwaysAcceptingMessageAcceptor()
-    
-    private init() { }
-    
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         true
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        type(of: acceptor) == AlwaysAcceptingMessageAcceptor.self
     }
 }
 
 /// This is intended for use by `XPCAnonymousServer`.
 internal struct SameProcessMessageAcceptor: MessageAcceptor {
-    static let instance = SameProcessMessageAcceptor()
-    
-    private init() { }
-    
     /// Accepts a message only if it is coming from this process.
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         // In the case of an XPCAnonymousServer, all of the connections must be created after the server itself was
@@ -47,6 +36,10 @@ internal struct SameProcessMessageAcceptor: MessageAcceptor {
         // the PID returned by xpc_connection_get_pid(...) is not the process that created the connection, there's no
         // way for it fake being this process. Therefore for anonymous connections it's safe to directly compare PIDs.
         getpid() == xpc_connection_get_pid(connection)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        type(of: acceptor) == SameProcessMessageAcceptor.self
     }
 }
 
@@ -61,10 +54,16 @@ internal struct SecRequirementsMessageAcceptor: MessageAcceptor {
         self.requirements = requirements
     }
     
-    /// Accepts a message if it meets at least on of the provided `requirements`.
+    /// Accepts a message if it meets at least one of the provided `requirements`.
     ///
     /// If the `SecCode` of the process belonging to the other side of the connection could be not be determined, `false` is always returned.
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        do {
+            try expandSandboxIfNecessary(message: message)
+        } catch {
+            return false
+        }
+        
         guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: message) else {
             return false
         }
@@ -97,56 +96,40 @@ internal struct SecRequirementsMessageAcceptor: MessageAcceptor {
 
 /// Accepts messages that originates from a directory containing this server.
 internal struct ParentBundleMessageAcceptor: MessageAcceptor {
+    /// Requests must come from a process that either has the same URL as this or is a subdirectory of it.
+    private let parentBundleURL: URL
     
-    static let instance = ParentBundleMessageAcceptor()
-    
-    private init() { }
+    init(parentBundleURL: URL) {
+        self.parentBundleURL = parentBundleURL
+    }
     
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        do {
+            try expandSandboxIfNecessary(message: message)
+        } catch {
+            return false
+        }
+        
         guard let clientCode = SecCodeCreateWithXPCConnection(connection, andMessage: message),
               let clientPath = SecCodeCopyPath(clientCode) else {
             return false
         }
         
-        var serverCode: SecCode?
-        guard SecCodeCopySelf(SecCSFlags(), &serverCode) == errSecSuccess,
-              let serverCode = serverCode,
-              let serverPath = SecCodeCopyPath(serverCode) else {
+        // If this is true there's no possibility of the client being equal to or a subdirectory of the parent bundle.
+        // And importantly, this prevents indexing out of bounds when iterate through to check equality/containment.
+        if clientPath.pathComponents.count < parentBundleURL.pathComponents.count {
             return false
         }
         
-        // TODO: change this logic so any path within the parent bundle's directory is accepted
-        // this will allow for other services, such as a Finder Sync Extension, to also communicate with the login item
-        
-        // If this is true, then the client path can't possibly be a parent directory
-        if clientPath.pathComponents.count > serverPath.pathComponents.count {
-            return false
-        }
-        
-        // Validate the each component in the client path is present in the server in path in the same order
-        for i in 0..<clientPath.pathComponents.count {
-            if clientPath.pathComponents[i] != serverPath.pathComponents[i] {
+        // Validate the each component in the client path is present in the parent bundle path in the same order
+        for i in 0..<parentBundleURL.pathComponents.count {
+            if parentBundleURL.pathComponents[i] != clientPath.pathComponents[i] {
                 return false
             }
         }
         
         return true
     }
-    
-    /// This needs to be computed each time and not stored because it's entirely valid for a running app's bundle directory to be moved.
-    /*
-    private func parentBundleLocation() -> URL? {
-        var code: SecCode?
-        guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess,
-              let code = code,
-              let path = SecCodeCopyPath(code) else {
-            return nil
-        }
-        
-        
-        
-        return nil
-    }*/
     
     private func SecCodeCopyPath(_ code: SecCode) -> URL? {
         var staticCode: SecStaticCode?
@@ -162,5 +145,52 @@ internal struct ParentBundleMessageAcceptor: MessageAcceptor {
         }
         
         return path
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? ParentBundleMessageAcceptor else {
+            return false
+        }
+        
+        return acceptor.parentBundleURL == self.parentBundleURL
+    }
+}
+
+/// Logically ands the results of two message acceptors.
+struct AndMessageAcceptor: MessageAcceptor {
+    private let lhs: MessageAcceptor
+    private let rhs: MessageAcceptor
+    
+    init(lhs: MessageAcceptor, rhs: MessageAcceptor) {
+        self.lhs = lhs
+        self.rhs = rhs
+    }
+    
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.acceptMessage(connection: connection, message: message) &&
+        rhs.acceptMessage(connection: connection, message: message)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? AndMessageAcceptor else {
+            return false
+        }
+        
+        return self.lhs.isEqual(to: acceptor.lhs) && self.rhs.isEqual(to: acceptor.rhs)
+    }
+}
+
+/// If sandboxed, expands the sandbox by using a URL contained within the client's request.
+private func expandSandboxIfNecessary(message: xpc_object_t) throws {
+    // If we're sandboxed, in order to check the validity of the client process we need to expand our sandbox to include
+    // the client's bundle. If the client is a legitimate SecureXPC client then the request will include a bookmark to
+    // its bundle. If it's an attempted exploit, this poses some risk if there are vulnerabilities in decoding or in how
+    // URL's initializer resolves the bookmark.
+    if try isSandboxed() {
+        let clientBookmark = try Request.decodeClientBookmark(dictionary: message)
+        var isStale = Bool()
+        // Creating this URL implicitly applies the bookmark's security scope
+        // See https://developer.apple.com/forums//thread/704971?answerId=711609022
+        _ = try URL(resolvingBookmarkData: clientBookmark, bookmarkDataIsStale: &isStale)
     }
 }

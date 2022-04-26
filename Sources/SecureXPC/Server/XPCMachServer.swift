@@ -118,52 +118,8 @@ extension XPCMachServer {
         }
     }
     
-    internal static func _forThisLoginItem() throws -> XPCMachServer {
-        // There's no public way to definitively determine this code is actually running as part of a login item, but
-        // at a minimum it's possible to determine if we're *not* one based on the required directory structure.
-        //
-        // From SMLoginItemSetEnabled:
-        // https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled
-        //     Enables a helper tool in the main app bundle’s Contents/Library/LoginItems directory.
-        func validatePathComponent(_ path: URL, expectedLastComponent: String) throws -> URL {
-            if path.lastPathComponent != expectedLastComponent {
-                let message = "A login item helper tool must be located within the main app bundle's " +
-                              "Contents/Library/LoginItems directory.\n" +
-                              "Expected path component: \(expectedLastComponent)\n" +
-                              "Actual path component: \(path.lastPathComponent)"
-                throw XPCError.misconfiguredLoginItem(message)
-            }
-            
-            return path.deletingLastPathComponent()
-        }
-        
-        let loginItemsDir = Bundle.main.bundleURL.deletingLastPathComponent() // removes the login item's app bundle
-        let libraryDir = try validatePathComponent(loginItemsDir, expectedLastComponent: "LoginItems")
-        let contentsDir = try validatePathComponent(libraryDir, expectedLastComponent: "Library")
-        let parentAppBundle = try validatePathComponent(contentsDir, expectedLastComponent: "Contents")
-        
-        if parentAppBundle.pathExtension != "app" {
-            let message = "A login item helper tool must be located within a main app bundle, but the containing " +
-                          "directory is not an app bundle.\n" +
-                          "Expected path extension: app\n" +
-                          "Actual path extension: \(parentAppBundle.pathExtension)"
-            throw XPCError.misconfiguredLoginItem(message)
-        }
-        
-        // Note: due to sandboxing, there's a good chance we can't actually access the parent app bundle to do any sort
-        // of validation (like checking it's actually a bundle) or reading its Info.plist
-        
-        // From Apple's AppSandboxLoginItemXPCDemo:
-        // https://developer.apple.com/library/archive/samplecode/AppSandboxLoginItemXPCDemo/
-        //     LaunchServices implicitly registers a mach service for the login item whose name is the same as the
-        //     login item's bundle identifier.
-        guard let bundleID = Bundle.main.bundleIdentifier else {
-            throw XPCError.misconfiguredLoginItem("The bundle identifier is missing; login items must have one")
-        }
-        
-        return try getXPCMachServer(named: bundleID, messageAcceptor: ParentBundleMessageAcceptor.instance)
-    }
-
+    // MARK: Blessed Helper Tool
+    
     internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
         // Determine mach service name using the launchd property list's MachServices entry
         let machServiceName: String
@@ -231,5 +187,129 @@ extension XPCMachServer {
         }
         
         return Data(bytes: section, count: Int(size))
+    }
+    
+    // MARK: Login Item
+    
+    internal static func _forThisLoginItem() throws -> XPCMachServer {
+        guard let teamIdentifier = try teamIdentifier() else {
+            throw XPCError.misconfiguredLoginItem("A login item must have a team identifier in order to enable " +
+                                                  "secure communication.")
+        }
+        
+        // From Apple's AppSandboxLoginItemXPCDemo:
+        // https://developer.apple.com/library/archive/samplecode/AppSandboxLoginItemXPCDemo/
+        //     LaunchServices implicitly registers a Mach service for the login item whose name is the same as the
+        //     login item's bundle identifier.
+        guard let bundleID = Bundle.main.bundleIdentifier else {
+            throw XPCError.misconfiguredLoginItem("The bundle identifier is missing; login items must have one.")
+        }
+        
+        let parentMessageAcceptor = try validateIsLoginItem(teamIdentifier: teamIdentifier)
+        let teamRequirementMessageAcceptor = try messageAcceptor(forTeamIdentifier: teamIdentifier)
+        let messageAcceptor = AndMessageAcceptor(lhs: teamRequirementMessageAcceptor, rhs: parentMessageAcceptor)
+        
+        return try getXPCMachServer(named: bundleID, messageAcceptor: messageAcceptor)
+    }
+    
+    /// The team identifier for this process or `nil` if there isn't one.
+    private static func teamIdentifier() throws -> String? {
+        var info: CFDictionary?
+        let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
+        let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)
+        guard status == errSecSuccess, let info = info as NSDictionary? else {
+            throw XPCError.internalFailure("SecCodeCopySigningInformation failed with status: \(status)")
+        }
+
+        return info[kSecCodeInfoTeamIdentifier] as? String
+    }
+    
+    /// Partially validates this process is a login item, and if successful returns a message acceptor which accepts messages from any client located within the
+    /// parent bundle of this login item.
+    private static func validateIsLoginItem(teamIdentifier: String) throws -> ParentBundleMessageAcceptor {
+        // From SMLoginItemSetEnabled:
+        // https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled
+        //     Enables a helper tool in the main app bundle’s Contents/Library/LoginItems directory.
+        func validatePathComponent(_ path: URL, expectedLastComponent: String) throws -> URL {
+            if path.lastPathComponent != expectedLastComponent {
+                let message = "A login item helper tool must be located within the main app bundle's " +
+                              "Contents/Library/LoginItems directory.\n" +
+                              "Expected path component: \(expectedLastComponent)\n" +
+                              "Actual path component: \(path.lastPathComponent)"
+                throw XPCError.misconfiguredLoginItem(message)
+            }
+            
+            return path.deletingLastPathComponent()
+        }
+        
+        let loginItemsDir = Bundle.main.bundleURL.deletingLastPathComponent() // removes the login item's app bundle
+        let libraryDir = try validatePathComponent(loginItemsDir, expectedLastComponent: "LoginItems")
+        let contentsDir = try validatePathComponent(libraryDir, expectedLastComponent: "Library")
+        let parentBundle = try validatePathComponent(contentsDir, expectedLastComponent: "Contents")
+        if parentBundle.pathExtension != "app" {
+            let message = "A login item must be located within a main app bundle, but the containing " +
+                          "directory is not an app bundle.\n" +
+                          "Expected path extension: app\n" +
+                          "Actual path extension: \(parentBundle.pathExtension)"
+            throw XPCError.misconfiguredLoginItem(message)
+        }
+        
+        if try isSandboxed() {
+            // If this process is sandboxed, then the login item *must* have an application group entitlement in order
+            // to enable XPC communication. (Non-sandboxed apps cannot have one as this entitlement only applies to the
+            // sandbox - it's not part of the hardened runtime.)
+            let entitlementName = "com.apple.security.application-groups"
+            
+            let entitlement = try readEntitlement(name: entitlementName)
+            guard let entitlement = entitlement else {
+                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) is missing, " +
+                                                      "but must be present for a sandboxed login item to communicate " +
+                                                      "over XPC.")
+            }
+            guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
+                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be an " +
+                                                      "array of strings.")
+            }
+            let appGroups = try entitlement.map { (element: NSArray.Element) throws -> String in
+                guard let elementAsString = element as? String else {
+                    throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be " +
+                                                          "an array of strings.")
+                }
+                
+                return elementAsString
+            }
+            
+            // From https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups
+            //     For macOS the format is: <team identifier>.<group name>
+            //
+            // So for XPC communication to succeed at least one app group must start with this login item's team
+            // identifier followed by a period.
+            if !appGroups.contains(where: { $0.starts(with: "\(teamIdentifier).") }) {
+                let message = "Application groups entitlement \(entitlementName) must contain at least one " +
+                              "application group for team identifier \(teamIdentifier)."
+                throw XPCError.misconfiguredLoginItem(message)
+            }
+        }
+        
+        return ParentBundleMessageAcceptor(parentBundleURL: parentBundle)
+    }
+    
+    private static func messageAcceptor(forTeamIdentifier teamIdentifier: String) throws -> SecRequirementsMessageAcceptor {
+        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
+        // In regards to subject.OU:
+        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
+        let teamRequirement = "certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+        // Effectively this means the certificate chain was signed by Apple
+        let appleRequirement = "anchor apple generic"
+        let requirementString = [appleRequirement, teamRequirement].joined(separator: " and ") as CFString
+        
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(requirementString, SecCSFlags(), &requirement) == errSecSuccess,
+              let requirement = requirement else {
+            let message = "Security requirement could not be created; textual representation: \(requirementString)"
+            throw XPCError.internalFailure(message)
+        }
+        
+        return SecRequirementsMessageAcceptor([requirement])
     }
 }
