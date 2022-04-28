@@ -232,8 +232,8 @@ extension XPCMachServer {
         //     Enables a helper tool in the main app bundle’s Contents/Library/LoginItems directory.
         func validatePathComponent(_ path: URL, expectedLastComponent: String) throws -> URL {
             if path.lastPathComponent != expectedLastComponent {
-                let message = "A login item helper tool must be located within the main app bundle's " +
-                              "Contents/Library/LoginItems directory.\n" +
+                let message = "A login item must be located within the main app bundle's Contents/Library/LoginItems " +
+                              "directory.\n" +
                               "Expected path component: \(expectedLastComponent)\n" +
                               "Actual path component: \(path.lastPathComponent)"
                 throw XPCError.misconfiguredLoginItem(message)
