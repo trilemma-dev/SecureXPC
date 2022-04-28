@@ -623,8 +623,8 @@ extension XPCServer {
     ///
     /// This function may successfully be called by both sandboxed and non-sandboxed login items. If this is a sandboxed login item, the
     /// [`com.apple.security.application-groups`](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups)
-    /// entitlement must be present and one of the application groups must have a team identifier matching this login item's helper tool. Both sandboxed and
-    /// non-sandboxed apps must have a team identifier.
+    /// entitlement must be present and one of the application groups must have the same team identifier as this login item. Both sandboxed and non-sandboxed
+    /// apps must have a team identifier.
     ///
     /// Incoming requests will only be accepted from the main app or helper tools contained within the main app bundle. Additionally they must have the same team
     /// identifier as this login item.
@@ -667,8 +667,7 @@ extension XPCServer {
     /// error handler has been set then it is called with ``XPCError/insecure``.
     ///
     /// - Parameters:
-    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry
-    ///   or be implicitly registered by LaunchServices.
+    ///   - named: The name of the Mach service this server should bind to.
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
     /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
     ///           requirements.
