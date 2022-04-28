@@ -15,6 +15,8 @@ It's built with security in mind, minimizing the opportunities for
 against the actual calling process instead of relying on PIDs which are known to be
 [insecure](https://saelo.github.io/presentations/warcon18_dont_trust_the_pid.pdf).
 
+Recommendation: If you are using `SMJobBless` helper tools, also check out [Blessed](https://github.com/trilemma-dev/Blessed).
+
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
 
 # Usage
