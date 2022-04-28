@@ -54,6 +54,9 @@ There are multiple types of servers which can be retrieved:
        [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
      - To see a sample app for this use case, check out
        [SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample)
+ - `XPCServer.forThisLoginItem()`
+     - For a login item installed with
+       [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
  - `XPCServer.forThisMachService(named:clientRequirements:)`
      - For
        [Launch Daemons and Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
@@ -89,7 +92,8 @@ There are multiple types of clients which can be retrieved:
      - This corresponds to servers created with `XPCServer.forThisXPCService()`
  - `XPCClient.forMachService(named:)`
      - For communicating with an XPC Mach service
-     - This corresponds to servers created with `XPCServer.forThisBlessedHelperTool()` or
+     - This corresponds to servers created with `XPCServer.forThisBlessedHelperTool()`,
+       `XPCServer.forThisLoginItem()`, and
        `XPCServer.forThisMachService(named:clientRequirements:)`
  - `XPCClient.forEndpoint(_:)`
     - This is the only way to communicate with an anonymous server
