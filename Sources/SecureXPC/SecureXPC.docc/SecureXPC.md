@@ -8,7 +8,9 @@ compatability.
 SecureXPC provides an easy way to perform secure XPC communication with pure Swift. `Codable` conforming types are used
 to make requests and receive responses. This framework can be used to communicate with any type of XPC service or XPC
 Mach service. Customized support for communicating with helper tools installed via 
-[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) is also provided.
+[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed
+via [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+are also provided.
 
 ## Usage
 The envisioned pattern when using this framework is to define routes in a shared file, retrieve a server in one program

@@ -29,6 +29,26 @@ enum XPCCoderError: Error {
     case onlyEncodableBySecureXPCFramework
 }
 
+
+/// Creates the static code representation for this running process.
+///
+/// This is a conveniene wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
+func SecStaticCodeCopySelf() throws -> SecStaticCode {
+    var currentCode: SecCode?
+    var status = SecCodeCopySelf(SecCSFlags(), &currentCode)
+    guard status == errSecSuccess, let currentCode = currentCode else {
+        throw XPCError.internalFailure("SecCodeCopySelf failed with status: \(status)")
+    }
+    
+    var currentStaticCode: SecStaticCode?
+    status = SecCodeCopyStaticCode(currentCode, SecCSFlags(), &currentStaticCode)
+    guard status == errSecSuccess, let currentStaticCode = currentStaticCode else {
+        throw XPCError.internalFailure("SecCodeCopyStaticCode failed with status: \(status)")
+    }
+    
+    return currentStaticCode
+}
+
 /// Determines the `SecCode` corresponding to an XPC connection and/or message.
 ///
 /// Uses undocumented functionality prior to macOS 11.
@@ -62,7 +82,7 @@ fileprivate struct UndocumentedAuditToken {
     /// If this function can't be loaded for some version, a fatalError will intentonally be raised as this should never occur on an older version of macOS supported by
     /// SecureXPC.
     ///
-    /// Note that because static variables are implicitly lazy the code to populate this variable never run unless this variable is accessed.
+    /// Note that because static variables are implicitly lazy the code to populate this variable is never run unless this variable is accessed.
     private static var xpc_connection_get_audit_tokenFunction: get_audit_token = {
         // From man dlopen 3: If a null pointer is passed in path, dlopen() returns a handle equivalent to RTLD_DEFAULT
         guard let handle = dlopen(nil, RTLD_LAZY) else {
@@ -89,4 +109,34 @@ fileprivate struct UndocumentedAuditToken {
         
         return token
     }
+}
+
+/// Determines if this process is sandboxed based on its entitlements.
+func isSandboxed() throws -> Bool {
+    let entitlementName = "com.apple.security.app-sandbox"
+    let entitlement = try readEntitlement(name: entitlementName)
+    
+    if let entitlement = entitlement {
+        guard CFGetTypeID(entitlement) == CFBooleanGetTypeID(), let boolValue = (entitlement as? Bool) else {
+            // Under normal circumstances it should not be possible for the entitlement to be anything but a boolean
+            // (Maybe it's possible if the app was built outside of Xcode or something unusual like that?)
+            fatalError("App sandbox entitlement has a non-boolean value")
+        }
+        
+        return boolValue
+    } else { // No entitlement means not sandboxed
+        return false
+    }
+}
+
+/// Reads an entitlement for this process.
+func readEntitlement(name: String) throws -> CFTypeRef? {
+    guard let task = SecTaskCreateFromSelf(nil) else {
+        throw XPCError.internalFailure("SecTaskCreateFromSelf failed")
+    }
+    guard let entitlement = SecTaskCopyValueForEntitlement(task, name as CFString, nil) else {
+        return nil
+    }
+    
+    return entitlement
 }

@@ -24,19 +24,21 @@ import Foundation
 /// ```
 ///
 /// #### XPC Mach services
-/// Launch Agents, Launch Daemons, and helper tools installed with
-/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
-/// over XPC by using Mach services.
+/// Launch Agents, Launch Daemons, helper tools installed with
+/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless), and login items installed with
+/// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled) can
+/// optionally communicate over XPC by using Mach services.
 ///
-/// In most cases, a server can be auto-configured for a helper tool installed with `SMJobBless`:
+/// In most cases, a server can be auto-configured using ``XPCServer/forThisBlessedHelperTool()`` for a helper tool installed with `SMJobBless`:
 /// ```swift
 /// let server = try XPCServer.forThisBlessedHelperTool()
 /// ```
-/// See ``XPCServer/forThisBlessedHelperTool()`` for the exact requirements which need to be met.
 ///
-/// For Launch Agents, Launch Daemons, more advanced `SMJobBless` helper tool configurations, as well as other cases it is necessary both to the specify the
-/// name of the service as well its security requirements. See ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and
-/// details.
+/// Similarly, a server can be auto-configured using ``XPCServer/forThisLoginItem()`` for a login item installed with `SMLoginItemSetEnabled`.
+///
+/// For Launch Agents, Launch Daemons, more advanced `SMJobBless` and `SMLoginItemSetEnabled` configurations, as well as other cases it is
+/// necessary both to the specify the name of the service as well its security requirements. See
+/// ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and details.
 ///
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program. Use cases for making one include:
@@ -92,6 +94,7 @@ import Foundation
 /// ### Retrieving a Server
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
+/// - ``forThisLoginItem()``
 /// - ``forThisMachService(named:clientRequirements:)``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
@@ -150,6 +153,9 @@ public class XPCServer {
         }
     }
     
+    /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
+    internal let messageAcceptor: MessageAcceptor
+    
     /// The queue used to run the handlers associated with registered routes.
     ///
     /// Applying the target queue is asynchronous and non-preemptive and therefore will not interrupt the execution of an already-running handler. The queue
@@ -158,6 +164,10 @@ public class XPCServer {
         willSet {
             connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
         }
+    }
+    
+    internal init(messageAcceptor: MessageAcceptor) {
+        self.messageAcceptor = messageAcceptor
     }
     
     // MARK: Route registration
@@ -494,11 +504,6 @@ public class XPCServer {
     public var serviceName: String? {
         fatalError("Abstract Property")
     }
-    
-    /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal var messageAcceptor: MessageAcceptor {
-        fatalError("Abstract Property")
-    }
 }
 
 // MARK: public server protocols
@@ -588,7 +593,7 @@ extension XPCServer {
     /// - Parameters:
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
     public static func makeAnonymous(clientRequirements: [SecRequirement]) -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SecureMessageAcceptor(requirements: clientRequirements))
+        XPCAnonymousServer(messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
     }
     
     /// Provides a server for this helper tool if it was installed with
@@ -611,6 +616,24 @@ extension XPCServer {
     /// - Returns: A server instance configured with the embedded property list entries.
     public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
+    }
+    
+    /// Provides a server for this login item installed with
+    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+    ///
+    /// This function may successfully be called by both sandboxed and non-sandboxed login items. If this is a sandboxed login item, the
+    /// [`com.apple.security.application-groups`](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups)
+    /// entitlement must be present and one of the application groups must have a team identifier matching this login item's helper tool. Both sandboxed and
+    /// non-sandboxed apps must have a team identifier.
+    ///
+    /// Incoming requests will only be accepted from the main app or helper tools contained within the main app bundle. Additionally they must have the same team
+    /// identifier as this login item.
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
+    ///
+    /// - Returns: A server instance configured to communicate with its main containing app.
+    public static func forThisLoginItem() throws -> XPCServer & XPCNonBlockingServer {
+        try XPCMachServer._forThisLoginItem()
     }
 
     /// Provides a server for this XPC Mach service that accepts requests from clients which meet the security requirements.
@@ -644,7 +667,8 @@ extension XPCServer {
     /// error handler has been set then it is called with ``XPCError/insecure``.
     ///
     /// - Parameters:
-    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry.
+    ///   - named: The name of the Mach service this server should bind to. This name must be present in the launchd property list's `MachServices` entry
+    ///   or be implicitly registered by LaunchServices.
     ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
     /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
     ///           requirements.
@@ -652,7 +676,8 @@ extension XPCServer {
         named machServiceName: String,
         clientRequirements: [SecRequirement]
     ) throws -> XPCServer & XPCNonBlockingServer {
-        try XPCMachServer.getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
+        try XPCMachServer.getXPCMachServer(named: machServiceName,
+                                           messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
     }
 }
 

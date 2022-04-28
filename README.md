@@ -7,8 +7,10 @@ later allowing clients to make non-blocking asynchronous requests to servers. A 
 providing compatibility back to OS X 10.10.
 
 This framework is ideal for communicating with helper tools installed via 
-[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless). It's built with
-security in mind, minimizing the opportunities for 
+[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed
+via
+[`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+It's built with security in mind, minimizing the opportunities for 
 [exploits](https://objectivebythesea.com/v3/talks/OBTS_v3_wReguła.pdf). Server-side security checks are performed
 against the actual calling process instead of relying on PIDs which are known to be
 [insecure](https://saelo.github.io/presentations/warcon18_dont_trust_the_pid.pdf).

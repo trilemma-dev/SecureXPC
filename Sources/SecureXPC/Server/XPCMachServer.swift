@@ -21,23 +21,17 @@ internal class XPCMachServer: XPCServer {
     private var started = false
     /// Connections received while the server is not started
     private var pendingConnections = [xpc_connection_t]()
-    /// Determines if an incoming request will be accepted based on the provided client requirements
-    private let _messageAcceptor: SecureMessageAcceptor
-    override internal var messageAcceptor: MessageAcceptor {
-        _messageAcceptor
-    }
     
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
-    private init(machServiceName: String, clientRequirements: [SecRequirement]) {
+    private init(machServiceName: String, messageAcceptor: MessageAcceptor) {
         self.machServiceName = machServiceName
-        self._messageAcceptor = SecureMessageAcceptor(requirements: clientRequirements)
         let listenerQueue = DispatchQueue(label: String(describing: XPCMachServer.self))
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
         self.listenerConnection = machServiceName.withCString { namePointer in
             xpc_connection_create_mach_service(namePointer, listenerQueue, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
         self.listenerQueue = listenerQueue
-        super.init()
+        super.init(messageAcceptor: messageAcceptor)
         
         // Configure listener for new connections, all received events are incoming client connections
         xpc_connection_set_event_handler(self.listenerConnection, { connection in
@@ -95,51 +89,37 @@ extension XPCMachServer {
     /// Prevents race conditions for creating and retrieving cached Mach servers
     private static let serialQueue = DispatchQueue(label: "XPCMachServer Retrieval Queue")
     
-    /// Returns a server with the provided name and requirements OR throws an error if that's not possible.
+    /// Returns a server with the provided name and an equivalent message acceptor OR throws an error if that's not possible.
     ///
     /// Decision tree:
     /// - If a server exists with that name:
-    ///   - If the client requirements match, return the server.
-    ///   - Else the client requirements do not match, throw an error.
+    ///   - If the message acceptors are equivalent, return the server.
+    ///   - Else, throw an error.
     /// - Else no server exists in the cache with the provided name, create one, store it in the cache, and return it.
     ///
     /// This behavior prevents ending up with two servers for the same named XPC Mach service.
     internal static func getXPCMachServer(named machServiceName: String,
-                                          clientRequirements: [SecRequirement]) throws -> XPCMachServer {
+                                          messageAcceptor: MessageAcceptor) throws -> XPCMachServer {
         // Force serial execution to prevent a race condition where multiple XPCMachServer instances for the same Mach
         // service name are created and returned
         try serialQueue.sync {
             let server: XPCMachServer
             if let cachedServer = machServerCache[machServiceName] {
-                // Transform the requirements into Data form so that they can be compared
-                let requirementTransform = { (requirement: SecRequirement) throws -> Data in
-                    var data: CFData?
-                    if SecRequirementCopyData(requirement, [], &data) == errSecSuccess,
-                       let data = data as Data? {
-                        return data
-                    } else {
-                        throw XPCError.unknown
-                    }
-                }
-                
-                // Turn into sets so they can be compared without taking into account the order of requirements
-                let requirementsData = Set<Data>(try clientRequirements.map(requirementTransform))
-                let cachedRequirementsData = Set<Data>(try cachedServer._messageAcceptor.requirements
-                                                                       .map(requirementTransform))
-                guard requirementsData == cachedRequirementsData else {
+                if !messageAcceptor.isEqual(to: cachedServer.messageAcceptor) {
                     throw XPCError.conflictingClientRequirements
                 }
-                
                 server = cachedServer
             } else {
-                server = XPCMachServer(machServiceName: machServiceName, clientRequirements: clientRequirements)
+                server = XPCMachServer(machServiceName: machServiceName, messageAcceptor: messageAcceptor)
                 machServerCache[machServiceName] = server
             }
             
             return server
         }
     }
-
+    
+    // MARK: Blessed Helper Tool
+    
     internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
         // Determine mach service name using the launchd property list's MachServices entry
         let machServiceName: String
@@ -181,8 +161,9 @@ extension XPCMachServer {
         if clientRequirements.isEmpty {
             throw XPCError.misconfiguredBlessedHelperTool("No requirements were generated from SMAuthorizedClients")
         }
+        let messageAcceptor = SecRequirementsMessageAcceptor(clientRequirements)
 
-        return try getXPCMachServer(named: machServiceName, clientRequirements: clientRequirements)
+        return try getXPCMachServer(named: machServiceName, messageAcceptor: messageAcceptor)
     }
 
     /// Read the property list embedded within this helper tool.
@@ -206,5 +187,129 @@ extension XPCMachServer {
         }
         
         return Data(bytes: section, count: Int(size))
+    }
+    
+    // MARK: Login Item
+    
+    internal static func _forThisLoginItem() throws -> XPCMachServer {
+        guard let teamIdentifier = try teamIdentifier() else {
+            throw XPCError.misconfiguredLoginItem("A login item must have a team identifier in order to enable " +
+                                                  "secure communication.")
+        }
+        
+        // From Apple's AppSandboxLoginItemXPCDemo:
+        // https://developer.apple.com/library/archive/samplecode/AppSandboxLoginItemXPCDemo/
+        //     LaunchServices implicitly registers a Mach service for the login item whose name is the same as the
+        //     login item's bundle identifier.
+        guard let bundleID = Bundle.main.bundleIdentifier else {
+            throw XPCError.misconfiguredLoginItem("The bundle identifier is missing; login items must have one.")
+        }
+        
+        let parentMessageAcceptor = try validateIsLoginItem(teamIdentifier: teamIdentifier)
+        let teamRequirementMessageAcceptor = try messageAcceptor(forTeamIdentifier: teamIdentifier)
+        let messageAcceptor = AndMessageAcceptor(lhs: teamRequirementMessageAcceptor, rhs: parentMessageAcceptor)
+        
+        return try getXPCMachServer(named: bundleID, messageAcceptor: messageAcceptor)
+    }
+    
+    /// The team identifier for this process or `nil` if there isn't one.
+    private static func teamIdentifier() throws -> String? {
+        var info: CFDictionary?
+        let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
+        let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)
+        guard status == errSecSuccess, let info = info as NSDictionary? else {
+            throw XPCError.internalFailure("SecCodeCopySigningInformation failed with status: \(status)")
+        }
+
+        return info[kSecCodeInfoTeamIdentifier] as? String
+    }
+    
+    /// Partially validates this process is a login item, and if successful returns a message acceptor which accepts messages from any client located within the
+    /// parent bundle of this login item.
+    private static func validateIsLoginItem(teamIdentifier: String) throws -> ParentBundleMessageAcceptor {
+        // From SMLoginItemSetEnabled:
+        // https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled
+        //     Enables a helper tool in the main app bundle’s Contents/Library/LoginItems directory.
+        func validatePathComponent(_ path: URL, expectedLastComponent: String) throws -> URL {
+            if path.lastPathComponent != expectedLastComponent {
+                let message = "A login item helper tool must be located within the main app bundle's " +
+                              "Contents/Library/LoginItems directory.\n" +
+                              "Expected path component: \(expectedLastComponent)\n" +
+                              "Actual path component: \(path.lastPathComponent)"
+                throw XPCError.misconfiguredLoginItem(message)
+            }
+            
+            return path.deletingLastPathComponent()
+        }
+        
+        let loginItemsDir = Bundle.main.bundleURL.deletingLastPathComponent() // removes the login item's app bundle
+        let libraryDir = try validatePathComponent(loginItemsDir, expectedLastComponent: "LoginItems")
+        let contentsDir = try validatePathComponent(libraryDir, expectedLastComponent: "Library")
+        let parentBundle = try validatePathComponent(contentsDir, expectedLastComponent: "Contents")
+        if parentBundle.pathExtension != "app" {
+            let message = "A login item must be located within a main app bundle, but the containing " +
+                          "directory is not an app bundle.\n" +
+                          "Expected path extension: app\n" +
+                          "Actual path extension: \(parentBundle.pathExtension)"
+            throw XPCError.misconfiguredLoginItem(message)
+        }
+        
+        if try isSandboxed() {
+            // If this process is sandboxed, then the login item *must* have an application group entitlement in order
+            // to enable XPC communication. (Non-sandboxed apps cannot have one as this entitlement only applies to the
+            // sandbox - it's not part of the hardened runtime.)
+            let entitlementName = "com.apple.security.application-groups"
+            
+            let entitlement = try readEntitlement(name: entitlementName)
+            guard let entitlement = entitlement else {
+                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) is missing, " +
+                                                      "but must be present for a sandboxed login item to communicate " +
+                                                      "over XPC.")
+            }
+            guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
+                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be an " +
+                                                      "array of strings.")
+            }
+            let appGroups = try entitlement.map { (element: NSArray.Element) throws -> String in
+                guard let elementAsString = element as? String else {
+                    throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be " +
+                                                          "an array of strings.")
+                }
+                
+                return elementAsString
+            }
+            
+            // From https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups
+            //     For macOS the format is: <team identifier>.<group name>
+            //
+            // So for XPC communication to succeed at least one app group must start with this login item's team
+            // identifier followed by a period.
+            if !appGroups.contains(where: { $0.starts(with: "\(teamIdentifier).") }) {
+                let message = "Application groups entitlement \(entitlementName) must contain at least one " +
+                              "application group for team identifier \(teamIdentifier)."
+                throw XPCError.misconfiguredLoginItem(message)
+            }
+        }
+        
+        return ParentBundleMessageAcceptor(parentBundleURL: parentBundle)
+    }
+    
+    private static func messageAcceptor(forTeamIdentifier teamIdentifier: String) throws -> SecRequirementsMessageAcceptor {
+        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
+        // In regards to subject.OU:
+        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
+        let teamRequirement = "certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+        // Effectively this means the certificate chain was signed by Apple
+        let appleRequirement = "anchor apple generic"
+        let requirementString = [appleRequirement, teamRequirement].joined(separator: " and ") as CFString
+        
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(requirementString, SecCSFlags(), &requirement) == errSecSuccess,
+              let requirement = requirement else {
+            let message = "Security requirement could not be created; textual representation: \(requirementString)"
+            throw XPCError.internalFailure(message)
+        }
+        
+        return SecRequirementsMessageAcceptor([requirement])
     }
 }

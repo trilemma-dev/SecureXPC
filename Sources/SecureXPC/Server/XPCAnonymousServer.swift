@@ -16,16 +16,10 @@ internal class XPCAnonymousServer: XPCServer {
     private var started = false
     /// Connections received while the server is not started
     private var pendingConnections = [xpc_connection_t]()
-    /// Determines if an incoming request will be accepted based on the provided client requirements
-    private let _messageAcceptor: MessageAcceptor
-    override internal var messageAcceptor: MessageAcceptor {
-        _messageAcceptor
-    }
     
-    internal init(messageAcceptor: MessageAcceptor) {
-        self._messageAcceptor = messageAcceptor
+    internal override init(messageAcceptor: MessageAcceptor) {
         self.anonymousListenerConnection = xpc_connection_create(nil, listenerQueue)
-        super.init()
+        super.init(messageAcceptor: messageAcceptor)
         
         // Configure listener for new anonymous connections, all received events are incoming client connections
         xpc_connection_set_event_handler(self.anonymousListenerConnection, { connection in
@@ -42,12 +36,6 @@ internal class XPCAnonymousServer: XPCServer {
     public override func startAndBlock() -> Never {
         self.start()
         dispatchMain()
-    }
-
-    internal func simulateDisconnectionForTesting() {
-        xpc_connection_cancel(self.anonymousListenerConnection)
-        // A new event handler must be set otherwise the existing one will still be used even after cancellation
-        xpc_connection_set_event_handler(self.anonymousListenerConnection, { _ in })
     }
 }
 

@@ -11,7 +11,7 @@ import Foundation
 ///
 /// In the case of this framework, the XPC service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
-	private static let service = XPCServiceServer()
+	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
     
     internal static func _forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
@@ -55,9 +55,5 @@ internal class XPCServiceServer: XPCServer {
     public override var serviceName: String? {
         // This is safe to unwrap because it was already checked in `_forThisXPCService()`.
         Bundle.main.bundleIdentifier!
-    }
-    
-    override internal var messageAcceptor: MessageAcceptor {
-        AlwaysAcceptingMessageAcceptor.instance
     }
 }

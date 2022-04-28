@@ -58,10 +58,16 @@ public enum XPCError: Error, Codable {
     ///
     /// The associated string is a descriptive error message.
     case misconfiguredXPCService(String)
+    /// The caller is not a login item installed with
+    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+    /// or its configuration is not compatible with ``XPCServer/forThisLoginItem()``.
+    case misconfiguredLoginItem(String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.
     case handlerError(HandlerError)
+    /// An error internal to the SecureXPC framework.
+    case internalFailure(String)
     /// Unknown error occurred.
     case unknown
     
