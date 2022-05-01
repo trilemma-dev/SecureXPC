@@ -77,7 +77,9 @@ import Foundation
 /// }
 /// ```
 ///
-/// On macOS 10.15 and later async functions and closures can also be registered as the handler for a route.
+/// On macOS 10.15 and later async functions and closures can also be registered as the handler for a route. For command line tools, such as the helper tools
+/// installed with `SMJobBless`, async functions and closures are only supported on macOS 12 and later. This is an
+/// [Apple limitation](https://developer.apple.com/forums/thread/701969) unrelated to SecureXPC.
 ///
 /// ### Starting a Server
 /// Once all of the routes are registered, the server must be told to start processing requests. In most cases this should be done with:
