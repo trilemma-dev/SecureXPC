@@ -37,13 +37,13 @@ func SecStaticCodeCopySelf() throws -> SecStaticCode {
     var currentCode: SecCode?
     var status = SecCodeCopySelf(SecCSFlags(), &currentCode)
     guard status == errSecSuccess, let currentCode = currentCode else {
-        throw XPCError.internalFailure("SecCodeCopySelf failed with status: \(status)")
+        throw XPCError.internalFailure(description: "SecCodeCopySelf failed with status: \(status)")
     }
     
     var currentStaticCode: SecStaticCode?
     status = SecCodeCopyStaticCode(currentCode, SecCSFlags(), &currentStaticCode)
     guard status == errSecSuccess, let currentStaticCode = currentStaticCode else {
-        throw XPCError.internalFailure("SecCodeCopyStaticCode failed with status: \(status)")
+        throw XPCError.internalFailure(description: "SecCodeCopyStaticCode failed with status: \(status)")
     }
     
     return currentStaticCode
@@ -132,7 +132,7 @@ func isSandboxed() throws -> Bool {
 /// Reads an entitlement for this process.
 func readEntitlement(name: String) throws -> CFTypeRef? {
     guard let task = SecTaskCreateFromSelf(nil) else {
-        throw XPCError.internalFailure("SecTaskCreateFromSelf failed")
+        throw XPCError.internalFailure(description: "SecTaskCreateFromSelf failed")
     }
     guard let entitlement = SecTaskCopyValueForEntitlement(task, name as CFString, nil) else {
         return nil

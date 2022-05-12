@@ -33,20 +33,22 @@ public enum XPCError: Error, Codable {
     /// Failed to encode a request or response in order to send it across the XPC connection.
     ///
     /// The associated value describes this encoding error.
-    case encodingError(String)
+    case encodingError(description: String)
     /// Failed to decode a request or response once it was received via the XPC connection.
     ///
     /// The associated value describes this decoding error.
-    case decodingError(String)
+    case decodingError(description: String)
     /// The route associated with the incoming request is not registered with the ``XPCServer``.
-    case routeNotRegistered([String])
+    case routeNotRegistered(routeName: [String])
     /// While the route associated with the incoming request is registered with the ``XPCServer``, the message and/or reply does not match the handler
     /// registered with the server.
     ///
-    /// The first associated value is the route's path components. The second is a descriptive error message.
-    case routeMismatch([String], String)
+    /// The first associated value is the route's name. The second is a descriptive error message.
+    case routeMismatch(routeName:[String], description: String)
     /// The caller is not a blessed helper tool or its property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
-    case misconfiguredBlessedHelperTool(String)
+    ///
+    /// The associated string is a descriptive error message.
+    case misconfiguredBlessedHelperTool(description: String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
     /// The caller is not an XPC service.
@@ -57,19 +59,25 @@ public enum XPCError: Error, Codable {
     /// The caller is a misconfigured XPC service.
     ///
     /// The associated string is a descriptive error message.
-    case misconfiguredXPCService(String)
+    case misconfiguredXPCService(description: String)
     /// The caller is not a login item installed with
     /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
     /// or its configuration is not compatible with ``XPCServer/forThisLoginItem()``.
-    case misconfiguredLoginItem(String)
+    ///
+    /// The associated string is a descriptive error message.
+    case misconfiguredLoginItem(description: String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.
     case handlerError(HandlerError)
     /// An error internal to the SecureXPC framework.
-    case internalFailure(String)
+    ///
+    /// The associated string is a descriptive error message.
+    case internalFailure(description: String)
     /// Unknown error occurred.
-    case unknown
+    ///
+    /// The associated string is a descriptive error message.
+    case unknown(description: String)
     
     /// Represents the provided error as an ``XPCError``.
     ///
@@ -82,11 +90,11 @@ public enum XPCError: Error, Codable {
         } else if let error = error as? HandlerError {
             return .handlerError(error)
         } else if let error = error as? DecodingError {
-            return .decodingError(String(describing: error))
+            return .decodingError(description: String(describing: error))
         } else if let error = error as? EncodingError {
-            return .encodingError(String(describing: error))
+            return .encodingError(description: String(describing: error))
         } else {
-            return .unknown
+            return .unknown(description: "Unexpected error received: \(error)")
         }
     }
     
@@ -99,7 +107,7 @@ public enum XPCError: Error, Codable {
         } else if xpc_equal(object, XPC_ERROR_TERMINATION_IMMINENT) {
             return .terminationImminent
         } else {
-            return .unknown
+            return .unknown(description: "Unexpected XPC object: \(object)")
         }
     }
 }

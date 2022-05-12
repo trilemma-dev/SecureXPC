@@ -357,7 +357,7 @@ public class XPCServer {
         }
         
         guard let handler = self.routes[request.route] else {
-            let error = XPCError.routeNotRegistered(request.route.pathComponents)
+            let error = XPCError.routeNotRegistered(routeName: request.route.pathComponents)
             var reply = xpc_dictionary_create_reply(message)
             self.handleError(error, request: request, connection: connection, reply: &reply)
             return
@@ -723,7 +723,8 @@ fileprivate extension XPCHandler {
         }
         
         if !errorMessages.isEmpty {
-            throw XPCError.routeMismatch(request.route.pathComponents, errorMessages.joined(separator: "\n"))
+            throw XPCError.routeMismatch(routeName: request.route.pathComponents,
+                                         description: errorMessages.joined(separator: "\n"))
         }
     }
 }

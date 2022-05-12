@@ -242,7 +242,7 @@ public class XPCClient {
                 let request = try Request(route: route.route)
                 sendRequest(request, withResponse: handler)
             } catch {
-                handler(.failure(.encodingError(String(describing: error))))
+                handler(.failure(XPCError.asXPCError(error: error)))
             }
         } else {
             if let encoded = try? Request(route: route.route).dictionary,
@@ -283,7 +283,7 @@ public class XPCClient {
                 let request = try Request(route: route.route, payload: message)
                 sendRequest(request, withResponse: handler)
             } catch {
-                handler(.failure(.encodingError(String(describing: error))))
+                handler(.failure(XPCError.asXPCError(error: error)))
             }
         } else {
             if let encoded = try? Request(route: route.route, payload: message).dictionary,
@@ -323,7 +323,7 @@ public class XPCClient {
             let request = try Request(route: route.route)
             sendRequest(request, withResponse: handler)
         } catch {
-            handler(.failure(.encodingError(String(describing: error))))
+            handler(.failure(XPCError.asXPCError(error: error)))
         }
     }
     
@@ -357,7 +357,7 @@ public class XPCClient {
             let request = try Request(route: route.route, payload: message)
             sendRequest(request, withResponse: handler)
         } catch {
-            handler(.failure(.encodingError(String(describing: error))))
+            handler(.failure(XPCError.asXPCError(error: error)))
         }
     }
     
@@ -473,7 +473,8 @@ public class XPCClient {
                     } else if R.self == EmptyResponse.self { // Special case for when an empty response is expected
                         result = .success(EmptyResponse.instance as! R)
                     } else {
-                        result = .failure(.unknown)
+                        result = .failure(.internalFailure(description: "Response is not empty nor does it contain a " +
+                                                                        "payload or error"))
                     }
                 } catch {
                     result = .failure(XPCError.asXPCError(error: error))
