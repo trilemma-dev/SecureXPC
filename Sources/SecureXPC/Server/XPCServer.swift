@@ -115,7 +115,7 @@ import Foundation
 /// - ``registerRoute(_:handler:)-6sxby``
 /// - ``registerRoute(_:handler:)-qcox``
 /// ### Configuring a Server
-/// - ``targetQueue``
+/// - ``handlerQueue``
 /// - ``setErrorHandler(_:)-lex4``
 /// - ``setErrorHandler(_:)-1r3up``
 /// ### Starting a Server
@@ -131,8 +131,13 @@ public class XPCServer {
     /// By default this is the
     /// [global concurrent queue](https://developer.apple.com/documentation/dispatch/dispatchqueue/2300077-global).
     ///
-    /// >Note: `async` handlers for registered routes do not make use of this queue.
-    public var targetQueue = DispatchQueue.global()
+    /// Requests will be dispatched to this queue in the order in which they are received by the server. However, even if this is set to a serial `DispatchQueue`
+    /// that does not guarantee the order will match `send` or `sendMessage` calls made by an ``XPCClient`` due to their asynchronous nature. If a need
+    /// exists for the server to receive requests in a specific order, the caller must wait until a `send` or `sendMessage` call has completed before calling the
+    /// next one.
+    ///
+    /// >Note: `async` handlers for registered routes do not make use of this queue and may always be run concurrently.
+    public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
     internal let messageAcceptor: MessageAcceptor
@@ -359,7 +364,7 @@ public class XPCServer {
         }
         
         if let handler = handler as? XPCHandlerSync {
-            // The target queue must be used to run sync handlers. The underlying XPC framework always delivers events
+            // The handler queue must be used to run sync handlers. The underlying XPC framework always delivers events
             // serially for the same connection (client in SecureXPC parlance) even if a target queue applied to the
             // connection is concurrent. From xpc_connection_set_target_queue:
             //
@@ -369,7 +374,7 @@ public class XPCServer {
             // This is *not* the behavior we want for XPCServer, which is intended to operate more like a web server
             // that largely abstracts away the concept of a client at all. As such, by default the target queue is
             // concurrent. (Although if an API user sets the target queue to be serial that's supported too.)
-            self.targetQueue.async {
+            self.handlerQueue.async {
                 XPCRequestContext.setForCurrentThread(connection: connection, message: message) {
                     var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
                     do {
@@ -383,13 +388,18 @@ public class XPCServer {
             }
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
             XPCRequestContext.setForTask(connection: connection, message: message) {
-                // Creating a task allows it to begin running immediately, achieving comparable as the use of the
-                // targetQueue for synchronous handlers. However, the difference is there's no possibility for the API
-                // user to enforce serial execution. From Task:
+                // Creating a task allows it to begin running immediately, operating similar to a concurrent
+                // DispatchQueue. However, the difference is there's no built in support to enforce serial execution.
+                // From Task:
                 //
                 //   When you create an instance of Task, you provide a closure that contains the work for that task to
                 //   perform. Tasks can start running immediately after creation; you don’t explicitly start or schedule
                 //   them.
+                //
+                // Note: An implementation was created, but never merged, that enabled serial execution of Tasks by
+                // manually managing the queue. The additional complexity was of little value as it doesn't result in
+                // consistent ordering of received events due to the asynchronous behavior of how they're sent by the
+                // XPCClient. If an API user wants consistent ordering, that needs to be done at the application layer.
                 Task {
                     var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
                     do {
