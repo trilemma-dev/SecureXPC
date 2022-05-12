@@ -11,7 +11,7 @@ import Foundation
 ///
 /// ### Retrieving a Client
 /// There are two different types of services you can communicate with using this client: XPC services and XPC Mach services. If you are uncertain which
-/// type of service you're using, it's likely an XPC Service.
+/// type of service you're using, it's likely an XPC service.
 ///
 /// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server.
 ///
@@ -27,16 +27,23 @@ import Foundation
 /// communicate with it.
 ///
 /// #### XPC Mach services
-/// Launch Agents, Launch Daemons, and helper tools installed with
-/// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) can optionally communicate
-/// over XPC by using Mach services.
+/// Launch Agents, Launch Daemons, helper tools installed with
+/// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless),  and login items installed with
+/// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+/// can optionally communicate over XPC by using Mach services.
 ///
-/// The name of the service must be specified when retrieving a client; this must be a key in the `MachServices` entry of the tool's launchd property list:
+/// The name of the service must be specified when retrieving a client:
 /// ```swift
 /// let client = XPCClient.forMachService(named: "com.example.service")
 /// ```
-/// The tool itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)`` or
-/// ``XPCServer/forThisBlessedHelperTool()`` in order for this client to be able to communicate with it.
+///
+/// The name of the service is defined differently depending on the type of bundle or binary:
+/// - For an `SMJobBless` helper tool this must be a key in the `MachServices` entry of the tool's launchd property list
+/// - For a `SMLoginItemSetEnabled` login item it is the bundle's identifier
+/// - For a Launch Agent or Launch Daemon, it's defined in the property list used when registering with `launchd`
+///
+/// The service itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)``,
+/// ``XPCServer/forThisBlessedHelperTool()``, or ``XPCServer/forThisLoginItem()`` in order for this client to be able to communicate with it.
 ///
 /// #### Endpoints
 /// Clients can be created from server endpoints:
@@ -196,9 +203,12 @@ public class XPCClient {
         xpc_connection_resume(connection)
 
         switch endpoint.serviceDescriptor {
-        case .anonymous: return XPCAnonymousClient(connection: connection)
-        case .xpcService(name: let name): return XPCServiceClient(xpcServiceName: name, connection: connection)
-        case .machService(name: let name): return XPCMachClient(machServiceName: name, connection: connection)
+            case .anonymous:
+                return XPCAnonymousClient(connection: connection)
+            case .xpcService(name: let name):
+                return XPCServiceClient(xpcServiceName: name, connection: connection)
+            case .machService(name: let name):
+                return XPCMachClient(machServiceName: name, connection: connection)
         }
     }
 

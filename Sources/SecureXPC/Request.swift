@@ -28,7 +28,7 @@ struct Request {
     ///
     /// If  `containsPayload` is `true` then `decodePayload` can be called to decode it; otherwise calling this function will result an error being thrown.
     let dictionary: xpc_object_t
-    /// A bookmark of the client's bundle. This allows a sandboxed server to validate the server's identity.
+    /// A bookmark of the client's bundle. This allows a sandboxed server to validate the client's identity.
     let clientBookmark: Data
     
     /// Represents a request that's already been encoded into an XPC dictionary.

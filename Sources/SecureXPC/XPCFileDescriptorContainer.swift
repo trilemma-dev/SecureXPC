@@ -40,7 +40,7 @@ public struct XPCFileDescriptorContainer {
     ///
     /// - Parameters:
     ///   - descriptor: The descriptor to be boxed.
-    ///   - closeDescriptor: If set to `true`, `descriptor` will be closed if this initializer succesfully completes.
+    ///   - closeDescriptor: If set to `true`, `descriptor` will be closed if this initializer successfully completes.
     public init(descriptor: Int32, closeDescriptor: Bool) throws {
         guard let xpcEncodedForm = xpc_fd_create(descriptor) else {
             throw XPCFileDescriptorContainerError.invalidFileDescriptor
@@ -56,7 +56,7 @@ public struct XPCFileDescriptorContainer {
     ///
     /// - Parameters:
     ///   - handle: The file handle to be boxed.
-    ///   - closeHandle: If set to `true`, `handler` will be closed if this initializer succesfully completes.
+    ///   - closeHandle: If set to `true`, `handler` will be closed if this initializer successfully completes.
     public init(handle: FileHandle, closeHandle: Bool) throws {
         guard let xpcEncodedForm = xpc_fd_create(handle.fileDescriptor) else {
             throw XPCFileDescriptorContainerError.invalidFileDescriptor
@@ -76,7 +76,7 @@ public struct XPCFileDescriptorContainer {
     ///
     /// - Parameters:
     ///   - descriptor: The descriptor to be boxed.
-    ///   - closeDescriptor: If set to `true`, `descriptor` will be closed if this initializer succesfully completes.
+    ///   - closeDescriptor: If set to `true`, `descriptor` will be closed if this initializer successfully completes.
     @available(macOS 11.0, *)
     public init(descriptor: FileDescriptor, closeDescriptor: Bool) throws {
         guard let xpcEncodedForm = xpc_fd_create(descriptor.rawValue) else {
