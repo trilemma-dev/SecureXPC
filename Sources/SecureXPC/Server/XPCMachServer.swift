@@ -50,6 +50,10 @@ internal class XPCMachServer: XPCServer {
         // Park the main thread, allowing for incoming connections and requests to be processed
         dispatchMain()
     }
+    
+    public override var serviceName: String? {
+        machServiceName
+    }
 }
 
 extension XPCMachServer: XPCNonBlockingServer {

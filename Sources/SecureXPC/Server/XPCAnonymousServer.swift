@@ -37,6 +37,10 @@ internal class XPCAnonymousServer: XPCServer {
         self.start()
         dispatchMain()
     }
+    
+    public override var serviceName: String? {
+        nil
+    }
 }
 
 extension XPCAnonymousServer: XPCNonBlockingServer {
