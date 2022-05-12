@@ -132,10 +132,12 @@ extension XPCMachServer {
             if machServices.count == 1, let name = machServices.first?.key {
                 machServiceName = name
             } else {
-                throw XPCError.misconfiguredBlessedHelperTool("MachServices dictionary does not have exactly one entry")
+                throw XPCError.misconfiguredBlessedHelperTool(description: "MachServices dictionary does not have " +
+                                                                           "exactly one entry")
             }
         } else {
-            throw XPCError.misconfiguredBlessedHelperTool("launchd property list missing MachServices key")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "launchd property list missing MachServices " +
+                                                                       "key")
         }
 
         // Generate client requirements from info property list's SMAuthorizedClients
@@ -152,14 +154,17 @@ extension XPCMachServer {
                    let requirement = requirement {
                     clientRequirements.append(requirement)
                 } else {
-                    throw XPCError.misconfiguredBlessedHelperTool("Invalid SMAuthorizedClients requirement: \(client)")
+                    throw XPCError.misconfiguredBlessedHelperTool(description: "Invalid SMAuthorizedClients " +
+                                                                               "requirement: \(client)")
                 }
             }
         } else {
-            throw XPCError.misconfiguredBlessedHelperTool("Info property list missing SMAuthorizedClients key")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "Info property list missing " +
+                                                                       "SMAuthorizedClients key")
         }
         if clientRequirements.isEmpty {
-            throw XPCError.misconfiguredBlessedHelperTool("No requirements were generated from SMAuthorizedClients")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "No requirements were generated from " +
+                                                                       "SMAuthorizedClients")
         }
         let messageAcceptor = SecRequirementsMessageAcceptor(clientRequirements)
 
@@ -172,18 +177,20 @@ extension XPCMachServer {
     private static func readEmbeddedPropertyList(sectionName: String) throws -> Data {
         // By passing in nil, this returns a handle for the dynamic shared object (shared library) for this helper tool
         guard let handle = dlopen(nil, RTLD_LAZY) else {
-            throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (handle not openable)")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "Could not read property list (handle not " +
+                                                                       "openable)")
         }
         defer { dlclose(handle) }
         
         guard let mhExecutePointer = dlsym(handle, MH_EXECUTE_SYM) else {
-            throw XPCError.misconfiguredBlessedHelperTool("Could not read property list (nil symbol pointer)")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "Could not read property list (nil symbol " +
+                                                                       "pointer)")
         }
         let mhExecuteBoundPointer = mhExecutePointer.assumingMemoryBound(to: mach_header_64.self)
 
         var size = UInt()
         guard let section = getsectiondata(mhExecuteBoundPointer, "__TEXT", sectionName, &size) else {
-            throw XPCError.misconfiguredBlessedHelperTool("Missing property list section \(sectionName)")
+            throw XPCError.misconfiguredBlessedHelperTool(description: "Missing property list section \(sectionName)")
         }
         
         return Data(bytes: section, count: Int(size))
@@ -193,8 +200,8 @@ extension XPCMachServer {
     
     internal static func _forThisLoginItem() throws -> XPCMachServer {
         guard let teamIdentifier = try teamIdentifier() else {
-            throw XPCError.misconfiguredLoginItem("A login item must have a team identifier in order to enable " +
-                                                  "secure communication.")
+            throw XPCError.misconfiguredLoginItem(description: "A login item must have a team identifier in order " +
+                                                               "to enable secure communication.")
         }
         
         // From Apple's AppSandboxLoginItemXPCDemo:
@@ -202,7 +209,8 @@ extension XPCMachServer {
         //     LaunchServices implicitly registers a Mach service for the login item whose name is the same as the
         //     login item's bundle identifier.
         guard let bundleID = Bundle.main.bundleIdentifier else {
-            throw XPCError.misconfiguredLoginItem("The bundle identifier is missing; login items must have one.")
+            throw XPCError.misconfiguredLoginItem(description: "The bundle identifier is missing; login items must " +
+                                                               "have one.")
         }
         
         let parentMessageAcceptor = try validateIsLoginItem(teamIdentifier: teamIdentifier)
@@ -218,7 +226,7 @@ extension XPCMachServer {
         let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
         let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)
         guard status == errSecSuccess, let info = info as NSDictionary? else {
-            throw XPCError.internalFailure("SecCodeCopySigningInformation failed with status: \(status)")
+            throw XPCError.internalFailure(description: "SecCodeCopySigningInformation failed with status: \(status)")
         }
 
         return info[kSecCodeInfoTeamIdentifier] as? String
@@ -236,7 +244,7 @@ extension XPCMachServer {
                               "directory.\n" +
                               "Expected path component: \(expectedLastComponent)\n" +
                               "Actual path component: \(path.lastPathComponent)"
-                throw XPCError.misconfiguredLoginItem(message)
+                throw XPCError.misconfiguredLoginItem(description: message)
             }
             
             return path.deletingLastPathComponent()
@@ -251,7 +259,7 @@ extension XPCMachServer {
                           "directory is not an app bundle.\n" +
                           "Expected path extension: app\n" +
                           "Actual path extension: \(parentBundle.pathExtension)"
-            throw XPCError.misconfiguredLoginItem(message)
+            throw XPCError.misconfiguredLoginItem(description: message)
         }
         
         if try isSandboxed() {
@@ -262,18 +270,20 @@ extension XPCMachServer {
             
             let entitlement = try readEntitlement(name: entitlementName)
             guard let entitlement = entitlement else {
-                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) is missing, " +
-                                                      "but must be present for a sandboxed login item to communicate " +
-                                                      "over XPC.")
+                throw XPCError.misconfiguredLoginItem(description: "Application groups entitlement " +
+                                                                   "\(entitlementName) is missing, but must be " +
+                                                                   "present for a sandboxed login item to " +
+                                                                   "communicate over XPC.")
             }
             guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
-                throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be an " +
-                                                      "array of strings.")
+                throw XPCError.misconfiguredLoginItem(description: "Application groups entitlement " +
+                                                                   "\(entitlementName) must be an array of strings.")
             }
             let appGroups = try entitlement.map { (element: NSArray.Element) throws -> String in
                 guard let elementAsString = element as? String else {
-                    throw XPCError.misconfiguredLoginItem("Application groups entitlement \(entitlementName) must be " +
-                                                          "an array of strings.")
+                    throw XPCError.misconfiguredLoginItem(description: "Application groups entitlement " +
+                                                                       "\(entitlementName) must be an array of " +
+                                                                       "strings.")
                 }
                 
                 return elementAsString
@@ -287,7 +297,7 @@ extension XPCMachServer {
             if !appGroups.contains(where: { $0.starts(with: "\(teamIdentifier).") }) {
                 let message = "Application groups entitlement \(entitlementName) must contain at least one " +
                               "application group for team identifier \(teamIdentifier)."
-                throw XPCError.misconfiguredLoginItem(message)
+                throw XPCError.misconfiguredLoginItem(description: message)
             }
         }
         
@@ -307,7 +317,7 @@ extension XPCMachServer {
         guard SecRequirementCreateWithString(requirementString, SecCSFlags(), &requirement) == errSecSuccess,
               let requirement = requirement else {
             let message = "Security requirement could not be created; textual representation: \(requirementString)"
-            throw XPCError.internalFailure(message)
+            throw XPCError.internalFailure(description: message)
         }
         
         return SecRequirementsMessageAcceptor([requirement])

@@ -21,7 +21,8 @@ internal class XPCServiceServer: XPCServer {
         }
 
         if Bundle.main.bundleIdentifier == nil {
-            throw XPCError.misconfiguredXPCService("The bundle identifier is missing; XPC services must have one")
+            throw XPCError.misconfiguredXPCService(description: "The bundle identifier is missing; XPC services " +
+                                                                "must have one")
         }
         
         return service
