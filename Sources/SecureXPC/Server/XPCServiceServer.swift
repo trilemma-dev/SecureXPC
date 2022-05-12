@@ -53,8 +53,10 @@ internal class XPCServiceServer: XPCServer {
         }
     }
 
-    public override var serviceName: String? {
+    public override var connectionDescriptor: XPCConnectionDescriptor {
         // This is safe to unwrap because it was already checked in `_forThisXPCService()`.
-        Bundle.main.bundleIdentifier!
+        let serviceName = Bundle.main.bundleIdentifier!
+        
+        return .xpcService(name: serviceName)
     }
 }

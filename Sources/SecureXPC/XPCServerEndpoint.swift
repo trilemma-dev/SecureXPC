@@ -9,18 +9,19 @@ import Foundation
 
 /// An endpoint is used to create clients which can communicate with their associated server.
 ///
-/// Endpoints are retrieved from a server's ``XPCNonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing XPC
-/// connection.
+/// Endpoints are retrieved from a server's ``XPCNonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing
+/// XPC connection.
 ///
 /// > Warning: While ``XPCServerEndpoint`` conforms to `Codable` it can only be encoded and decoded by the `SecureXPC` framework.
 public struct XPCServerEndpoint {
-    // Technically, an `xpc_endpoint_t` is sufficient to create a new connection, on its own. However, it's useful to
-    // be able to communicate the kind of connection, and its name, so we also store those, separately.
-    internal let serviceDescriptor: XPCServiceDescriptor
+    /// The type of connections serviced by the ``XPCServer`` which created this endpoint.
+    public let connectionDescriptor: XPCConnectionDescriptor
+    
+    // The underlying XPC C API endpoint needed to create connections to the listener connection it came from
     internal let endpoint: xpc_endpoint_t
 
-    internal init(serviceDescriptor: XPCServiceDescriptor, endpoint: xpc_endpoint_t) {
-        self.serviceDescriptor = serviceDescriptor
+    internal init(connectionDescriptor: XPCConnectionDescriptor, endpoint: xpc_endpoint_t) {
+        self.connectionDescriptor = connectionDescriptor
         self.endpoint = endpoint
     }
 }
@@ -33,7 +34,8 @@ extension XPCServerEndpoint: Hashable {
 
 extension XPCServerEndpoint: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        // No need to compare service descriptors as the endpoint is guaranteed to be unique
+        // No need to compare connection descriptors as the endpoint is guaranteed to be unique (also all anonymous
+        // connection descriptors are equivalent to one another because they don't have names).
         xpc_equal(lhs.endpoint, rhs.endpoint)
     }
 }
@@ -41,7 +43,7 @@ extension XPCServerEndpoint: Equatable {
 // MARK: Codable
 
 private enum CodingKeys: String, CodingKey {
-    case serviceDescriptor
+    case connectionDescriptor
     case endpoint
 }
 
@@ -52,7 +54,7 @@ extension XPCServerEndpoint: Encodable {
         }
         
         let container = xpcEncoder.xpcContainer(keyedBy: CodingKeys.self)
-        try container.encode(self.serviceDescriptor, forKey: CodingKeys.serviceDescriptor)
+        try container.encode(self.connectionDescriptor, forKey: CodingKeys.connectionDescriptor)
         container.encode(self.endpoint, forKey: CodingKeys.endpoint)
     }
 }
@@ -65,6 +67,7 @@ extension XPCServerEndpoint: Decodable {
         
         let container = try xpcDecoder.xpcContainer(keyedBy: CodingKeys.self)
         self.endpoint = try container.decodeEndpoint(forKey: CodingKeys.endpoint)
-        self.serviceDescriptor = try container.decode(XPCServiceDescriptor.self, forKey: CodingKeys.serviceDescriptor)
+        self.connectionDescriptor = try container.decode(XPCConnectionDescriptor.self,
+                                                         forKey: CodingKeys.connectionDescriptor)
     }
 }

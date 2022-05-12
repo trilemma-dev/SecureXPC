@@ -37,10 +37,10 @@ import Foundation
 /// let client = XPCClient.forMachService(named: "com.example.service")
 /// ```
 ///
-/// The name of the service is defined differently depending on the type of bundle or binary:
+/// The sservice's name is defined differently depending on its type:
 /// - For an `SMJobBless` helper tool this must be a key in the `MachServices` entry of the tool's launchd property list
-/// - For a `SMLoginItemSetEnabled` login item it is the bundle's identifier
-/// - For a Launch Agent or Launch Daemon, it's defined in the property list used when registering with `launchd`
+/// - For an `SMLoginItemSetEnabled` login item it is the bundle's identifier
+/// - For a Launch Agent or Launch Daemon it's defined in the property list used when registering with launchd
 ///
 /// The service itself must retrieve and configure an ``XPCServer`` by calling ``XPCServer/forThisMachService(named:clientRequirements:)``,
 /// ``XPCServer/forThisBlessedHelperTool()``, or ``XPCServer/forThisLoginItem()`` in order for this client to be able to communicate with it.
@@ -153,7 +153,7 @@ import Foundation
 /// - ``XPCResponseHandler``
 /// - ``XPCSequentialResponseHandler``
 /// ### Client Information
-/// - ``serviceName``
+/// - ``connectionDescriptor``
 public class XPCClient {
     
     // MARK: Public factories
@@ -202,7 +202,7 @@ public class XPCClient {
         })
         xpc_connection_resume(connection)
 
-        switch endpoint.serviceDescriptor {
+        switch endpoint.connectionDescriptor {
             case .anonymous:
                 return XPCAnonymousClient(connection: connection)
             case .xpcService(name: let name):
@@ -642,11 +642,9 @@ public class XPCClient {
     }
 
     // MARK: Abstract methods & properties
-
-    /// The name of the service this client is configured to communicate with.
-    ///
-    /// If this is configured to talk to an anonymous server then there is no service and therefore the service name will always be `nil`.
-    public var serviceName: String? {
+    
+    /// The type of connection created by this client.
+    public var connectionDescriptor: XPCConnectionDescriptor {
         fatalError("Abstract Property")
     }
 

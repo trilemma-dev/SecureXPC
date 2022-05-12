@@ -122,7 +122,7 @@ import Foundation
 /// - ``startAndBlock()``
 /// - ``XPCNonBlockingServer/start()``
 /// ### Server State
-/// - ``serviceName``
+/// - ``connectionDescriptor``
 /// - ``XPCNonBlockingServer/endpoint``
 public class XPCServer {
     
@@ -478,10 +478,8 @@ public class XPCServer {
         fatalError("Abstract Method")
     }
     
-    /// The name of the service this server is bound to.
-    ///
-    /// Anonymous servers do not represent a service and therefore will always have a `nil` service name.
-    public var serviceName: String? {
+    /// The type of connections serviced by this server.
+    public var connectionDescriptor: XPCConnectionDescriptor {
         fatalError("Abstract Property")
     }
 }
@@ -592,7 +590,8 @@ extension XPCServer {
     ///
     /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
     ///
-    /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(_:)`` if the configuration does not match this function's requirements.
+    /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(description:)`` if the configuration does not match this function's
+    ///           requirements.
     /// - Returns: A server instance configured with the embedded property list entries.
     public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()

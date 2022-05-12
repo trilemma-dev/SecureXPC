@@ -13,7 +13,9 @@ import Foundation
 internal class XPCMachClient: XPCClient {
     private let machServiceName: String
 
-    override var serviceName: String? { machServiceName }
+    public override var connectionDescriptor: XPCConnectionDescriptor {
+        .machService(name: machServiceName)
+    }
 
     internal init(machServiceName: String, connection: xpc_connection_t? = nil) {
         self.machServiceName = machServiceName
