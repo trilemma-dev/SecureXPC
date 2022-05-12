@@ -115,7 +115,7 @@ import Foundation
 /// - ``registerRoute(_:handler:)-6sxby``
 /// - ``registerRoute(_:handler:)-qcox``
 /// ### Configuring a Server
-/// - ``targetQueue``
+/// - ``handlerQueue``
 /// - ``setErrorHandler(_:)-lex4``
 /// - ``setErrorHandler(_:)-1r3up``
 /// ### Starting a Server
@@ -126,47 +126,21 @@ import Foundation
 /// - ``XPCNonBlockingServer/endpoint``
 public class XPCServer {
     
-    /// Set of weak references to connections, used to update their dispatch queues.
-    private var connections = Set<WeakConnection>()
-    
-    /// Weak wrapper around a connection stored in the `connections` variable.
+    /// The queue used to run synchronous handlers associated with registered routes.
     ///
-    /// Designed to be conveniently settable as the context of an `xpc_connection_t` so that it's accessible from its finalizer.
-    fileprivate class WeakConnection: Hashable {
-        private weak var server: XPCServer?
-        fileprivate weak var connection: xpc_connection_t?
-        private let id = UUID()
-        
-        init(_ connection: xpc_connection_t, server: XPCServer) {
-            self.connection = connection
-            self.server = server
-        }
-        
-        func removeFromContainer() {
-            self.server?.connections.remove(self)
-        }
-        
-        static func == (lhs: XPCServer.WeakConnection, rhs: XPCServer.WeakConnection) -> Bool {
-            lhs.id == rhs.id
-        }
-        
-        func hash(into hasher: inout Hasher) {
-            self.id.hash(into: &hasher)
-        }
-    }
+    /// By default this is the
+    /// [global concurrent queue](https://developer.apple.com/documentation/dispatch/dispatchqueue/2300077-global).
+    ///
+    /// Requests will be dispatched to this queue in the order in which they are received by the server. However, even if this is set to a serial `DispatchQueue`
+    /// that does not guarantee the order will match `send` or `sendMessage` calls made by an ``XPCClient`` due to their asynchronous nature. If a need
+    /// exists for the server to receive requests in a specific order, the caller must wait until a `send` or `sendMessage` call has completed before calling the
+    /// next one.
+    ///
+    /// >Note: `async` handlers for registered routes do not make use of this queue and may always be run concurrently.
+    public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
     internal let messageAcceptor: MessageAcceptor
-    
-    /// The queue used to run the handlers associated with registered routes.
-    ///
-    /// Applying the target queue is asynchronous and non-preemptive and therefore will not interrupt the execution of an already-running handler. The queue
-    /// returned from reading this property will always be the one most recently set even if it is not yet the queue used to run handlers for all incoming requests.
-    public var targetQueue: DispatchQueue? {
-        willSet {
-            connections.compactMap{ $0.connection }.forEach{ xpc_connection_set_target_queue($0, newValue) }
-        }
-    }
     
     internal init(messageAcceptor: MessageAcceptor) {
         self.messageAcceptor = messageAcceptor
@@ -352,27 +326,7 @@ public class XPCServer {
         xpc_connection_set_event_handler(connection, { event in
             self.handleEvent(connection: connection, event: event)
         })
-        xpc_connection_set_target_queue(connection, self.targetQueue)
-        self.addConnection(connection)
         xpc_connection_resume(connection)
-    }
-    
-    private func addConnection(_ connection: xpc_connection_t) {
-        // Keep a weak reference to the connection and this server, setting this as the context on the connection
-        let weakConnection = WeakConnection(connection, server: self)
-        self.connections.insert(weakConnection)
-        xpc_connection_set_context(connection, Unmanaged.passRetained(weakConnection).toOpaque())
-        
-        // The finalizer is called when the connection's retain count has reached zero, so now we need to remove the
-        // wrapper from the containing connections array
-        xpc_connection_set_finalizer_f(connection, { opaqueWeakConnection in
-            guard let opaqueWeakConnection = opaqueWeakConnection else {
-                fatalError("Connection with retain count of zero is missing context, this should never happen")
-            }
-            
-            let weakConnection = Unmanaged<WeakConnection>.fromOpaque(opaqueWeakConnection).takeRetainedValue()
-            weakConnection.removeFromContainer()
-        })
     }
     
     private func handleEvent(connection: xpc_connection_t, event: xpc_object_t) {
@@ -410,23 +364,47 @@ public class XPCServer {
         }
         
         if let handler = handler as? XPCHandlerSync {
-            XPCRequestContext.setForCurrentThread(connection: connection, message: message) {
-                var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
-                do {
-                    try handler.handle(request: request, server: self, connection: connection, reply: &reply)
-                    try maybeSendReply(&reply, request: request, connection: connection)
-                } catch {
-                    var reply = handler.shouldCreateReply ? reply : xpc_dictionary_create_reply(message)
-                    self.handleError(error, request: request, connection: connection, reply: &reply)
+            // The handler queue must be used to run sync handlers. The underlying XPC framework always delivers events
+            // serially for the same connection (client in SecureXPC parlance) even if a target queue applied to the
+            // connection is concurrent. From xpc_connection_set_target_queue:
+            //
+            //    If the target queue is a concurrent queue, then XPC still guarantees that there will never be more
+            //    than one invocation of the connection's event handler block executing concurrently.
+            //
+            // This is *not* the behavior we want for XPCServer, which is intended to operate more like a web server
+            // that largely abstracts away the concept of a client at all. As such, by default the target queue is
+            // concurrent. (Although if an API user sets the target queue to be serial that's supported too.)
+            self.handlerQueue.async {
+                XPCRequestContext.setForCurrentThread(connection: connection, message: message) {
+                    var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
+                    do {
+                        try handler.handle(request: request, server: self, connection: connection, reply: &reply)
+                        try self.maybeSendReply(&reply, request: request, connection: connection)
+                    } catch {
+                        var reply = handler.shouldCreateReply ? reply : xpc_dictionary_create_reply(message)
+                        self.handleError(error, request: request, connection: connection, reply: &reply)
+                    }
                 }
             }
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
             XPCRequestContext.setForTask(connection: connection, message: message) {
+                // Creating a task allows it to begin running immediately, operating similar to a concurrent
+                // DispatchQueue. However, the difference is there's no built in support to enforce serial execution.
+                // From Task:
+                //
+                //   When you create an instance of Task, you provide a closure that contains the work for that task to
+                //   perform. Tasks can start running immediately after creation; you don’t explicitly start or schedule
+                //   them.
+                //
+                // Note: An implementation was created, but never merged, that enabled serial execution of Tasks by
+                // manually managing the queue. The additional complexity was of little value as it doesn't result in
+                // consistent ordering of received events due to the asynchronous behavior of how they're sent by the
+                // XPCClient. If an API user wants consistent ordering, that needs to be done at the application layer.
                 Task {
                     var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
                     do {
                         try await handler.handle(request: request, server: self, connection: connection, reply: &reply)
-                        try maybeSendReply(&reply, request: request, connection: connection)
+                        try self.maybeSendReply(&reply, request: request, connection: connection)
                     } catch {
                         var reply = handler.shouldCreateReply ? reply : xpc_dictionary_create_reply(message)
                         self.handleError(error, request: request, connection: connection, reply: &reply)
