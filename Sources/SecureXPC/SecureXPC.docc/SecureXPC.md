@@ -74,6 +74,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCServer``
 - ``XPCNonBlockingServer``
 - ``XPCServerEndpoint``
+- ``XPCConnectionDescriptor``
 
 ### Routes
 - ``XPCRoute``

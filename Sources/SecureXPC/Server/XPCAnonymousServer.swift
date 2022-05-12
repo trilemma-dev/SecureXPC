@@ -38,8 +38,8 @@ internal class XPCAnonymousServer: XPCServer {
         dispatchMain()
     }
     
-    public override var serviceName: String? {
-        nil
+    public override var connectionDescriptor: XPCConnectionDescriptor {
+        .anonymous
     }
 }
 
@@ -56,7 +56,7 @@ extension XPCAnonymousServer: XPCNonBlockingServer {
     
     public var endpoint: XPCServerEndpoint {
         XPCServerEndpoint(
-            serviceDescriptor: .anonymous,
+            connectionDescriptor: .anonymous,
             endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
         )
     }

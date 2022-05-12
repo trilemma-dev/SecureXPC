@@ -13,7 +13,9 @@ import Foundation
 internal class XPCServiceClient: XPCClient {
     private let xpcServiceName: String
 
-    override var serviceName: String? { xpcServiceName }
+    public override var connectionDescriptor: XPCConnectionDescriptor {
+        .xpcService(name: xpcServiceName)
+    }
 
     internal init(xpcServiceName: String, connection: xpc_connection_t? = nil) {
         self.xpcServiceName = xpcServiceName
@@ -22,6 +24,6 @@ internal class XPCServiceClient: XPCClient {
     
     /// Creates and returns a connection for the XPC service represented by this client.
     internal override func createConnection() -> xpc_connection_t {
-        xpc_connection_create(self.serviceName, nil)
+        xpc_connection_create(self.xpcServiceName, nil)
     }
 }

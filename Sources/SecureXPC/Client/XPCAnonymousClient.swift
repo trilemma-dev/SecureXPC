@@ -11,7 +11,9 @@ import Foundation
 ///
 /// In the case of this framework, the anonymous listener connection is expected to be represented by an `XPCAnonymousServer`.
 internal class XPCAnonymousClient: XPCClient {
-    override var serviceName: String? { nil }
+    public override var connectionDescriptor: XPCConnectionDescriptor {
+        .anonymous
+    }
 
     // Anonymous clients *must* be created from an existing connection.
     init(connection: xpc_connection_t) {

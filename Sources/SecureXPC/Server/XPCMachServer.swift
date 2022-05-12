@@ -51,8 +51,8 @@ internal class XPCMachServer: XPCServer {
         dispatchMain()
     }
     
-    public override var serviceName: String? {
-        machServiceName
+    public override var connectionDescriptor: XPCConnectionDescriptor {
+        .machService(name: machServiceName)
     }
 }
 
@@ -69,7 +69,7 @@ extension XPCMachServer: XPCNonBlockingServer {
     
     public var endpoint: XPCServerEndpoint {
         XPCServerEndpoint(
-            serviceDescriptor: .machService(name: self.machServiceName),
+            connectionDescriptor: .machService(name: self.machServiceName),
             endpoint: xpc_endpoint_create(self.listenerConnection)
         )
     }
