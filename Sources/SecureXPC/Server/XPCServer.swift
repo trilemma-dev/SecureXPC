@@ -24,21 +24,28 @@ import Foundation
 /// ```
 ///
 /// #### XPC Mach services
-/// Launch Agents, Launch Daemons, helper tools installed with
-/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless), and login items installed with
-/// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled) can
-/// optionally communicate over XPC by using Mach services.
+/// Launch Daemons, Login Items, Launch Agents, and certain extensions can optionally communicate over XPC by using
+/// Mach services.
+///
+/// Launch Daemons include helper tools installed with
+/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless), registered via
+/// [`SMAppService.daemon(...)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon?changes=la_2),
+/// or those manually registered via a property list in `/Library/LaunchDaemons/`.
 ///
 /// In most cases, a server can be auto-configured using ``XPCServer/forThisBlessedHelperTool()`` for a helper tool installed with `SMJobBless`:
 /// ```swift
 /// let server = try XPCServer.forThisBlessedHelperTool()
 /// ```
 ///
-/// Similarly, a server can be auto-configured using ``XPCServer/forThisLoginItem()`` for a login item installed with `SMLoginItemSetEnabled`.
+/// Similarly one registered with `SMAppService` can be auto-configured with ``XPCServer/forThisDaemon()``.
 ///
-/// For Launch Agents, Launch Daemons, more advanced `SMJobBless` and `SMLoginItemSetEnabled` configurations, as well as other cases it is
-/// necessary both to the specify the name of the service as well its security requirements. See
-/// ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and details.
+/// Login Items include those enabled with
+/// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+/// or registered with [`SMAppService.loginItem(...)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945411-loginitem). A server can be auto-configured for them
+/// using ``XPCServer/forThisLoginItem()``.
+///
+/// For more advanced configurations as well as user other cases (such as Launch Agents) it is necessary to specify
+/// both the name of the service as well its security requirements. See ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and details.
 ///
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program. Use cases for making one include:
@@ -96,6 +103,7 @@ import Foundation
 /// ### Retrieving a Server
 /// - ``forThisXPCService()`` 
 /// - ``forThisBlessedHelperTool()``
+/// - ``forThisDaemon()``
 /// - ``forThisLoginItem()``
 /// - ``forThisMachService(named:clientRequirements:)``
 /// - ``makeAnonymous()``
@@ -259,7 +267,7 @@ public class XPCServer {
         self.registerRoute(route.route, handler: ConstrainedXPCHandlerWithMessageWithReplyAsync(handler: handler))
     }
     
-    /// Registers a route for a request without a message that can receive sequential responses.
+    /// Registers a route for a request without a message that can receive sequential replies.
     ///
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
@@ -295,7 +303,7 @@ public class XPCServer {
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
-    ///   - route: A route that has a message and can receive zero or more sequential responses.
+    ///   - route: A route that has a message and can receive zero or more sequential replies.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     public func registerRoute<M: Decodable, S: Encodable>(
         _ route: XPCRouteWithMessageWithSequentialReply<M, S>,
@@ -310,7 +318,7 @@ public class XPCServer {
     /// > Important: Routes can only be registered with a handler once; it is a programming error to provide a route which has already been registered.
     ///
     /// - Parameters:
-    ///   - route: A route that has a message and can receive zero or more sequential responses.
+    ///   - route: A route that has a message and can receive zero or more sequential replies.
     ///   - handler: Will be called when the server receives an incoming request for this route if the request is accepted.
     @available(macOS 10.15.0, *)
     public func registerRoute<M: Decodable, S: Encodable>(
@@ -595,6 +603,24 @@ extension XPCServer {
     /// - Returns: A server instance configured with the embedded property list entries.
     public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
         try XPCMachServer._forThisBlessedHelperTool()
+    }
+    
+    /// Provides a server for this daemon if it was enabled via
+    /// [`SMAppService.daemon(...)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon?changes=la_2)
+    /// and subsequently registered.
+    ///
+    /// To successfully call this function the containing app's `Contents/Library/LaunchDaemons` must contain exactly
+    /// one distinct `MachServices` key in one (or more) property lists where the `BundleProgram` corresponds to this
+    /// executable.
+    ///
+    /// Incoming requests will be accepted from a client which meets the designated requirement of the containing app
+    /// (meaning in most cases only the containing app's requests will be accepted).
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is
+    ///   called.
+    @available(macOS 13.0, *)
+    public static func forThisDaemon() throws -> XPCServer & XPCNonBlockingServer {
+        try XPCMachServer._forThisSMAppServiceDaemon()
     }
     
     /// Provides a server for this login item installed with

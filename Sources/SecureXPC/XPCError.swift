@@ -66,6 +66,12 @@ public enum XPCError: Error, Codable {
     ///
     /// The associated string is a descriptive error message.
     case misconfiguredLoginItem(description: String)
+    /// The caller is not a daemon enabled via
+    /// [`SMAppService.daemon(...)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon?changes=la_2)
+    /// and subsequently registered.
+    /// 
+    /// The associated string is a descriptive error message.
+    case misconfiguredDaemon(description: String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.

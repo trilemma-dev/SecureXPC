@@ -128,43 +128,32 @@ extension XPCMachServer {
         // Determine mach service name using the launchd property list's MachServices entry
         let machServiceName: String
         let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
-        let launchdPropertyList = try PropertyListSerialization.propertyList(
-            from: launchdData,
-            options: .mutableContainersAndLeaves,
-            format: nil) as? NSDictionary
-        if let machServices = launchdPropertyList?["MachServices"] as? [String : Any] {
-            if machServices.count == 1, let name = machServices.first?.key {
-                machServiceName = name
-            } else {
-                throw XPCError.misconfiguredBlessedHelperTool(description: "MachServices dictionary does not have " +
-                                                                           "exactly one entry")
-            }
-        } else {
-            throw XPCError.misconfiguredBlessedHelperTool(description: "launchd property list missing MachServices " +
-                                                                       "key")
+        let launchdPlist = try PropertyListSerialization.propertyList(from: launchdData, format: nil) as? [String : Any]
+        guard let machServices = launchdPlist?["MachServices"] as? [String : Any] else {
+            throw XPCError.misconfiguredBlessedHelperTool(description: "launchd property list missing MachServices key")
         }
-
+        guard machServices.count == 1, let name = machServices.first?.key else {
+            throw XPCError.misconfiguredBlessedHelperTool(description: "MachServices dictionary does not have " +
+                                                                       "exactly one entry")
+        }
+        machServiceName = name
+        
         // Generate client requirements from info property list's SMAuthorizedClients
         var clientRequirements = [SecRequirement]()
         let infoData = try readEmbeddedPropertyList(sectionName: "__info_plist")
-        let infoPropertyList = try PropertyListSerialization.propertyList(
-            from: infoData,
-            options: .mutableContainersAndLeaves,
-            format: nil) as? NSDictionary
-        if let authorizedClients = infoPropertyList?["SMAuthorizedClients"] as? [String] {
-            for client in authorizedClients {
-                var requirement: SecRequirement?
-                if SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,
-                   let requirement = requirement {
-                    clientRequirements.append(requirement)
-                } else {
-                    throw XPCError.misconfiguredBlessedHelperTool(description: "Invalid SMAuthorizedClients " +
-                                                                               "requirement: \(client)")
-                }
-            }
-        } else {
+        let infoPlist = try PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String : Any]
+        guard let authorizedClients = infoPlist?["SMAuthorizedClients"] as? [String] else {
             throw XPCError.misconfiguredBlessedHelperTool(description: "Info property list missing " +
                                                                        "SMAuthorizedClients key")
+        }
+        for client in authorizedClients {
+            var requirement: SecRequirement?
+            guard SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+               let requirement = requirement else {
+                throw XPCError.misconfiguredBlessedHelperTool(description: "Invalid SMAuthorizedClients requirement: " +
+                                                                            client)
+            }
+            clientRequirements.append(requirement)
         }
         if clientRequirements.isEmpty {
             throw XPCError.misconfiguredBlessedHelperTool(description: "No requirements were generated from " +
@@ -198,6 +187,67 @@ extension XPCMachServer {
         }
         
         return Data(bytes: section, count: Int(size))
+    }
+    
+    // MARK: SMAppService daemon
+    
+    internal static func _forThisSMAppServiceDaemon() throws -> XPCMachServer {
+        // Parent bundle
+        let components = Bundle.main.bundleURL.pathComponents
+        guard let contentsIndex = components.lastIndex(of: "Contents"),
+              components[components.index(before: contentsIndex)].hasSuffix(".app") else {
+            throw XPCError.misconfiguredDaemon(description: "Parent bundle could not be found")
+        }
+        let parentBundleURL = URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))
+        
+        // Determine the service name by finding the launch property list for this service and read their MachServices
+        // names. From Apple:
+        //   The property list name must correspond to a property list in the calling app’s
+        //   Contents/Library/LaunchDaemons directory
+        var machServiceNames = Set<String>()
+        let plistDirectory = parentBundleURL.appendingPathComponent("Contents", isDirectory: true)
+                                            .appendingPathComponent("Library", isDirectory: true)
+                                            .appendingPathComponent("LaunchDaemons", isDirectory: true)
+        for entry in try FileManager.default.contentsOfDirectory(at: plistDirectory, includingPropertiesForKeys: nil) {
+            let data = try Data(contentsOf: entry)
+            if let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String : Any],
+               let bundleProgram = plist["BundleProgram"] as? String,
+               let executableURL = Bundle.main.executableURL,
+               let bundledProgramURL = URL(string: bundleProgram, relativeTo: parentBundleURL)?.absoluteURL,
+               executableURL == bundledProgramURL,
+               let services = plist["MachServices"] as? [String : Any] {
+                services.keys.forEach { machServiceNames.insert($0) }
+            }
+        }
+        
+        // We can't actually know which one was used to register this service, so if there are multiple conflicting ones
+        // we need to fail (and of course also fail if there are none)
+        guard machServiceNames.count == 1, let serviceName = machServiceNames.first else {
+            if machServiceNames.isEmpty {
+                throw XPCError.misconfiguredDaemon(description: "No property lists for this daemon had a " +
+                                                                "MachServices entry")
+            } else {
+                throw XPCError.misconfiguredDaemon(description: "Multiple MachServices keys were found: " +
+                                                                "\(machServiceNames)")
+            }
+        }
+        
+        // Use parent's designated requirement as the criteria for the message acceptor.
+        // An alternative approach would be to use the same approach as Login Item where we allow anything in the
+        // parent's bundle with the same team identifier to communicate with this daemon, but considering the
+        // considerable privilege escalation potential this intentionally takes a more restricted approach.
+        var parentCode: SecStaticCode?
+        var parentRequirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(parentBundleURL as CFURL, [], &parentCode) == errSecSuccess,
+              let parentCode,
+              SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
+              let parentRequirement else {
+            throw XPCError.misconfiguredDaemon(description: "Designated requirement for parent bundle could not be " +
+                                                            "determined")
+        }
+        let messageAcceptor = SecRequirementsMessageAcceptor([parentRequirement])
+        
+        return try getXPCMachServer(named: serviceName, messageAcceptor: messageAcceptor)
     }
     
     // MARK: Login Item
