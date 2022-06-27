@@ -37,7 +37,7 @@ import Foundation
 /// let client = XPCClient.forMachService(named: "com.example.service")
 /// ```
 ///
-/// The sservice's name is defined differently depending on its type:
+/// The service's name is defined differently depending on its type:
 /// - For an `SMJobBless` helper tool this must be a key in the `MachServices` entry of the tool's launchd property list
 /// - For an `SMLoginItemSetEnabled` login item it is the bundle's identifier
 /// - For a Launch Agent or Launch Daemon it's defined in the property list used when registering with launchd
@@ -193,7 +193,7 @@ public class XPCClient {
 
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
     ///
-    /// A server's endpoint is accesible via ``XPCNonBlockingServer/endpoint``. The endpoint can be sent across an XPC connection.
+    /// A server's endpoint is accesible via ``XPCServer/endpoint``. The endpoint can be sent across an XPC connection.
 	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
         let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
 

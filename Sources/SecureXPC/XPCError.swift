@@ -45,27 +45,12 @@ public enum XPCError: Error, Codable {
     ///
     /// The first associated value is the route's name. The second is a descriptive error message.
     case routeMismatch(routeName:[String], description: String)
-    /// The caller is not a blessed helper tool or its property list configuration is not compatible with ``XPCServer/forThisBlessedHelperTool()``.
-    ///
-    /// The associated string is a descriptive error message.
-    case misconfiguredBlessedHelperTool(description: String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
-    /// The caller is not an XPC service.
+    /// This process's configuration prevents an ``XPCServer`` being retrieved for it.
     ///
-    /// This may mean there is a configuration issue. Alternatively it could be the caller is an XPC Mach service, in which case use
-    /// ``XPCServer/forThisMachService(named:clientRequirements:)`` instead.
-    case notXPCService
-    /// The caller is a misconfigured XPC service.
-    ///
-    /// The associated string is a descriptive error message.
-    case misconfiguredXPCService(description: String)
-    /// The caller is not a login item installed with
-    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
-    /// or its configuration is not compatible with ``XPCServer/forThisLoginItem()``.
-    ///
-    /// The associated string is a descriptive error message.
-    case misconfiguredLoginItem(description: String)
+    /// The associated value describes why it could not be retrieved.
+    case misconfiguredServer(description: String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.

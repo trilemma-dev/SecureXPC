@@ -11,18 +11,24 @@ import Foundation
 ///
 /// In the case of this framework, the XPC service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
+    
+    
+    internal static var isThisProcessAnXPCService: Bool {
+        mainBundlePackageInfo().packageType == "XPC!"
+    }
+    
 	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
     
     internal static func _forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
         // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
-        if mainBundlePackageInfo().packageType != "XPC!" {
-            throw XPCError.notXPCService
-        }
+        
+        guard mainBundlePackageInfo().packageType == "XPC!" else {
+            throw XPCError.misconfiguredServer(description: "An XPC service's CFBundlePackageType value must be XPC!")
+       }
 
         if Bundle.main.bundleIdentifier == nil {
-            throw XPCError.misconfiguredXPCService(description: "The bundle identifier is missing; XPC services " +
-                                                                "must have one")
+            throw XPCError.misconfiguredServer(description: "An XPC service must have a CFBundleIdentifier")
         }
         
         return service
@@ -58,5 +64,15 @@ internal class XPCServiceServer: XPCServer {
         let serviceName = Bundle.main.bundleIdentifier!
         
         return .xpcService(name: serviceName)
+    }
+    
+    public override var endpoint: XPCServerEndpoint? {
+        // An `XPCServiceServer` can't have an endpoint created for it. From a technical perspective this is because
+        // endpoints are only created from connection listeners, which an XPC service doesn't expose (incoming
+        // connections are simply passed to the handler provided to `xpc_main(...)`. From a security point of view, it
+        // makes sense that it's not possible to create an endpoint for an XPC service because they're designed to only
+        // allow communication between the main app and .xpc bundles contained within the same main app's bundle. As
+        // such there's no valid use case for creating such an endpoint.
+        nil
     }
 }

@@ -41,6 +41,13 @@ internal class XPCAnonymousServer: XPCServer {
     public override var connectionDescriptor: XPCConnectionDescriptor {
         .anonymous
     }
+    
+    public override var endpoint: XPCServerEndpoint? {
+        XPCServerEndpoint(
+            connectionDescriptor: .anonymous,
+            endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
+        )
+    }
 }
 
 extension XPCAnonymousServer: XPCNonBlockingServer {
@@ -52,12 +59,5 @@ extension XPCAnonymousServer: XPCNonBlockingServer {
             }
             self.pendingConnections.removeAll()
         }
-    }
-    
-    public var endpoint: XPCServerEndpoint {
-        XPCServerEndpoint(
-            connectionDescriptor: .anonymous,
-            endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
-        )
     }
 }
