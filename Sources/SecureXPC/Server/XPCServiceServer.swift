@@ -67,12 +67,11 @@ internal class XPCServiceServer: XPCServer {
     }
     
     public override var endpoint: XPCServerEndpoint? {
-        // An `XPCServiceServer` can't have an endpoint created for it. From a technical perspective this is because
-        // endpoints are only created from connection listeners, which an XPC service doesn't expose (incoming
-        // connections are simply passed to the handler provided to `xpc_main(...)`. From a security point of view, it
-        // makes sense that it's not possible to create an endpoint for an XPC service because they're designed to only
-        // allow communication between the main app and .xpc bundles contained within the same main app's bundle. As
-        // such there's no valid use case for creating such an endpoint.
+        // There's seemingly no way to create an endpoint for an XPC service using the XPC C API. This is because
+        // endpoints are only created from connection listeners, which an XPC service doesn't expose — incoming
+        // connections are simply passed to the handler provided to `xpc_main(...)`. Specifically the documentation for
+        // xpc_main says:
+        //   This function will set up your service bundle's listener connection and manage it automatically.
         nil
     }
 }
