@@ -628,21 +628,21 @@ extension XPCServer {
         switch type {
             case .autoDetect:
                 if XPCServiceServer.isThisProcessAnXPCService {
-                    return try XPCServiceServer._forThisXPCService()
+                    return try XPCServiceServer.forThisXPCService()
                 } else if XPCMachServer.isThisProcessABlessedHelperTool {
-                    return try XPCMachServer._forThisBlessedHelperTool()
+                    return try XPCMachServer.forThisBlessedHelperTool()
                 } else if XPCMachServer.isThisProcessALoginItem {
-                    return try XPCMachServer._forThisLoginItem()
+                    return try XPCMachServer.forThisLoginItem()
                 } else {
                     throw XPCError.misconfiguredServer(description: "Unable to auto-detect what type of XPC server " +
                                                                     "this is. Please provide an explicit type.")
                 }
             case .xpcService:
-                return try XPCServiceServer._forThisXPCService()
+                return try XPCServiceServer.forThisXPCService()
             case .blessedHelperTool:
-                return try XPCMachServer._forThisBlessedHelperTool()
+                return try XPCMachServer.forThisBlessedHelperTool()
             case .loginItem:
-                return try XPCMachServer._forThisLoginItem()
+                return try XPCMachServer.forThisLoginItem()
             case .machService(let name, let clientRequirements):
                 let messageAcceptor = SecRequirementsMessageAcceptor(clientRequirements)
                 return try XPCMachServer.getXPCMachServer(named: name, messageAcceptor: messageAcceptor)

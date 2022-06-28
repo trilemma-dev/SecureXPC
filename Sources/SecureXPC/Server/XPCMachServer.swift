@@ -164,7 +164,7 @@ extension XPCMachServer {
         return true
     }
     
-    internal static func _forThisBlessedHelperTool() throws -> XPCMachServer {
+    internal static func forThisBlessedHelperTool() throws -> XPCMachServer {
         // Determine mach service name using the launchd property list's MachServices entry
         let machServiceName: String
         let launchdData = try readEmbeddedPropertyList(sectionName: "__launchd_plist")
@@ -255,7 +255,7 @@ extension XPCMachServer {
         return true
     }
     
-    internal static func _forThisLoginItem() throws -> XPCMachServer {
+    internal static func forThisLoginItem() throws -> XPCMachServer {
         guard let teamIdentifier = try teamIdentifier() else {
             throw XPCError.misconfiguredServer(description: "A login item must have a team identifier in order to " +
                                                             "enable secure communication.")

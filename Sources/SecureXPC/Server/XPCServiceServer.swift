@@ -19,7 +19,7 @@ internal class XPCServiceServer: XPCServer {
     
 	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
     
-    internal static func _forThisXPCService() throws -> XPCServiceServer {
+    internal static func forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
         // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
         
