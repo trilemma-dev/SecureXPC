@@ -21,21 +21,20 @@ internal class XPCServiceServer: XPCServer {
     
     /// Whether this server has been started.
     private var started = false
-    /// The serial queue used when to handle requets for an endpoint
+    /// The serial queue used for handling retrieving an `endpoint`
     private let endpointQueue = DispatchQueue(label: String(describing: XPCServiceServer.self))
     /// Receives new incoming connections via the endpoint
     private var anonymousListenerConnection: xpc_connection_t?
     /// Connections received for the anonymous listener connection while the server is not started
     private var pendingConnections = [xpc_connection_t]()
-    
-    
+        
     internal static func forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
         // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
         
         guard mainBundlePackageInfo().packageType == "XPC!" else {
             throw XPCError.misconfiguredServer(description: "An XPC service's CFBundlePackageType value must be XPC!")
-       }
+        }
 
         if Bundle.main.bundleIdentifier == nil {
             throw XPCError.misconfiguredServer(description: "An XPC service must have a CFBundleIdentifier")
