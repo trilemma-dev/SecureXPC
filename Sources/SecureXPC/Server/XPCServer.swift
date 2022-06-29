@@ -500,7 +500,7 @@ extension XPCServer {
     /// Creates a new anonymous server that accepts requests from the same process it's running in.
     ///
     /// Only a client created from an anonymous server's endpoint can communicate with that server. Do this by retrieving the server's
-    /// ``XPCNonBlockingServer/endpoint`` and then creating a client with it:
+    /// ``XPCServer/endpoint`` and then creating a client with it:
     /// ```swift
     /// let server = XPCServer.makeAnonymous()
     /// let client = XPCClient.fromEndpoint(server.endpoint)
@@ -617,7 +617,7 @@ extension XPCServer {
     
     /// Returns the XPC server for this process.
     ///
-    /// The type of server returned and its request acceptance behavior will depend on what type of ``ProcessType`` this server was created for.
+    /// The request acceptance behavior of the returned service will depend on what type of ``ProcessType`` this server was created for.
     ///
     /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
     ///
