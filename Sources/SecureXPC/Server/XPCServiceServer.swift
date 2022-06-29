@@ -12,12 +12,22 @@ import Foundation
 /// In the case of this framework, the XPC service is expected to be communicated with by an `XPCServiceClient`.
 internal class XPCServiceServer: XPCServer {
     
-    
     internal static var isThisProcessAnXPCService: Bool {
         mainBundlePackageInfo().packageType == "XPC!"
     }
     
-	private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
+    /// The server itself, there can only ever be one per process as there is only ever one named connection that exists for an XPC service
+    private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
+    
+    /// Whether this server has been started.
+    private var started = false
+    /// The serial queue used when to handle requets for an endpoint
+    private let endpointQueue = DispatchQueue(label: String(describing: XPCServiceServer.self))
+    /// Receives new incoming connections via the endpoint
+    private var anonymousListenerConnection: xpc_connection_t?
+    /// Connections received for the anonymous listener connection while the server is not started
+    private var pendingConnections = [xpc_connection_t]()
+    
     
     internal static func forThisXPCService() throws -> XPCServiceServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
@@ -52,6 +62,14 @@ internal class XPCServiceServer: XPCServer {
     }
 
     public override func startAndBlock() -> Never {
+        // Starts up any connections which were received for the anonymous listener connection which is used to have
+        // this server provide an `endpoint`
+        self.endpointQueue.sync {
+            self.started = true
+            self.pendingConnections.forEach(self.startClientConnection(_:))
+            self.pendingConnections.removeAll()
+        }
+        
         xpc_main { connection in
             // This is a @convention(c) closure, so we can't just capture `self`.
             // As such, the singleton reference `XPCServiceServer.service` is used instead.
@@ -60,18 +78,42 @@ internal class XPCServiceServer: XPCServer {
     }
 
     public override var connectionDescriptor: XPCConnectionDescriptor {
-        // This is safe to unwrap because it was already checked in `_forThisXPCService()`.
-        let serviceName = Bundle.main.bundleIdentifier!
-        
-        return .xpcService(name: serviceName)
+        // It's safe to force unwrap the bundle identifier because it was already checked in `forThisXPCService()`.
+        .xpcService(name: Bundle.main.bundleIdentifier!)
     }
     
-    public override var endpoint: XPCServerEndpoint? {
+    public override var endpoint: XPCServerEndpoint {
         // There's seemingly no way to create an endpoint for an XPC service using the XPC C API. This is because
         // endpoints are only created from connection listeners, which an XPC service doesn't expose — incoming
         // connections are simply passed to the handler provided to `xpc_main(...)`. Specifically the documentation for
         // xpc_main says:
         //   This function will set up your service bundle's listener connection and manage it automatically.
-        nil
+        //
+        // So instead we'll create an anonymous listener connection and then treat incoming connections identically to
+        // as if they were coming from `xpc_main(...)`. To users of this API there should be no discernable difference
+        // as both `xpc_main(...)` and the anonymous listener connection are fully encapsulated within this class.
+        self.endpointQueue.sync {
+            // Already created the listener connection previously
+            if let anonymousListenerConnection = self.anonymousListenerConnection {
+                return XPCServerEndpoint(connectionDescriptor: self.connectionDescriptor,
+                                         endpoint: xpc_endpoint_create(anonymousListenerConnection))
+            }
+            
+            // Otherwise, create the listener connection and start it
+            let anonymousListenerConnection = xpc_connection_create(nil, nil)
+            xpc_connection_set_event_handler(anonymousListenerConnection, { connection in
+                NSLog("received connection: \(connection)")
+                if self.started {
+                    self.startClientConnection(connection)
+                } else {
+                    self.pendingConnections.append(connection)
+                }
+            })
+            xpc_connection_resume(anonymousListenerConnection)
+            self.anonymousListenerConnection = anonymousListenerConnection
+            
+            return XPCServerEndpoint(connectionDescriptor: self.connectionDescriptor,
+                                     endpoint: xpc_endpoint_create(anonymousListenerConnection))
+        }
     }
 }

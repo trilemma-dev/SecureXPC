@@ -42,11 +42,9 @@ internal class XPCAnonymousServer: XPCServer {
         .anonymous
     }
     
-    public override var endpoint: XPCServerEndpoint? {
-        XPCServerEndpoint(
-            connectionDescriptor: .anonymous,
-            endpoint: xpc_endpoint_create(self.anonymousListenerConnection)
-        )
+    public override var endpoint: XPCServerEndpoint {
+        XPCServerEndpoint(connectionDescriptor: .anonymous,
+                        endpoint: xpc_endpoint_create(self.anonymousListenerConnection))
     }
 }
 

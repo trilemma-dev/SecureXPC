@@ -14,6 +14,9 @@ import Foundation
 ///
 /// > Warning: While ``XPCServerEndpoint`` conforms to `Codable` it can only be encoded and decoded by the `SecureXPC` framework.
 public struct XPCServerEndpoint {
+    // Private implementation note: The connection descriptor may not represent the _true_ connection type in the case
+    // of an XPCServiceServer which for its endpoint makes use of an anonymous connection. SecureXPC intentionally
+    // represents this an an `xpcService` connection type as it better represents how SecureXPC behaves for the user.
     /// The type of connections serviced by the ``XPCServer`` which created this endpoint.
     public let connectionDescriptor: XPCConnectionDescriptor
     

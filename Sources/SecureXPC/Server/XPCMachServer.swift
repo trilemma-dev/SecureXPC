@@ -55,11 +55,9 @@ internal class XPCMachServer: XPCServer {
         .machService(name: machServiceName)
     }
     
-    public override var endpoint: XPCServerEndpoint? {
-        XPCServerEndpoint(
-            connectionDescriptor: .machService(name: self.machServiceName),
-            endpoint: xpc_endpoint_create(self.listenerConnection)
-        )
+    public override var endpoint: XPCServerEndpoint {
+        XPCServerEndpoint(connectionDescriptor: .machService(name: self.machServiceName),
+                          endpoint: xpc_endpoint_create(self.listenerConnection))
     }
 }
 

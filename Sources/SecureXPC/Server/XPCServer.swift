@@ -476,9 +476,7 @@ public class XPCServer {
     /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
     ///
     /// Endpoints can be sent across an XPC connection.
-    ///
-    /// XPC services do not have endpoints, while XPC Mach services and anonymous servers both do.
-    public var endpoint: XPCServerEndpoint? {
+    public var endpoint: XPCServerEndpoint {
         fatalError("Abstract Property")
     }
 }

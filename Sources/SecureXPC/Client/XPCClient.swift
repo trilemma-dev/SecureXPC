@@ -227,9 +227,11 @@ public class XPCClient {
 
         switch endpoint.connectionDescriptor {
             case .anonymous:
-                return XPCAnonymousClient(connection: connection)
-            case .xpcService(name: let name):
-                return XPCServiceClient(xpcServiceName: name, connection: connection)
+                return XPCAnonymousClient(connection: connection, connectionDescriptor: .anonymous)
+            // XPCServiceServer creates an anonymous listener connection in order to provide an endpoint, so an
+            // anonymous client needs to be created to connect to it, but we want to preserve the connection descriptor
+            case .xpcService(_):
+                return XPCAnonymousClient(connection: connection, connectionDescriptor: endpoint.connectionDescriptor)
             case .machService(name: let name):
                 return XPCMachClient(machServiceName: name, connection: connection)
         }
