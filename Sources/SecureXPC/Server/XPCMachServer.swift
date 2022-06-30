@@ -243,10 +243,7 @@ extension XPCMachServer {
         
         // Login item must be within the main app bundle's Contents/Library/LoginItems directory
         let pathComponents = loginItem.deletingLastPathComponent().pathComponents
-        guard pathComponents.count >= 3,
-              pathComponents[pathComponents.count - 1] == "LoginItems",
-              pathComponents[pathComponents.count - 2] == "Library",
-              pathComponents[pathComponents.count - 3] == "Contents" else {
+        guard pathComponents.count >= 3, pathComponents.suffix(3) == ["LoginItems", "Library", "Contents"] else {
             return false
         }
         

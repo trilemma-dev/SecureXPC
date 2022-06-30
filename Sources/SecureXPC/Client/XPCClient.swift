@@ -198,20 +198,17 @@ public class XPCClient {
     
     /// The `CFBundleIdentifier` values for every `.xpc` file in the `Contents/XPCServices` of this app (if it exists).
     private static let bundledXPCServiceIdentifiers: Set<String> = {
-        var xpcServiceBundleIdentifiers = Set<String>()
         let servicesDir = Bundle.main.bundleURL.appendingPathComponent("Contents")
                                                .appendingPathComponent("XPCServices")
-        if let bundleNames = try? FileManager.default.contentsOfDirectory(atPath: servicesDir.path) {
-            for bundleName in bundleNames {
-                if bundleName.hasSuffix(".xpc"),
-                   let bundle = Bundle(url: servicesDir.appendingPathComponent(bundleName)),
-                   let bundleIdentifier = bundle.infoDictionary?[kCFBundleIdentifierKey as String] as? String {
-                    xpcServiceBundleIdentifiers.insert(bundleIdentifier)
-                }
-            }
+        guard let servicesContents = try? FileManager.default.contentsOfDirectory(atPath: servicesDir.path) else {
+            return []
         }
         
-        return xpcServiceBundleIdentifiers
+        let xpcBundleNames = servicesContents.filter { $0.hasSuffix(".xpc") }
+        let xpcBundles = xpcBundleNames.compactMap { Bundle(url: servicesDir.appendingPathComponent($0)) }
+        let xpcBundleIDs = xpcBundles.compactMap { $0.infoDictionary?[kCFBundleIdentifierKey as String] as? String }
+        
+        return Set<String>(xpcBundleIDs)
     }()
 
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
