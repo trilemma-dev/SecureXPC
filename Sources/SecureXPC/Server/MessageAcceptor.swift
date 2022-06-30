@@ -15,7 +15,7 @@ internal protocol MessageAcceptor {
     func isEqual(to acceptor: MessageAcceptor) -> Bool
 }
 
-/// This should only be used by XPC services which are application-scoped, so it's acceptable to assume they're inheritently safe.
+/// This should only be used by XPC services which are by default application-scoped, so it's acceptable to assume they're inheritently safe.
 internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
     func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         true
@@ -52,6 +52,26 @@ internal struct SecRequirementsMessageAcceptor: MessageAcceptor {
     
     internal init(_ requirements: [SecRequirement]) {
         self.requirements = requirements
+    }
+    
+    /// Initialized with the requirement the specified team identifier is present
+    internal init(forTeamIdentifier teamIdentifier: String) throws {
+        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
+        // In regards to subject.OU:
+        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
+        // The "anchor apple generic" portion effectively means the certificate chain was signed by Apple
+        let requirementString = """
+        anchor apple generic and certificate leaf[subject.OU] = "\(teamIdentifier)"
+        """ as CFString
+        
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(requirementString, [], &requirement) == errSecSuccess,
+              let requirement = requirement else {
+            let message = "Security requirement could not be created; textual representation: \(requirementString)"
+            throw XPCError.internalFailure(description: message)
+        }
+        
+        self.requirements = [requirement]
     }
     
     /// Accepts a message if it meets at least one of the provided `requirements`.

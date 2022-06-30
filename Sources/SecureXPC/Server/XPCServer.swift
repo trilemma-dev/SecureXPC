@@ -130,7 +130,7 @@ public class XPCServer {
     public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal let messageAcceptor: MessageAcceptor
+    internal var messageAcceptor: MessageAcceptor
     
     internal init(messageAcceptor: MessageAcceptor) {
         self.messageAcceptor = messageAcceptor
@@ -555,6 +555,11 @@ extension XPCServer {
         /// specify this service's name and client requirements.
         case autoDetect
         /// A process that is an [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html)
+        ///
+        /// By default the returned server will accept incoming requests from any client without any _explicit_ security requirements; however, macOS itself only
+        /// allows the containing application to make such incoming requests. If you retrieve the ``XPCServer/endpoint`` for an XPC service, this will
+        /// upgrade the security requirements of the server and require all requests to be from the same containing application bundle. If this XPC service has a
+        /// Team ID then incoming requests will also need to be from processes with the same Team ID.
         case xpcService
         /// A process that is a helper tool installed with
         /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).

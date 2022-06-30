@@ -269,22 +269,10 @@ extension XPCMachServer {
         }
         
         let parentMessageAcceptor = try validateIsLoginItem(teamIdentifier: teamIdentifier)
-        let teamRequirementMessageAcceptor = try messageAcceptor(forTeamIdentifier: teamIdentifier)
+        let teamRequirementMessageAcceptor = try SecRequirementsMessageAcceptor(forTeamIdentifier: teamIdentifier)
         let messageAcceptor = AndMessageAcceptor(lhs: teamRequirementMessageAcceptor, rhs: parentMessageAcceptor)
         
         return try getXPCMachServer(named: bundleID, messageAcceptor: messageAcceptor)
-    }
-    
-    /// The team identifier for this process or `nil` if there isn't one.
-    private static func teamIdentifier() throws -> String? {
-        var info: CFDictionary?
-        let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
-        let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)
-        guard status == errSecSuccess, let info = info as NSDictionary? else {
-            throw XPCError.internalFailure(description: "SecCodeCopySigningInformation failed with status: \(status)")
-        }
-
-        return info[kSecCodeInfoTeamIdentifier] as? String
     }
     
     /// Partially validates this process is a login item, and if successful returns a message acceptor which accepts messages from any client located within the
@@ -355,24 +343,5 @@ extension XPCMachServer {
         }
         
         return ParentBundleMessageAcceptor(parentBundleURL: parentBundle)
-    }
-    
-    private static func messageAcceptor(forTeamIdentifier teamIdentifier: String) throws -> SecRequirementsMessageAcceptor {
-        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
-        // In regards to subject.OU:
-        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
-        let teamRequirement = "certificate leaf[subject.OU] = \"\(teamIdentifier)\""
-        // Effectively this means the certificate chain was signed by Apple
-        let appleRequirement = "anchor apple generic"
-        let requirementString = [appleRequirement, teamRequirement].joined(separator: " and ") as CFString
-        
-        var requirement: SecRequirement?
-        guard SecRequirementCreateWithString(requirementString, SecCSFlags(), &requirement) == errSecSuccess,
-              let requirement = requirement else {
-            let message = "Security requirement could not be created; textual representation: \(requirementString)"
-            throw XPCError.internalFailure(description: message)
-        }
-        
-        return SecRequirementsMessageAcceptor([requirement])
     }
 }

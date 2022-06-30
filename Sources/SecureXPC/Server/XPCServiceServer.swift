@@ -13,7 +13,11 @@ import Foundation
 internal class XPCServiceServer: XPCServer {
     
     internal static var isThisProcessAnXPCService: Bool {
-        mainBundlePackageInfo().packageType == "XPC!"
+        // To be an XPC service this process needs to have a package type of XPC!, have an xpc file extension, and be
+        // located in its parent's Contents/XPCServices directory
+        return mainBundlePackageInfo().packageType == "XPC!" &&
+        Bundle.main.bundleURL.pathExtension == "xpc" &&
+        Bundle.main.bundleURL.deletingLastPathComponent().pathComponents.suffix(2) == ["Contents", "XPCServices"]
     }
     
     /// The server itself, there can only ever be one per process as there is only ever one named connection that exists for an XPC service
@@ -32,8 +36,12 @@ internal class XPCServiceServer: XPCServer {
         // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
         // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
         
-        guard mainBundlePackageInfo().packageType == "XPC!" else {
-            throw XPCError.misconfiguredServer(description: "An XPC service's CFBundlePackageType value must be XPC!")
+        guard isThisProcessAnXPCService else {
+            throw XPCError.misconfiguredServer(description: """
+            This process is not an XPC service.
+            Package type: \(mainBundlePackageInfo().packageType ?? "<not present>")
+            Location: \(Bundle.main.bundleURL.path)
+            """)
         }
 
         if Bundle.main.bundleIdentifier == nil {
@@ -101,7 +109,6 @@ internal class XPCServiceServer: XPCServer {
             // Otherwise, create the listener connection and start it
             let anonymousListenerConnection = xpc_connection_create(nil, nil)
             xpc_connection_set_event_handler(anonymousListenerConnection, { connection in
-                NSLog("received connection: \(connection)")
                 if self.started {
                     self.startClientConnection(connection)
                 } else {
@@ -110,6 +117,22 @@ internal class XPCServiceServer: XPCServer {
             })
             xpc_connection_resume(anonymousListenerConnection)
             self.anonymousListenerConnection = anonymousListenerConnection
+            
+            // Now that any arbitrary process could create a connection to this server, the message acceptor needs to be
+            // more restrictive. We'll allow any connection from a process belongs to the same parent bundle and if
+            // there's a valid team ID present we'll additionally enforce it's of the same team ID.
+            
+            // XPC services are located in their parent's Contents/XPCServices directory
+            let parentBundleURL = Bundle.main.bundleURL.deletingLastPathComponent() // <name>.xpc bundle directory
+                                                       .deletingLastPathComponent() // XPCServices
+                                                       .deletingLastPathComponent() // Contents
+            let parentBundleAcceptor = ParentBundleMessageAcceptor(parentBundleURL: parentBundleURL)
+            if let teamID = try? teamIdentifier(),
+               let teamIDAcceptor = try? SecRequirementsMessageAcceptor(forTeamIdentifier: teamID) {
+                self.messageAcceptor = AndMessageAcceptor(lhs: teamIDAcceptor, rhs: parentBundleAcceptor)
+            } else {
+                self.messageAcceptor = parentBundleAcceptor
+            }
             
             return XPCServerEndpoint(connectionDescriptor: self.connectionDescriptor,
                                      endpoint: xpc_endpoint_create(anonymousListenerConnection))
