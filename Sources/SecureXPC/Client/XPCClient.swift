@@ -16,7 +16,7 @@ import Foundation
 /// let client = XPCClient.forService(named: "com.example.myapp.service")
 /// ```
 ///
-/// It is possible to explicitly specify the type of client which will be returned and in some uncommon cases this will is required. See ``ServiceType`` for details.
+/// It is possible to explicitly specify the type of client which will be returned and in some uncommon cases this is required. See ``ServiceType`` for details.
 ///
 /// ## Retrieving a Client For an Anonymous Server
 /// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server:
@@ -135,24 +135,26 @@ public class XPCClient {
         /// Auto-detects what type of client to retrieve for the name provided to ``XPCClient/forService(named:ofType:)``.
         ///
         /// This is accomplished by finding the names (`CFBundleIdentifier`s) for each of the XPC services bundled with this app. If the name provided
-        /// to `forService(named:ofType:)` belongs to one of the XPC services then a client will be created to communicate with it. Otherwise, a client
-        /// will be created to communicate with an XPC Mach service.
+        /// to `forService(named:ofType:)` belongs to one of the XPC services then a client will be returned to communicate with it. Otherwise, a client
+        /// will be returned to communicate with an XPC Mach service.
         ///
-        /// If there is a Mach service you need to communicate with that has the same name as a bundled XPC service, explicitly retrieve the client as such
-        /// by passing in ``machService`` as the type.
+        /// If there is a Mach service you need to communicate with that has the same name as a bundled XPC service, explicitly retrieve the client by passing
+        /// ``machService`` as the type.
         case autoDetect
         /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC Mach service with the provided
         /// name.
         ///
-        /// Launch Agents, Launch Daemons, helper tools installed with
-        /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless),
-        /// and login items installed with
+        /// Numerous helper tools & services can optionally communicate over XPC by using Mach services, including:
+        /// - Helper tools installed with
+        /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+        /// - Login items installed with
         /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
-        /// can all optionally communicate over XPC by using Mach services.
+        /// - Launch Agents
+        /// - Launch Daemons
         case machService
         /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC service with the provided name.
         ///
-        /// XPC services are helper tools which ship as part of your app and only your app can communicate with.
+        /// XPC services are helper tools which ship as part of an app and by default only that app can communicate with them.
         ///
         /// It is a programming error to specify this type and provide `forService(named:ofType:)` a name which does not correspond to an XPC service
         /// bundled with the calling app. You may find this behavior helpful for debugging purposes.
@@ -164,15 +166,15 @@ public class XPCClient {
     /// In order for this client to be able to communicate with the service, the service itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisProcess(ofType:)``.
     ///
-    /// > Note: Client creation can succeed regardless of whether the service actually exists.
+    /// > Note: This function can return successfully regardless of whether the service actually exists.
     ///
     /// - Parameters:
     ///   - named: The `CFBundleIdentifier` of the XPC service or the name of the XPC Mach service. For most Mach services the name is specified
     ///            with the `MachServices` launchd property list entry; however, for login items the name is its`CFBundleIdentifier`.
     ///   - ofType: There are multiple different types of XPC clients and normally you do not need to concern yourself with this. However, if you are trying to
-    ///             create a client for an XPC Mach service *and* you have an XPC service with a CFBundleIdentifier value that's the same as the name of
-    ///             that Mach service, then you must call this function and explicitly set the type to ``ServiceType/machService``. This is because auto
-    ///             detection will always choose the XPC service if one exists with the provided name.
+    ///             create a client for an XPC Mach service *and* you have an XPC service with a `CFBundleIdentifier` value that's the same as the
+    ///             name of that Mach service, then you must call this function and explicitly set the type to ``ServiceType/machService``. This is
+    ///             because auto detection will always choose the XPC service if one exists with the provided name.
     /// - Returns: A client configured to communicate with the named service.
     public static func forService(named serviceName: String, ofType type: ServiceType = .autoDetect) -> XPCClient {
         switch type {
@@ -184,10 +186,11 @@ public class XPCClient {
                 }
             case .xpcService:
                 guard bundledXPCServiceIdentifiers.contains(serviceName) else {
-                    let message = "There is no bundled XPC service with name \(serviceName)\n" +
-                                  "Available XPC service names are:\n" +
-                                  bundledXPCServiceIdentifiers.joined(separator: "\n")
-                    fatalError(message)
+                    fatalError("""
+                    There is no bundled XPC service named \(serviceName)
+                    Available XPC service names are:
+                    \(bundledXPCServiceIdentifiers.joined(separator: "\n"))
+                    """)
                 }
                 
                 return XPCServiceClient(xpcServiceName: serviceName)

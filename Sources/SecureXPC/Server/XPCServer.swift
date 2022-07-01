@@ -17,7 +17,7 @@ import Foundation
 ///
 /// This will always work for any
 /// [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html).
-/// XPC services are helper tools which ship as part of your app and only your app can communicate with.
+/// XPC services are helper tools which ship as part of an app and that by default only that app can communicate with.
 ///
 /// In most cases helper tools installed with
 /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed with
@@ -81,7 +81,7 @@ import Foundation
 ///
 /// ### Requirements Checking
 /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used.  When requests are not accepted, if an error
+/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` is used.  When requests are not accepted, if an error
 /// handler has been set then it is called with ``XPCError/insecure``.
 ///
 /// ## Topics
