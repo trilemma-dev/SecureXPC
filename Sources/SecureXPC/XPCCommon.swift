@@ -140,3 +140,15 @@ func readEntitlement(name: String) throws -> CFTypeRef? {
     
     return entitlement
 }
+
+/// The team identifier for this process or `nil` if there isn't one.
+func teamIdentifier() throws -> String? {
+    var info: CFDictionary?
+    let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
+    let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)
+    guard status == errSecSuccess, let info = info as NSDictionary? else {
+        throw XPCError.internalFailure(description: "SecCodeCopySigningInformation failed with status: \(status)")
+    }
+
+    return info[kSecCodeInfoTeamIdentifier] as? String
+}

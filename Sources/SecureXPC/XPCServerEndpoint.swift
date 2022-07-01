@@ -9,21 +9,19 @@ import Foundation
 
 /// An endpoint is used to create clients which can communicate with their associated server.
 ///
-/// Endpoints are retrieved from a server's ``XPCNonBlockingServer/endpoint`` property. They can be used in the same process or sent across an existing
-/// XPC connection.
+/// Endpoints are retrieved from a server's ``XPCServer/endpoint`` property. They can be used in the same process or sent across an existing XPC
+/// connection.
 ///
 /// > Warning: While ``XPCServerEndpoint`` conforms to `Codable` it can only be encoded and decoded by the `SecureXPC` framework.
 public struct XPCServerEndpoint {
+    // Private implementation note: The connection descriptor may not represent the _true_ connection type in the case
+    // of an XPCServiceServer which for its endpoint makes use of an anonymous connection. SecureXPC intentionally
+    // represents this an an `xpcService` connection type as it better represents how SecureXPC behaves for the user.
     /// The type of connections serviced by the ``XPCServer`` which created this endpoint.
     public let connectionDescriptor: XPCConnectionDescriptor
     
     // The underlying XPC C API endpoint needed to create connections to the listener connection it came from
     internal let endpoint: xpc_endpoint_t
-
-    internal init(connectionDescriptor: XPCConnectionDescriptor, endpoint: xpc_endpoint_t) {
-        self.connectionDescriptor = connectionDescriptor
-        self.endpoint = endpoint
-    }
 }
 
 extension XPCServerEndpoint: Hashable {

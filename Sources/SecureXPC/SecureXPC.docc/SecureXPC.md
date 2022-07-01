@@ -6,11 +6,13 @@ compatability.
 ## Overview
 
 SecureXPC provides an easy way to perform secure XPC communication with pure Swift. `Codable` conforming types are used
-to make requests and receive responses. This framework can be used to communicate with any type of XPC service or XPC
-Mach service. Customized support for communicating with helper tools installed via 
+to make requests and receive responses.
+
+This framework can be used to communicate with any type of XPC service or XPC Mach service. Built-in support for
+communicating with helper tools installed via 
 [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed
 via [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
-are also provided.
+is also provided.
 
 ## Usage
 The envisioned pattern when using this framework is to define routes in a shared file, retrieve a server in one program
@@ -32,9 +34,9 @@ See ``XPCRoute`` to learn more about how to create routes.
 In one program retrieve a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = <# server retrieval here #>
+    let server = XPCServer.forThisProcess()
     server.registerRoute(route, handler: bedazzle)
-    server.start()
+    server.startAndBlock()
 }
 
 private func bedazzle(message: String) throws -> Bool {
@@ -50,13 +52,13 @@ See ``XPCServer`` for details on how to retrieve, configure, and start a server.
 
 In another program retrieve a client, then send a request to one of these routes:
 ```swift
-let client = <# client retrieval here #>
+let client = XPCClient.forService(named: "com.example.service")
 let reply = try await client.sendMessage("Get Schwifty", to: route)
 ```
 
 Closure-based variants are available for macOS 10.14 and earlier:
 ```swift
-let client = <# client retrieval here #>
+let client = XPCClient.forService(named: "com.example.service")
 try client.sendMessage("Get Schwifty", to: route, withResponse: { response in
     switch response {
         case .success(let reply):

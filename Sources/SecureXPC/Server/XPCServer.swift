@@ -10,41 +10,28 @@ import Foundation
 /// An XPC server to receive requests from and send responses to an ``XPCClient``.
 ///
 /// ### Retrieving a Server
-/// There are two different types of services you can retrieve a server for: XPC services and XPC Mach services. If you're uncertain which type of service you're
-/// using, it's likely an XPC service.
-///
-/// Anonymous servers can also be created which do not correspond to an XPC service or XPC Mach service.
-///
-/// #### XPC services
-/// These are helper tools which ship as part of your app and only your app can communicate with.
-///
-/// To retrieve a server for an XPC service:
+/// Typically this is as easy as:
 /// ```swift
-/// let server = try XPCServer.forThisXPCService()
+/// let server = try XPCServer.forThisProcess()
 /// ```
 ///
-/// #### XPC Mach services
-/// Launch Agents, Launch Daemons, helper tools installed with
-/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless), and login items installed with
+/// This will always work for any
+/// [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html).
+/// XPC services are helper tools which ship as part of an app and that by default only that app can communicate with.
+///
+/// In most cases helper tools installed with
+/// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed with
 /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled) can
-/// optionally communicate over XPC by using Mach services.
+/// also be retrieved in the same way. See ``ProcessType/blessedHelperTool`` and ``ProcessType/loginItem`` for details.
 ///
-/// In most cases, a server can be auto-configured using ``XPCServer/forThisBlessedHelperTool()`` for a helper tool installed with `SMJobBless`:
-/// ```swift
-/// let server = try XPCServer.forThisBlessedHelperTool()
-/// ```
-///
-/// Similarly, a server can be auto-configured using ``XPCServer/forThisLoginItem()`` for a login item installed with `SMLoginItemSetEnabled`.
-///
-/// For Launch Agents, Launch Daemons, more advanced `SMJobBless` and `SMLoginItemSetEnabled` configurations, as well as other cases it is
-/// necessary both to the specify the name of the service as well its security requirements. See
-/// ``XPCServer/forThisMachService(named:clientRequirements:)`` for an example and details.
+/// For Launch Agents, Launch Daemons, and any other types of services an `XPCServer` can be retrieved by explicitly creating a
+/// ``ProcessType/machService(name:clientRequirements:)`` instance.
 ///
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program. Use cases for making one include:
 ///  - Allowing two processes which are not XPC services to communicate over XPC with each other. This is done by having one of those processes make an
-///    anonymous server and send its ``XPCNonBlockingServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that
-///    endpoint from the XPC Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
+///    anonymous server and send its ``XPCServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that endpoint from the XPC
+///    Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
 ///  - Testing code that would otherwise run as part of an XPC Mach service without needing to install a helper tool. However, note that this code won't run as root.
 ///
 /// ### Registering & Handling Routes
@@ -87,17 +74,20 @@ import Foundation
 /// server.startAndBlock()
 /// ```
 ///
-/// Returned server instances which conform to ``XPCNonBlockingServer`` can also be started in a non-blocking manner:
+/// Server instances which conform to ``XPCNonBlockingServer`` can also be started in a non-blocking manner:
 /// ```swift
 /// server.start()
 /// ```
 ///
+/// ### Requirements Checking
+/// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
+/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` is used.  When requests are not accepted, if an error
+/// handler has been set then it is called with ``XPCError/insecure``.
+///
 /// ## Topics
 /// ### Retrieving a Server
-/// - ``forThisXPCService()`` 
-/// - ``forThisBlessedHelperTool()``
-/// - ``forThisLoginItem()``
-/// - ``forThisMachService(named:clientRequirements:)``
+/// - ``forThisProcess(ofType:)``
+/// - ``ProcessType``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(clientRequirements:)``
 /// ### Registering Async Routes
@@ -123,7 +113,7 @@ import Foundation
 /// - ``XPCNonBlockingServer/start()``
 /// ### Server State
 /// - ``connectionDescriptor``
-/// - ``XPCNonBlockingServer/endpoint``
+/// - ``endpoint``
 public class XPCServer {
     
     /// The queue used to run synchronous handlers associated with registered routes.
@@ -140,7 +130,7 @@ public class XPCServer {
     public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal let messageAcceptor: MessageAcceptor
+    internal var messageAcceptor: MessageAcceptor
     
     internal init(messageAcceptor: MessageAcceptor) {
         self.messageAcceptor = messageAcceptor
@@ -482,6 +472,13 @@ public class XPCServer {
     public var connectionDescriptor: XPCConnectionDescriptor {
         fatalError("Abstract Property")
     }
+    
+    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
+    ///
+    /// Endpoints can be sent across an XPC connection.
+    public var endpoint: XPCServerEndpoint {
+        fatalError("Abstract Property")
+    }
 }
 
 // MARK: public server protocols
@@ -492,40 +489,16 @@ public class XPCServer {
 public protocol XPCNonBlockingServer {
     /// Begins processing requests received by this XPC server.
     func start()
-    
-    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
-    ///
-    /// Endpoints can be sent across an XPC connection.
-    var endpoint: XPCServerEndpoint { get }
-    
-    // Internal implementation note: `endpoint` is part of the `XPCNonBlockingServer` protocol instead of `XPCServer` as
-    // `XPCServiceServer` can't have an endpoint created for it.
-    
-    // From a technical perspective this is because endpoints are only created from connection listeners, which an XPC
-    // service doesn't expose (incoming connections are simply passed to the handler provided to `xpc_main(...)`. From a
-    // security point of view, it makes sense that it's not possible to create an endpoint for an XPC service because
-    // they're designed to only allow communication between the main app and .xpc bundles contained within the same main
-    // app's bundle. As such there's no valid use case for creating such an endpoint.
 }
 
 // MARK: public factories
 
 // Contains all of the `static` code that provides the entry points to retrieving an `XPCServer` instance.
 extension XPCServer {
-    /// Provides a server for this XPC service.
-    ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` is called.
-    ///
-    /// - Throws: ``XPCError/notXPCService`` if the caller is not an XPC service.
-    /// - Returns: A server instance configured for this XPC service.
-    public static func forThisXPCService() throws -> XPCServer {
-        try XPCServiceServer._forThisXPCService()
-    }
-    
     /// Creates a new anonymous server that accepts requests from the same process it's running in.
     ///
     /// Only a client created from an anonymous server's endpoint can communicate with that server. Do this by retrieving the server's
-    /// ``XPCNonBlockingServer/endpoint`` and then creating a client with it:
+    /// ``XPCServer/endpoint`` and then creating a client with it:
     /// ```swift
     /// let server = XPCServer.makeAnonymous()
     /// let client = XPCClient.fromEndpoint(server.endpoint)
@@ -541,9 +514,9 @@ extension XPCServer {
 
     /// Creates a new anonymous server that accepts requests from clients which meet the security requirements.
     ///
-    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``XPCNonBlockingServer/endpoint``
-    /// and send it across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is
-    /// required that you specifiy the
+    /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``XPCServer/endpoint`` and send it
+    /// across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required that you
+    /// specifiy the
     /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
     /// of any connecting clients:
     /// ```swift
@@ -561,11 +534,6 @@ extension XPCServer {
     ///
     /// > Important: No requests will be processed until ``XPCNonBlockingServer/start()`` or ``startAndBlock()`` is called.
     ///
-    /// ## Requirements Checking
-    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used.  When requests are not accepted, if an
-    /// error handler has been set then it is called with ``XPCError/insecure``.
-    ///
     /// > Note: If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
     ///
     /// - Parameters:
@@ -574,88 +542,114 @@ extension XPCServer {
         XPCAnonymousServer(messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
     }
     
-    /// Provides a server for this helper tool if it was installed with
-    /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
-    ///
-    /// To successfully call this function the following requirements must be met:
-    ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
-    ///   - The info property list embedded in this helper tool must have at least one element in its
-    ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
-    ///   array
-    ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
-    ///     - To be valid, it must be creatable by
-    ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
-    ///
-    /// Incoming requests will be accepted from clients that meet _any_ of the `SMAuthorizedClients` requirements.
-    ///
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
-    ///
-    /// - Throws: ``XPCError/misconfiguredBlessedHelperTool(description:)`` if the configuration does not match this function's
-    ///           requirements.
-    /// - Returns: A server instance configured with the embedded property list entries.
-    public static func forThisBlessedHelperTool() throws -> XPCServer & XPCNonBlockingServer {
-        try XPCMachServer._forThisBlessedHelperTool()
+    /// The type of process an ``XPCServer`` should be retrieved for.
+    public enum ProcessType {
+        /// Auto-detects what type of server to create for this process.
+        ///
+        /// Auto-detection currently supports:
+        /// - ``xpcService``
+        /// - ``blessedHelperTool``
+        /// - ``loginItem``
+        ///
+        /// For any other type such as Launch Agent or Launch Daemon, ``machService(name:clientRequirements:)`` must be used to explicitly
+        /// specify this service's name and client requirements.
+        case autoDetect
+        /// A process that is an [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html)
+        ///
+        /// By default the returned server will accept incoming requests from any client without any _explicit_ security requirements; however, macOS itself only
+        /// allows the containing application to make such incoming requests. If you retrieve the ``XPCServer/endpoint`` for an XPC service, this will
+        /// upgrade the security requirements of the server and require all requests to be from the same containing application bundle. If this XPC service has a
+        /// Team ID then incoming requests will also need to be from processes with the same Team ID.
+        case xpcService
+        /// A process that is a helper tool installed with
+        /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
+        ///
+        /// For a server to be automatically created for this process the following requirements must be met:
+        ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
+        ///   - The info property list embedded in this helper tool must have at least one element in its
+        ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
+        ///   array
+        ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
+        ///     - To be valid, it must be creatable by
+        ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
+        ///
+        /// The returned server will accept incoming requests from clients that meet _any_ of the `SMAuthorizedClients` requirements.
+        ///
+        /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
+        /// ``machService(name:clientRequirements:)`` may be used instead to explicitly specify this service's name and client requirements.
+        case blessedHelperTool
+        
+        /// A process that is a login item enabled with
+        /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+        ///
+        /// For a server to be automatically created for this process the following requirements must be met:
+        ///   - This bundle for this process must have a team identifier
+        ///   - If this is a sandboxed login item, the
+        ///     [`com.apple.security.application-groups`](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups)
+        ///     entitlement must be present and one of the application groups must have the same team identifier as this login item
+        ///
+        /// The returned server will accept incoming requests from the main app or helper tools contained within the main app bundle. Additionally they must have
+        /// the same team identifier as this login item.
+        ///
+        /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
+        /// ``machService(name:clientRequirements:)`` may be used instead to explicitly specify this service's name and client requirements.
+        case loginItem
+        
+        /// A process that is running as an XPC Mach service.
+        ///
+        /// Use this case to explicitly provide a service name and define the security requirements for connecting clients. This allows for retrieving a server for
+        /// any Launch Daemons and Launch Agents as well as customizing client requirements for process types with built-in support.
+        ///
+        /// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specifiy the
+        /// [code signing requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
+        /// of any connecting clients:
+        /// ```swift
+        /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
+        /// var requirement: SecRequirement?
+        /// if SecRequirementCreateWithString(reqString as CFString,
+        ///                                   SecCSFlags(),
+        ///                                   &requirement) == errSecSuccess,
+        ///   let requirement = requirement {
+        ///     let server = XPCServer.forThisProcess(ofType: .machService(name: "com.example.service",
+        ///                                                                clientRequirements: [requirement]))
+        ///    <# configure and start server #>
+        /// }
+        /// ```
+        case machService(name: String, clientRequirements: [SecRequirement])
     }
     
-    /// Provides a server for this login item installed with
-    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+    /// Returns the XPC server for this process.
     ///
-    /// This function may successfully be called by both sandboxed and non-sandboxed login items. If this is a sandboxed login item, the
-    /// [`com.apple.security.application-groups`](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups)
-    /// entitlement must be present and one of the application groups must have the same team identifier as this login item. Both sandboxed and non-sandboxed
-    /// apps must have a team identifier.
-    ///
-    /// Incoming requests will only be accepted from the main app or helper tools contained within the main app bundle. Additionally they must have the same team
-    /// identifier as this login item.
+    /// The request acceptance behavior of the returned service will depend on what type of ``ProcessType`` this server was created for.
     ///
     /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
     ///
-    /// - Returns: A server instance configured to communicate with its main containing app.
-    public static func forThisLoginItem() throws -> XPCServer & XPCNonBlockingServer {
-        try XPCMachServer._forThisLoginItem()
-    }
-
-    /// Provides a server for this XPC Mach service that accepts requests from clients which meet the security requirements.
-    ///
-    /// For the provided server to function properly, the caller must be an XPC Mach service.
-    ///
-    /// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specifiy the
-    /// [requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)
-    /// of any connecting clients:
-    /// ```swift
-    /// let reqString = "identifier \"com.example.AuthorizedClient\" and certificate leaf[subject.OU] = \"4L0ZG128MM\""
-    /// var requirement: SecRequirement?
-    /// if SecRequirementCreateWithString(reqString as CFString,
-    ///                                   SecCSFlags(),
-    ///                                   &requirement) == errSecSuccess,
-    ///   let requirement = requirement {
-    ///     let server = XPCServer.forThisMachService(named: "com.example.service",
-    ///                                               clientRequirements: [requirement])
-    ///
-    ///    <# configure and start server #>
-    /// }
-    /// ```
-    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
-    ///
-    /// ## Requirements Checking
-    ///
-    /// SecureXPC requires that a server for an XPC Mach service provide code signing requirements which define which clients are allowed to talk to it.
-    ///
-    /// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-    /// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` will be used. When requests are not accepted, if an
-    /// error handler has been set then it is called with ``XPCError/insecure``.
-    ///
-    /// - Parameters:
-    ///   - named: The name of the Mach service this server should bind to.
-    ///   - clientRequirements: If a request is received from a client, it will only be processed if it meets one (or more) of these requirements.
-    /// - Throws: ``XPCError/conflictingClientRequirements`` if a server for this named service has previously been retrieved with different client
-    ///           requirements.
-    public static func forThisMachService(
-        named machServiceName: String,
-        clientRequirements: [SecRequirement]
-    ) throws -> XPCServer & XPCNonBlockingServer {
-        try XPCMachServer.getXPCMachServer(named: machServiceName,
-                                           messageAcceptor: SecRequirementsMessageAcceptor(clientRequirements))
+    /// By default this function will attempt to auto-detect which type of server this process represents. If this server's type cannot be detected then an error will be
+    /// thrown. To resolve this, explicitly provide a ``ProcessType`` and use ``ProcessType/machService(name:clientRequirements:)`` for any
+    /// configurations which do not have built-in support.
+    public static func forThisProcess(ofType type: ProcessType = .autoDetect) throws -> XPCServer {
+        switch type {
+            case .autoDetect:
+                if XPCServiceServer.isThisProcessAnXPCService {
+                    return try XPCServiceServer.forThisXPCService()
+                } else if XPCMachServer.isThisProcessABlessedHelperTool {
+                    return try XPCMachServer.forThisBlessedHelperTool()
+                } else if XPCMachServer.isThisProcessALoginItem {
+                    return try XPCMachServer.forThisLoginItem()
+                } else {
+                    throw XPCError.misconfiguredServer(description: "Unable to auto-detect what type of XPC server " +
+                                                                    "this is. Please provide an explicit type.")
+                }
+            case .xpcService:
+                return try XPCServiceServer.forThisXPCService()
+            case .blessedHelperTool:
+                return try XPCMachServer.forThisBlessedHelperTool()
+            case .loginItem:
+                return try XPCMachServer.forThisLoginItem()
+            case .machService(let name, let clientRequirements):
+                let messageAcceptor = SecRequirementsMessageAcceptor(clientRequirements)
+                return try XPCMachServer.getXPCMachServer(named: name, messageAcceptor: messageAcceptor)
+        }
     }
 }
 

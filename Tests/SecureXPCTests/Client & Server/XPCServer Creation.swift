@@ -20,29 +20,29 @@ final class XPCServerCreationTests: XCTestCase {
     
     func testFailToRetrieveServicesServer() {
         do {
-            _ = try XPCServer.forThisXPCService()
-            XCTFail("No error was thrown. \(XPCError.notXPCService) should have been thrown.")
-        } catch XPCError.notXPCService {
+            _ = try XPCServer.forThisProcess(ofType: .xpcService)
+            XCTFail("No error was thrown. XPCError.misconfiguredServer should have been thrown.")
+        } catch XPCError.misconfiguredServer(_) {
             // Expected behavior
         } catch {
-            XCTFail("Unexpected error thrown. \(XPCError.notXPCService) should have been thrown.")
+            XCTFail("Unexpected error thrown. XPCError.misconfiguredServer should have been thrown.")
         }
     }
     
     func testFailToRetrievedBlessedHelperToolServer() {
         do {
-            _ = try XPCServer.forThisBlessedHelperTool()
-            XCTFail("No error was thrown. XPCError.misconfiguredBlessedHelperTool should have been thrown.")
-        } catch XPCError.misconfiguredBlessedHelperTool(_) {
+            _ = try XPCServer.forThisProcess(ofType: .blessedHelperTool)
+            XCTFail("No error was thrown. XPCError.misconfiguredServer should have been thrown.")
+        } catch XPCError.misconfiguredServer(_) {
             // Expected behavior
         } catch {
-            XCTFail("Unexpected error thrown. XPCError.misconfiguredBlessedHelperTool should have been thrown.")
+            XCTFail("Unexpected error thrown. XPCError.misconfiguredServer should have been thrown.")
         }
     }
     
     // Expectation: server can be created without throwing
     func testRetrieveMachServerOnce() throws {
-        _ = try XPCServer.forThisMachService(named: "com.example.foo", clientRequirements: [])
+        _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.foo", clientRequirements: []))
     }
     
     // Expectation: same server is successfully returned for the same name and the same requirements
@@ -57,8 +57,10 @@ final class XPCServerCreationTests: XCTestCase {
         let requirements2 = [requirement2!]
         
         // The same server instance should be returned each time
-        let server1 = try XPCServer.forThisMachService(named: "com.example.bar", clientRequirements: requirements1)
-        let server2 = try XPCServer.forThisMachService(named: "com.example.bar", clientRequirements: requirements2)
+        let server1 = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.bar",
+                                                                        clientRequirements: requirements1))
+        let server2 = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.bar",
+                                                                        clientRequirements: requirements2))
         XCTAssertIdentical(server1, server2)
     }
     
@@ -68,14 +70,16 @@ final class XPCServerCreationTests: XCTestCase {
         SecRequirementCreateWithString("identifier \"foo.bar\"" as CFString, [], &requirement)
         let requirements = [requirement!]
         
-        _ = try XPCServer.forThisMachService(named: "com.example.biz", clientRequirements: requirements)
+        _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.biz",
+                                                              clientRequirements: requirements))
 
         var otherRequirement: SecRequirement?
         SecRequirementCreateWithString("identifier \"fizz.buzz\"" as CFString, [], &otherRequirement)
         let otherRequirements = [otherRequirement!]
         
         do {
-            _ = try XPCServer.forThisMachService(named: "com.example.biz", clientRequirements: otherRequirements)
+            _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.biz",
+                                                                  clientRequirements: otherRequirements))
             XCTFail("No error was thrown. \(XPCError.conflictingClientRequirements) should have been thrown.")
         } catch XPCError.conflictingClientRequirements {
             // Expected behavior
