@@ -142,7 +142,7 @@ func readEntitlement(name: String) throws -> CFTypeRef? {
 }
 
 /// The team identifier for this process or `nil` if there isn't one.
-func teamIdentifier() throws -> String? {
+func teamIdentifierForThisProcess() throws -> String? {
     var info: CFDictionary?
     let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
     let status = SecCodeCopySigningInformation(try SecStaticCodeCopySelf(), flags, &info)

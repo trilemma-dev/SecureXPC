@@ -26,6 +26,16 @@ internal struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
     }
 }
 
+internal struct NeverAcceptingMessageAcceptor: MessageAcceptor {
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        false
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        type(of: acceptor) == NeverAcceptingMessageAcceptor.self
+    }
+}
+
 /// This is intended for use by `XPCAnonymousServer`.
 internal struct SameProcessMessageAcceptor: MessageAcceptor {
     /// Accepts a message only if it is coming from this process.
@@ -193,6 +203,30 @@ struct AndMessageAcceptor: MessageAcceptor {
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {
         guard let acceptor = acceptor as? AndMessageAcceptor else {
+            return false
+        }
+        
+        return self.lhs.isEqual(to: acceptor.lhs) && self.rhs.isEqual(to: acceptor.rhs)
+    }
+}
+
+/// Logically ors the results of two message acceptors.
+struct OrMessageAcceptor: MessageAcceptor {
+    private let lhs: MessageAcceptor
+    private let rhs: MessageAcceptor
+    
+    init(lhs: MessageAcceptor, rhs: MessageAcceptor) {
+        self.lhs = lhs
+        self.rhs = rhs
+    }
+    
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.acceptMessage(connection: connection, message: message) ||
+        rhs.acceptMessage(connection: connection, message: message)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? OrMessageAcceptor else {
             return false
         }
         
