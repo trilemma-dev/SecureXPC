@@ -232,6 +232,133 @@ extension XPCMachServer {
         return Data(bytes: section, count: Int(size))
     }
     
+    // MARK: daemon & agent
+    
+    private static func parentAppURL() throws -> URL {
+        let components = Bundle.main.bundleURL.pathComponents
+        guard let contentsIndex = components.lastIndex(of: "Contents"),
+              components[components.index(before: contentsIndex)].hasSuffix(".app") else {
+            throw XPCError.misconfiguredServer(description: "Parent bundle could not be found")
+        }
+        
+        return URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))
+    }
+    
+    // directoryName is expected to be one of:
+    // - LaunchDaemons
+    // - LaunchAgents
+    private static func plistsForDaemonOrAgent(parentURL: URL, directoryName: String) throws -> [[String : Any]] {
+        // For a daemon, from Apple:
+        //   The property list name must correspond to a property list in the calling app’s
+        //   Contents/Library/LaunchDaemons directory
+        //
+        // For an agent, from Apple:
+        //   The property list name must correspond to a property list in the calling app’s
+        //   Contents/Library/LaunchAgents directory.
+        guard let executableURL = Bundle.main.executableURL else {
+            throw XPCError.misconfiguredServer(description: "This process lacks an executable URL")
+        }
+        let plistDirectory = parentURL.appendingPathComponent("Contents", isDirectory: true)
+                                      .appendingPathComponent("Library", isDirectory: true)
+                                      .appendingPathComponent(directoryName, isDirectory: true)
+        let plistDirectoryContents = try FileManager.default.contentsOfDirectory(at: plistDirectory,
+                                                                                 includingPropertiesForKeys: nil)
+        let plistsData = plistDirectoryContents.compactMap { try? Data(contentsOf: $0) }
+        let plists = plistsData.compactMap {
+            try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String : Any]
+        }
+        let matchingPlists = plists.filter {
+            guard let bundleProgram = $0["BundleProgram"] as? String else {
+                return false
+            }
+            return URL(string: bundleProgram, relativeTo: parentURL)?.absoluteURL == executableURL
+        }
+        
+        return matchingPlists
+    }
+    
+    private static func machServices(propertyLists: [[String : Any]]) throws -> Set<String> {
+        Set<String>(propertyLists.flatMap { ($0["MachServices"] as? [String : Any] ?? [:]).keys })
+    }
+    
+    private static func machServiceNameForAgentOrDaemon() throws -> String {
+        let parentURL = try parentAppURL()
+        let plists = try plistsForDaemonOrAgent(parentURL: parentURL, directoryName: "LaunchDaemons")
+        let serviceNames = try machServices(propertyLists: plists)
+
+        // We can't actually know which property list was used to register this service, so if there are multiple
+        // conflicting ones we need to fail (and of course also fail if there are none). The same applies if there was
+        // only one property list, but it had multiple MachServices entries.
+        guard serviceNames.count == 1, let serviceName = serviceNames.first else {
+            if serviceNames.isEmpty {
+                throw XPCError.misconfiguredServer(description: "No property lists for had a MachServices entry")
+            } else {
+                throw XPCError.misconfiguredServer(description: "Multiple MachServices keys found: \(serviceNames)")
+            }
+        }
+        
+        return serviceName
+    }
+    
+    // MARK: daemon
+    
+    internal static var isThisProcessADaemon: Bool {
+        guard let parentURL = try? parentAppURL(),
+              let machServices = try? plistsForDaemonOrAgent(parentURL: parentURL, directoryName: "LaunchDaemons") else {
+            return false
+        }
+        
+        return !machServices.isEmpty
+    }
+    
+    internal static func forThisDaemon() throws -> XPCMachServer {
+        let serviceName = try machServiceNameForAgentOrDaemon()
+
+        // Use the parent's designated requirement as the criteria for the message acceptor. An alternative approach
+        // would be to use the same approach as Login Item where we allow anything in the parent's bundle with the same
+        // team identifier to communicate with this daemon, but considering the considerable privilege escalation
+        // potential this intentionally takes a more restricted approach.
+        var parentCode: SecStaticCode?
+        var parentRequirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(try parentAppURL() as CFURL, [], &parentCode) == errSecSuccess,
+              let parentCode,
+              SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
+              let parentRequirement else {
+            throw XPCError.misconfiguredServer(description: "Parent's designated requirement could not be determined")
+        }
+        let messageAcceptor = SecRequirementsMessageAcceptor([parentRequirement])
+
+        return try getXPCMachServer(named: serviceName, messageAcceptor: messageAcceptor)
+    }
+    
+    // MARK: agent
+    
+    internal static var isThisProcessAnAgent: Bool {
+        guard let parentURL = try? parentAppURL(),
+              let machServices = try? plistsForDaemonOrAgent(parentURL: parentURL, directoryName: "LaunchAgents") else {
+            return false
+        }
+        
+        return !machServices.isEmpty
+    }
+    
+    internal static func forThisAgent() throws -> XPCMachServer {
+        let serviceName = try machServiceNameForAgentOrDaemon()
+
+        // Use the team identifier as the criteria for the message acceptor. An alternative approach would be to use
+        // the parent's designated requirement or restrict to within the parent's app bundle, but if either of those
+        // were the desired use case for this launch agent then in most cases an XPC service would be a better fit. If a
+        // launch agent is being used it's reasonable to default to allowing requests from outside of the app bundle as
+        // long as it's from the same team identifier.
+        guard let teamIdentifier = try teamIdentifier() else {
+            throw XPCError.misconfiguredServer(description: "A launch agent must have a team identifier in order to " +
+                                                            "enable secure communication.")
+        }
+        let messageAcceptor = try SecRequirementsMessageAcceptor(forTeamIdentifier: teamIdentifier)
+        
+        return try getXPCMachServer(named: serviceName, messageAcceptor: messageAcceptor)
+    }
+    
     // MARK: Login Item
     
     internal static var isThisProcessALoginItem: Bool {
