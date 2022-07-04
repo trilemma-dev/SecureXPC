@@ -91,11 +91,6 @@ import Foundation
 /// server.start()
 /// ```
 ///
-/// ### Requirements Checking
-/// On macOS 11 and later, requirement checking uses publicly documented APIs. On older versions of macOS, the private undocumented API
-/// `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)` is used.  When requests are not accepted, if an error
-/// handler has been set then it is called with ``XPCError/insecure``.
-///
 /// ## Topics
 /// ### Retrieving a Server
 /// - ``forThisProcess(ofType:)``
