@@ -321,9 +321,9 @@ extension XPCMachServer {
         var parentCode: SecStaticCode?
         var parentRequirement: SecRequirement?
         guard SecStaticCodeCreateWithPath(try parentAppURL() as CFURL, [], &parentCode) == errSecSuccess,
-              let parentCode,
+              let parentCode = parentCode,
               SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
-              let parentRequirement else {
+              let parentRequirement = parentRequirement else {
             throw XPCError.misconfiguredServer(description: "Parent's designated requirement could not be determined")
         }
         let messageAcceptor = SecRequirementsMessageAcceptor([parentRequirement])
