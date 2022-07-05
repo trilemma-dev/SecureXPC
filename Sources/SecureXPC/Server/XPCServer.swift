@@ -16,7 +16,7 @@ import Foundation
 /// ```
 ///
 /// #### XPC services
-/// This will always work for any
+/// The above will always work for any
 /// [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html).
 /// XPC services are helper tools which ship as part of an app and that by default only that app can communicate with.
 ///
@@ -137,10 +137,10 @@ public class XPCServer {
     public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal var messageAcceptor: MessageAcceptor
+    internal var clientRequirement: XPCClientRequirement
     
-    internal init(messageAcceptor: MessageAcceptor) {
-        self.messageAcceptor = messageAcceptor
+    internal init(clientRequirement: XPCClientRequirement) {
+        self.clientRequirement = clientRequirement
     }
     
     // MARK: Route registration
@@ -336,7 +336,7 @@ public class XPCServer {
             return
         }
         
-        guard self.messageAcceptor.acceptMessage(connection: connection, message: event) else {
+        guard self.clientRequirement.acceptMessage(connection: connection, message: event) else {
             self.errorHandler.handle(.insecure)
             return
         }
@@ -512,18 +512,15 @@ extension XPCServer {
     /// ```
     ///
     /// > Important: No requests will be processed until ``XPCNonBlockingServer/start()`` or ``startAndBlock()`` is called.
-    ///
-    /// This function is equivalent to `XPCServer.makeAnonymous(withRequirement: .sameProcess)` except that it is guaranteed not to `throw`.
-    /// If you need this server to be communicated with by clients running in a different process, use ``makeAnonymous(withRequirement:)`` instead.
     public static func makeAnonymous() -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: SameProcessMessageAcceptor())
+        XPCAnonymousServer(clientRequirement: .sameProcess)
     }
 
-    /// Creates a new anonymous server that accepts requests from clients which meet the provided requirement.
+    /// Creates a new anonymous server that accepts requests which meet the provided requirement.
     ///
     /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``XPCServer/endpoint`` and send it
     /// across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required that you
-    /// specifiy the ``XPCClientRequirement`` of any connecting clients:
+    /// specify the ``XPCClientRequirement`` for any connecting clients:
     /// ```swift
     /// let server = XPCServer.makeAnonymous(withRequirement: .sameTeamIdentifier)
     /// ```
@@ -533,11 +530,11 @@ extension XPCServer {
     /// > Note: If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
     ///
     /// - Parameters:
-    ///   - withRequirement: If a request is received from a client, it will only be processed if it meet this requirement.
+    ///   - withRequirement: If a request is received from a client, it will only be sent to a registered handler if it meets this requirement.
     public static func makeAnonymous(
         withRequirement requirement: XPCClientRequirement
-    ) throws -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(messageAcceptor: try requirement.messageAcceptor)
+    ) -> XPCServer & XPCNonBlockingServer {
+        XPCAnonymousServer(clientRequirement: requirement)
     }
     
     /// The type of process an ``XPCServer`` should be retrieved for.
@@ -644,7 +641,7 @@ extension XPCServer {
         /// any connecting clients:
         /// ```swift
         /// let server = XPCServer.forThisProcess(ofType: .machService(name: "com.example.service",
-        ///                                                            requirement: .sameTeamIdentifier))
+        ///                                                            requirement: try .sameTeamIdentifier))
         /// ```
         case machService(name: String, requirement: XPCClientRequirement)
     }
@@ -686,7 +683,7 @@ extension XPCServer {
             case .agent:
                 return try XPCMachServer.forThisAgent()
             case .machService(let name, let requirement):
-                return try XPCMachServer.getXPCMachServer(named: name, messageAcceptor: try requirement.messageAcceptor)
+                return try XPCMachServer.getXPCMachServer(named: name, clientRequirement: requirement)
         }
     }
 }

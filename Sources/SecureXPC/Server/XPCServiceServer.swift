@@ -21,7 +21,7 @@ internal class XPCServiceServer: XPCServer {
     }
     
     /// The server itself, there can only ever be one per process as there is only ever one named connection that exists for an XPC service
-    private static let service = XPCServiceServer(messageAcceptor: AlwaysAcceptingMessageAcceptor())
+    private static let service = XPCServiceServer(clientRequirement: XPCClientRequirement.alwaysAccepting)
     
     /// Whether this server has been started.
     private var started = false
@@ -118,20 +118,15 @@ internal class XPCServiceServer: XPCServer {
             xpc_connection_resume(anonymousListenerConnection)
             self.anonymousListenerConnection = anonymousListenerConnection
             
-            // Now that any arbitrary process could create a connection to this server, the message acceptor needs to be
-            // more restrictive. We'll allow any connection from a process belongs to the same parent bundle and if
-            // there's a valid team ID present we'll additionally enforce it's of the same team ID.
-            
-            // XPC services are located in their parent's Contents/XPCServices directory
-            let parentBundleURL = Bundle.main.bundleURL.deletingLastPathComponent() // <name>.xpc bundle directory
-                                                       .deletingLastPathComponent() // XPCServices
-                                                       .deletingLastPathComponent() // Contents
-            let parentBundleAcceptor = ParentBundleMessageAcceptor(parentBundleURL: parentBundleURL)
-            if let teamID = try? teamIdentifierForThisProcess(),
-               let teamIDAcceptor = try? SecRequirementsMessageAcceptor(forTeamIdentifier: teamID) {
-                self.messageAcceptor = AndMessageAcceptor(lhs: teamIDAcceptor, rhs: parentBundleAcceptor)
+            // Now that any arbitrary process could create a connection to this server, the client requirement needs to
+            // be more restrictive. We'll allow any connection from a process belongs to the same parent bundle and if
+            // there's a valid team ID present we'll additionally enforce it's of the same team ID. Creating the parent
+            // bundle requirement should always succeed because as part of creating an XPCServiceServer a check is
+            // performance that this process is located within a Contents/XPCServices directory.
+            if let teamIDRequirement = try? XPCClientRequirement.sameTeamIdentifier {
+                self.clientRequirement = .and(try! .sameParentBundle, teamIDRequirement)
             } else {
-                self.messageAcceptor = parentBundleAcceptor
+                self.clientRequirement = try! .sameParentBundle
             }
             
             return XPCServerEndpoint(connectionDescriptor: self.connectionDescriptor,

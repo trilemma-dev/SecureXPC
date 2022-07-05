@@ -17,9 +17,9 @@ internal class XPCAnonymousServer: XPCServer {
     /// Connections received while the server is not started
     private var pendingConnections = [xpc_connection_t]()
     
-    internal override init(messageAcceptor: MessageAcceptor) {
+    internal override init(clientRequirement: XPCClientRequirement) {
         self.anonymousListenerConnection = xpc_connection_create(nil, listenerQueue)
-        super.init(messageAcceptor: messageAcceptor)
+        super.init(clientRequirement: clientRequirement)
         
         // Configure listener for new anonymous connections, all received events are incoming client connections
         xpc_connection_set_event_handler(self.anonymousListenerConnection, { connection in
