@@ -350,7 +350,7 @@ extension XPCMachServer {
         // were the desired use case for this launch agent then in most cases an XPC service would be a better fit. If a
         // launch agent is being used it's reasonable to default to allowing requests from outside of the app bundle as
         // long as it's from the same team identifier.
-        guard let teamIdentifier = try teamIdentifier() else {
+        guard let teamIdentifier = try teamIdentifierForThisProcess() else {
             throw XPCError.misconfiguredServer(description: "A launch agent must have a team identifier in order to " +
                                                             "enable secure communication.")
         }
@@ -378,7 +378,7 @@ extension XPCMachServer {
     }
     
     internal static func forThisLoginItem() throws -> XPCMachServer {
-        guard let teamIdentifier = try teamIdentifier() else {
+        guard let teamIdentifier = try teamIdentifierForThisProcess() else {
             throw XPCError.misconfiguredServer(description: "A login item must have a team identifier in order to " +
                                                             "enable secure communication.")
         }

@@ -127,7 +127,7 @@ internal class XPCServiceServer: XPCServer {
                                                        .deletingLastPathComponent() // XPCServices
                                                        .deletingLastPathComponent() // Contents
             let parentBundleAcceptor = ParentBundleMessageAcceptor(parentBundleURL: parentBundleURL)
-            if let teamID = try? teamIdentifier(),
+            if let teamID = try? teamIdentifierForThisProcess(),
                let teamIDAcceptor = try? SecRequirementsMessageAcceptor(forTeamIdentifier: teamID) {
                 self.messageAcceptor = AndMessageAcceptor(lhs: teamIDAcceptor, rhs: parentBundleAcceptor)
             } else {

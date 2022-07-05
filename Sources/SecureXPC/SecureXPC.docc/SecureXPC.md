@@ -80,6 +80,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCClient``
 - ``XPCServer``
 - ``XPCNonBlockingServer``
+- ``XPCClientRequirement``
 - ``XPCServerEndpoint``
 - ``XPCConnectionDescriptor``
 
