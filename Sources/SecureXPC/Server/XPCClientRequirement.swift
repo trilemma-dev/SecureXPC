@@ -8,88 +8,364 @@
 import Foundation
 
 /// Determines whether a client's request should be routed to a request handler.
-public indirect enum XPCClientRequirement {
+///
+/// Use a client requirement to retrieve a customized ``XPCServer`` instance:
+/// ```swift
+/// let server = XPCServer.forThisProcess(
+///   ofType: .machService(name: "com.example.service", requirement: try .sameTeamIdentifier))
+/// ```
+///
+/// Requirements can be combined with ``or(_:_:)`` as well as ``and(_:_:)``:
+/// ```swift
+/// let server = XPCServer.makeAnonymous(
+///   withRequirement: .or(try .sameTeamIdentifier, try .teamIdentifier("Q55ZG849VX")))
+/// ```
+///
+/// ## Topics
+/// ### Requirements
+/// - ``sameParentBundle``
+/// - ``sameTeamIdentifier``
+/// - ``teamIdentifier(_:)``
+/// - ``parentDesignatedRequirement`` 
+/// - ``secRequirement(_:)``
+/// ### Logical Operators
+/// - ``and(_:_:)``
+/// - ``or(_:_:)``
+public struct XPCClientRequirement {
+    /// What actually performs the requirement validation
+    private let messageAcceptor: MessageAcceptor
+    
     /// The requesting client must satisfy the specified code signing security requirement.
-    case secRequirement(SecRequirement)
+    public static func secRequirement(_ requirement: SecRequirement) -> XPCClientRequirement {
+        XPCClientRequirement(messageAcceptor: SecRequirementsMessageAcceptor([requirement]))
+    }
     
     /// The requesting client must have the specified team identifier.
-    case teamIdentifier(String)
+    public static func teamIdentifier(_ teamIdentifier: String) throws -> XPCClientRequirement {
+        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
+        // In regards to subject.OU:
+        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
+        // The "anchor apple generic" portion effectively means the certificate chain was signed by Apple
+        let requirementString = """
+        anchor apple generic and certificate leaf[subject.OU] = "\(teamIdentifier)"
+        """ as CFString
+        
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(requirementString, [], &requirement) == errSecSuccess,
+              let requirement = requirement else {
+            let message = "Security requirement could not be created; textual representation: \(requirementString)"
+            throw XPCError.internalFailure(description: message)
+        }
+        
+        return .secRequirement(requirement)
+    }
     
     /// The requesting client must have the same team identifier as this server.
     ///
-    /// If this server does not have a team identifier, then this always evaluates to false.
-    case sameTeamIdentifier
+    /// - Throws: If this server does not have a team identifier.
+    public static var sameTeamIdentifier: XPCClientRequirement {
+        get throws {
+            guard let teamID = try teamIdentifierForThisProcess() else {
+                throw XPCError.misconfiguredServer(description: "This server does not have a team identifier")
+            }
+            
+            return try teamIdentifier(teamID)
+        }
+    }
     
-    /// The requesting client must be within the same parent app bundle as this server.
+    /// The requesting client must be within the same parent bundle as this server.
     ///
-    /// If this server is not part of an app bundle, then this always evaluates to false.
-    case sameAppBundle
+    /// - Throws: If this server is not part of a bundle.
+    public static var sameParentBundle: XPCClientRequirement {
+        get throws {
+            XPCClientRequirement(messageAcceptor: ParentBundleMessageAcceptor(parentBundleURL: try parentBundleURL))
+        }
+    }
     
-    /// The requesting client must satisfy the designated requirement of the parent app bundle.
+    /// The requesting client must satisfy the designated requirement of the parent bundle.
     ///
-    /// If this server has no parent app bundle, then this always evaluates to false.
-    case parentAppDesignatedRequirement
-    
-    /// The requesting client must be running in the same process as this server.
-    case sameProcess
+    /// - Throws: If this server has no parent bundle.
+    public static var parentDesignatedRequirement: XPCClientRequirement {
+        get throws {
+            let parentBundleURL = try parentBundleURL
+            var parentCode: SecStaticCode?
+            var parentRequirement: SecRequirement?
+            guard SecStaticCodeCreateWithPath(parentBundleURL as CFURL, [], &parentCode) == errSecSuccess,
+                  let parentCode = parentCode,
+                  SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
+                  let parentRequirement = parentRequirement else {
+                throw XPCError.internalFailure(description: "Unable to determine designated requirement for parent " +
+                                                            "bundle: \(parentBundleURL)")
+            }
+            
+            return secRequirement(parentRequirement)
+        }
+    }
     
     /// The requesting client must satisfy both requirements.
-    case and(XPCClientRequirement, XPCClientRequirement)
+    public static func and(_ lhs: XPCClientRequirement, _ rhs: XPCClientRequirement) -> XPCClientRequirement {
+        XPCClientRequirement(messageAcceptor: AndMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
+    }
     
     /// The requesting client must satisfy at least one of the requirements.
-    case or(XPCClientRequirement, XPCClientRequirement)
+    public static func or(_ lhs: XPCClientRequirement, _ rhs: XPCClientRequirement) -> XPCClientRequirement {
+        XPCClientRequirement(messageAcceptor: OrMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
+    }
     
-    internal var messageAcceptor: MessageAcceptor {
+    // MARK: Internal
+    
+    // This is intentionally not publicly exposed, it's only intended for default use by `XPCServiceServer`
+    internal static var alwaysAccepting: XPCClientRequirement {
+        XPCClientRequirement(messageAcceptor: AlwaysAcceptingMessageAcceptor())
+    }
+    
+    
+    // This is intentionally not publicly exposed as it's only safe to use for an `XPCAnonymousServer`
+    // See SameProcessMessageAcceptor for more details
+    internal static var sameProcess: XPCClientRequirement {
+        get {
+            XPCClientRequirement(messageAcceptor: SameProcessMessageAcceptor())
+        }
+    }
+    
+    /// Determines whether an incoming message should be accepted.
+    internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        self.messageAcceptor.acceptMessage(connection: connection, message: message)
+    }
+    
+    // MARK: Helpers
+    
+    private static var parentBundleURL: URL {
         get throws {
-            switch self {
-                case .secRequirement(let requirement):
-                    return SecRequirementsMessageAcceptor([requirement])
-                case .teamIdentifier(let teamIdentifier):
-                    return try SecRequirementsMessageAcceptor(forTeamIdentifier: teamIdentifier)
-                case .sameTeamIdentifier:
-                    guard let teamID = try teamIdentifierForThisProcess() else {
-                        return NeverAcceptingMessageAcceptor()
-                    }
-                    
-                    return try SecRequirementsMessageAcceptor(forTeamIdentifier: teamID)
-                case .sameAppBundle:
-                    guard let parentBundleURL = try parentAppBundleURL() else {
-                        return NeverAcceptingMessageAcceptor()
-                    }
-                    
-                    return ParentBundleMessageAcceptor(parentBundleURL: parentBundleURL)
-                case .parentAppDesignatedRequirement:
-                    guard let parentBundleURL = try parentAppBundleURL() else {
-                        return NeverAcceptingMessageAcceptor()
-                    }
-                    
-                    var parentCode: SecStaticCode?
-                    var parentRequirement: SecRequirement?
-                    guard SecStaticCodeCreateWithPath(parentBundleURL as CFURL, [], &parentCode) == errSecSuccess,
-                          let parentCode = parentCode,
-                          SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
-                          let parentRequirement = parentRequirement else {
-                        return NeverAcceptingMessageAcceptor()
-                    }
-                    
-                    return SecRequirementsMessageAcceptor([parentRequirement])
-                case .sameProcess:
-                    return SameProcessMessageAcceptor()
-                case .and(let rhs, let lhs):
-                    return AndMessageAcceptor(lhs: try lhs.messageAcceptor, rhs: try rhs.messageAcceptor)
-                case .or(let rhs, let lhs):
-                    return OrMessageAcceptor(lhs: try lhs.messageAcceptor, rhs: try rhs.messageAcceptor)
+            let components = Bundle.main.bundleURL.pathComponents
+            guard let contentsIndex = components.lastIndex(of: "Contents") else {
+                throw XPCError.misconfiguredServer(description: "This server does not have a parent bundle.\n" +
+                                                                "Path components: \(components)")
             }
+            
+            return URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))
         }
     }
 }
 
-private func parentAppBundleURL() throws -> URL? {
-    let components = Bundle.main.bundleURL.pathComponents
-    guard let contentsIndex = components.lastIndex(of: "Contents"),
-          components[components.index(before: contentsIndex)].hasSuffix(".app") else {
-        return nil
+extension XPCClientRequirement: Equatable {
+    public static func == (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> Bool {
+        return lhs.messageAcceptor.isEqual(to: rhs.messageAcceptor)
+    }
+}
+
+// MARK: Internal implementation
+
+// A `MessageAccceptor` is essentially the internal implementation for an `XPCClientRequirement`
+
+fileprivate protocol MessageAcceptor {
+    /// Determines whether an incoming message should be accepted.
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool
+    
+    /// Whether the `acceptor` is equivalent to this one.
+    func isEqual(to acceptor: MessageAcceptor) -> Bool
+}
+
+/// This should only be used by XPC services which are by default application-scoped, so it's acceptable to assume they're inheritently safe.
+fileprivate struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        true
     }
     
-    return URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        type(of: acceptor) == AlwaysAcceptingMessageAcceptor.self
+    }
+}
+
+/// This is intended for use by `XPCAnonymousServer`.
+fileprivate struct SameProcessMessageAcceptor: MessageAcceptor {
+    /// Accepts a message only if it is coming from this process.
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        // In the case of an XPCAnonymousServer, all of the connections must be created after the server itself was
+        // created. As such, the process containing the server must always exist first and so no other process can
+        // have the same PID while that process is still running. While it's possible the process now corresponding to
+        // the PID returned by xpc_connection_get_pid(...) is not the process that created the connection, there's no
+        // way for it fake being this process. Therefore for anonymous connections it's safe to directly compare PIDs.
+        getpid() == xpc_connection_get_pid(connection)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        type(of: acceptor) == SameProcessMessageAcceptor.self
+    }
+}
+
+/// Accepts messages which meet the provided code signing requirements.
+///
+/// Uses undocumented functionality prior to macOS 11.
+fileprivate struct SecRequirementsMessageAcceptor: MessageAcceptor {
+    /// At least one of these code signing requirements must be met in order for the message to be accepted
+    private let requirements: [SecRequirement]
+    
+    internal init(_ requirements: [SecRequirement]) {
+        self.requirements = requirements
+    }
+    
+    /// Accepts a message if it meets at least one of the provided `requirements`.
+    ///
+    /// If the `SecCode` of the process belonging to the other side of the connection could be not be determined, `false` is always returned.
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        do {
+            try expandSandboxIfNecessary(message: message)
+        } catch {
+            return false
+        }
+        
+        guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: message) else {
+            return false
+        }
+        
+        return self.requirements.contains { SecCodeCheckValidity(code, SecCSFlags(), $0) == errSecSuccess }
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? SecRequirementsMessageAcceptor else {
+            return false
+        }
+        
+        // Transform the requirements into Data form so that they can be compared
+        let requirementTransform = { (requirement: SecRequirement) -> Data? in
+            var data: CFData?
+            if SecRequirementCopyData(requirement, SecCSFlags(), &data) == errSecSuccess, let data = data as Data? {
+                return data
+            } else {
+                return nil
+            }
+        }
+        
+        // Turn into sets so they can be compared without taking into account the order of requirements
+        let requirementsData = Set<Data>(self.requirements.compactMap(requirementTransform))
+        let otherRequirementsData = Set<Data>(acceptor.requirements.compactMap(requirementTransform))
+        
+        return requirementsData == otherRequirementsData
+    }
+}
+
+/// Accepts messages that originates from a directory containing this server.
+fileprivate struct ParentBundleMessageAcceptor: MessageAcceptor {
+    /// Requests must come from a process that either has the same URL as this or is a subdirectory of it.
+    private let parentBundleURL: URL
+    
+    init(parentBundleURL: URL) {
+        self.parentBundleURL = parentBundleURL
+    }
+    
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        do {
+            try expandSandboxIfNecessary(message: message)
+        } catch {
+            return false
+        }
+        
+        guard let clientCode = SecCodeCreateWithXPCConnection(connection, andMessage: message),
+              let clientPath = SecCodeCopyPath(clientCode) else {
+            return false
+        }
+        
+        // If this is true there's no possibility of the client being equal to or a subdirectory of the parent bundle.
+        // And importantly, this prevents indexing out of bounds when iterate through to check equality/containment.
+        if clientPath.pathComponents.count < parentBundleURL.pathComponents.count {
+            return false
+        }
+        
+        // Validate the each component in the client path is present in the parent bundle path in the same order
+        for i in 0..<parentBundleURL.pathComponents.count {
+            if parentBundleURL.pathComponents[i] != clientPath.pathComponents[i] {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    private func SecCodeCopyPath(_ code: SecCode) -> URL? {
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess,
+              let staticCode = staticCode else {
+            return nil
+        }
+        
+        var path: CFURL?
+        guard Security.SecCodeCopyPath(staticCode, SecCSFlags(), &path) == errSecSuccess,
+              let path = (path as URL?)?.standardized else {
+            return nil
+        }
+        
+        return path
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? ParentBundleMessageAcceptor else {
+            return false
+        }
+        
+        return acceptor.parentBundleURL == self.parentBundleURL
+    }
+}
+
+/// Logically ands the results of two message acceptors.
+fileprivate struct AndMessageAcceptor: MessageAcceptor {
+    private let lhs: MessageAcceptor
+    private let rhs: MessageAcceptor
+    
+    init(lhs: MessageAcceptor, rhs: MessageAcceptor) {
+        self.lhs = lhs
+        self.rhs = rhs
+    }
+    
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.acceptMessage(connection: connection, message: message) &&
+        rhs.acceptMessage(connection: connection, message: message)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? AndMessageAcceptor else {
+            return false
+        }
+        
+        return self.lhs.isEqual(to: acceptor.lhs) && self.rhs.isEqual(to: acceptor.rhs)
+    }
+}
+
+/// Logically ors the results of two message acceptors.
+fileprivate struct OrMessageAcceptor: MessageAcceptor {
+    private let lhs: MessageAcceptor
+    private let rhs: MessageAcceptor
+    
+    init(lhs: MessageAcceptor, rhs: MessageAcceptor) {
+        self.lhs = lhs
+        self.rhs = rhs
+    }
+    
+    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.acceptMessage(connection: connection, message: message) ||
+        rhs.acceptMessage(connection: connection, message: message)
+    }
+    
+    func isEqual(to acceptor: MessageAcceptor) -> Bool {
+        guard let acceptor = acceptor as? OrMessageAcceptor else {
+            return false
+        }
+        
+        return self.lhs.isEqual(to: acceptor.lhs) && self.rhs.isEqual(to: acceptor.rhs)
+    }
+}
+
+/// If sandboxed, expands the sandbox by using a URL contained within the client's request.
+private func expandSandboxIfNecessary(message: xpc_object_t) throws {
+    // If we're sandboxed, in order to check the validity of the client process we need to expand our sandbox to include
+    // the client's bundle. If the client is a legitimate SecureXPC client then the request will include a bookmark to
+    // its bundle. If it's an attempted exploit, this poses some risk if there are vulnerabilities in decoding or in how
+    // URL's initializer resolves the bookmark.
+    if try isSandboxed() {
+        let clientBookmark = try Request.decodeClientBookmark(dictionary: message)
+        var isStale = Bool()
+        // Creating this URL implicitly applies the bookmark's security scope
+        // See https://developer.apple.com/forums//thread/704971?answerId=711609022
+        _ = try URL(resolvingBookmarkData: clientBookmark, bookmarkDataIsStale: &isStale)
+    }
 }

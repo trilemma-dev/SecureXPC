@@ -23,7 +23,7 @@ internal class XPCMachServer: XPCServer {
     private var pendingConnections = [xpc_connection_t]()
     
     /// This should only ever be called from `getXPCMachServer(...)` so that client requirement invariants are upheld.
-    private init(machServiceName: String, messageAcceptor: MessageAcceptor) {
+    private init(machServiceName: String, clientRequirement: XPCClientRequirement) {
         self.machServiceName = machServiceName
         let listenerQueue = DispatchQueue(label: String(describing: XPCMachServer.self))
         // Attempts to bind to the Mach service. If this isn't actually a Mach service a EXC_BAD_INSTRUCTION will occur.
@@ -31,7 +31,7 @@ internal class XPCMachServer: XPCServer {
             xpc_connection_create_mach_service(namePointer, listenerQueue, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
         }
         self.listenerQueue = listenerQueue
-        super.init(messageAcceptor: messageAcceptor)
+        super.init(clientRequirement: clientRequirement)
         
         // Configure listener for new connections, all received events are incoming client connections
         xpc_connection_set_event_handler(self.listenerConnection, { connection in
@@ -101,18 +101,18 @@ extension XPCMachServer {
     ///
     /// This behavior prevents ending up with two servers for the same named XPC Mach service.
     internal static func getXPCMachServer(named machServiceName: String,
-                                          messageAcceptor: MessageAcceptor) throws -> XPCMachServer {
+                                          clientRequirement: XPCClientRequirement) throws -> XPCMachServer {
         // Force serial execution to prevent a race condition where multiple XPCMachServer instances for the same Mach
         // service name are created and returned
         try serialQueue.sync {
             let server: XPCMachServer
             if let cachedServer = machServerCache[machServiceName] {
-                if !messageAcceptor.isEqual(to: cachedServer.messageAcceptor) {
+                guard clientRequirement == cachedServer.clientRequirement else {
                     throw XPCError.conflictingClientRequirements
                 }
                 server = cachedServer
             } else {
-                server = XPCMachServer(machServiceName: machServiceName, messageAcceptor: messageAcceptor)
+                server = XPCMachServer(machServiceName: machServiceName, clientRequirement: clientRequirement)
                 machServerCache[machServiceName] = server
             }
             
@@ -181,32 +181,31 @@ extension XPCMachServer {
         }
 
         // Generate client requirements from info property list's SMAuthorizedClients
-        var clientRequirements = [SecRequirement]()
         let infoData = try readEmbeddedPropertyList(sectionName: "__info_plist")
-        let infoPropertyList = try PropertyListSerialization.propertyList(
-            from: infoData,
-            options: .mutableContainersAndLeaves,
-            format: nil) as? NSDictionary
-        if let authorizedClients = infoPropertyList?["SMAuthorizedClients"] as? [String] {
-            for client in authorizedClients {
-                var requirement: SecRequirement?
-                if SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,
-                   let requirement = requirement {
-                    clientRequirements.append(requirement)
-                } else {
-                    throw XPCError.misconfiguredServer(description: "Invalid SMAuthorizedClients requirement: " +
-                                                                    "\(client)")
-                }
-            }
-        } else {
+        let infoPropertyList = try PropertyListSerialization.propertyList(from: infoData, format: nil) as? NSDictionary
+        guard let authorizedClients = infoPropertyList?["SMAuthorizedClients"] as? [String] else {
             throw XPCError.misconfiguredServer(description: "Info property list missing SMAuthorizedClients key")
         }
-        if clientRequirements.isEmpty {
+        
+        var clientRequirement: XPCClientRequirement? = nil
+        for client in authorizedClients {
+            var requirement: SecRequirement?
+            guard SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+                  let requirement = requirement else {
+                throw XPCError.misconfiguredServer(description: "Invalid SMAuthorizedClients requirement: \(client)")
+            }
+            
+            if let currentRequirement = clientRequirement {
+                clientRequirement = .or(currentRequirement, .secRequirement(requirement))
+            } else {
+                clientRequirement = .secRequirement(requirement)
+            }
+        }
+        guard let clientRequirement = clientRequirement else {
             throw XPCError.misconfiguredServer(description: "No requirements were generated from SMAuthorizedClients")
         }
-        let messageAcceptor = SecRequirementsMessageAcceptor(clientRequirements)
 
-        return try getXPCMachServer(named: machServiceName, messageAcceptor: messageAcceptor)
+        return try getXPCMachServer(named: machServiceName, clientRequirement: clientRequirement)
     }
 
     /// Read the property list embedded within this helper tool.
@@ -318,17 +317,9 @@ extension XPCMachServer {
         // would be to use the same approach as Login Item where we allow anything in the parent's bundle with the same
         // team identifier to communicate with this daemon, but considering the considerable privilege escalation
         // potential this intentionally takes a more restricted approach.
-        var parentCode: SecStaticCode?
-        var parentRequirement: SecRequirement?
-        guard SecStaticCodeCreateWithPath(try parentAppURL() as CFURL, [], &parentCode) == errSecSuccess,
-              let parentCode = parentCode,
-              SecCodeCopyDesignatedRequirement(parentCode, [], &parentRequirement) == errSecSuccess,
-              let parentRequirement = parentRequirement else {
-            throw XPCError.misconfiguredServer(description: "Parent's designated requirement could not be determined")
-        }
-        let messageAcceptor = SecRequirementsMessageAcceptor([parentRequirement])
-
-        return try getXPCMachServer(named: serviceName, messageAcceptor: messageAcceptor)
+        let clientRequirement = try XPCClientRequirement.parentDesignatedRequirement
+        
+        return try getXPCMachServer(named: serviceName, clientRequirement: clientRequirement)
     }
     
     // MARK: agent
@@ -350,13 +341,9 @@ extension XPCMachServer {
         // were the desired use case for this launch agent then in most cases an XPC service would be a better fit. If a
         // launch agent is being used it's reasonable to default to allowing requests from outside of the app bundle as
         // long as it's from the same team identifier.
-        guard let teamIdentifier = try teamIdentifierForThisProcess() else {
-            throw XPCError.misconfiguredServer(description: "A launch agent must have a team identifier in order to " +
-                                                            "enable secure communication.")
-        }
-        let messageAcceptor = try SecRequirementsMessageAcceptor(forTeamIdentifier: teamIdentifier)
+        let clientRequirement = try XPCClientRequirement.sameTeamIdentifier
         
-        return try getXPCMachServer(named: serviceName, messageAcceptor: messageAcceptor)
+        return try getXPCMachServer(named: serviceName, clientRequirement: clientRequirement)
     }
     
     // MARK: Login Item
@@ -368,9 +355,9 @@ extension XPCMachServer {
             return false
         }
         
-        // Login item must be within the main app bundle's Contents/Library/LoginItems directory
+        // Login item must be within the main bundle's Contents/Library/LoginItems directory
         let pathComponents = loginItem.deletingLastPathComponent().pathComponents
-        guard pathComponents.count >= 3, pathComponents.suffix(3) == ["LoginItems", "Library", "Contents"] else {
+        guard pathComponents.count >= 3, pathComponents.suffix(3) == ["Contents", "Library", "LoginItems"] else {
             return false
         }
         
@@ -382,6 +369,7 @@ extension XPCMachServer {
             throw XPCError.misconfiguredServer(description: "A login item must have a team identifier in order to " +
                                                             "enable secure communication.")
         }
+        try validateIsLoginItem(teamIdentifier: teamIdentifier)
         
         // From Apple's AppSandboxLoginItemXPCDemo:
         // https://developer.apple.com/library/archive/samplecode/AppSandboxLoginItemXPCDemo/
@@ -391,42 +379,17 @@ extension XPCMachServer {
             throw XPCError.misconfiguredServer(description: "The bundle identifier is missing; login items must have " +
                                                             "one.")
         }
+        let clientRequirement = try XPCClientRequirement.and(.teamIdentifier(teamIdentifier), .sameParentBundle)
         
-        let parentMessageAcceptor = try validateIsLoginItem(teamIdentifier: teamIdentifier)
-        let teamRequirementMessageAcceptor = try SecRequirementsMessageAcceptor(forTeamIdentifier: teamIdentifier)
-        let messageAcceptor = AndMessageAcceptor(lhs: teamRequirementMessageAcceptor, rhs: parentMessageAcceptor)
-        
-        return try getXPCMachServer(named: bundleID, messageAcceptor: messageAcceptor)
+        return try getXPCMachServer(named: bundleID, clientRequirement: clientRequirement)
     }
     
-    /// Partially validates this process is a login item, and if successful returns a message acceptor which accepts messages from any client located within the
-    /// parent bundle of this login item.
-    private static func validateIsLoginItem(teamIdentifier: String) throws -> ParentBundleMessageAcceptor {
-        // From SMLoginItemSetEnabled:
-        // https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled
-        //     Enables a helper tool in the main app bundle’s Contents/Library/LoginItems directory.
-        func validatePathComponent(_ path: URL, expectedLastComponent: String) throws -> URL {
-            if path.lastPathComponent != expectedLastComponent {
-                let message = "A login item must be located within the main app bundle's Contents/Library/LoginItems " +
-                              "directory.\n" +
-                              "Expected path component: \(expectedLastComponent)\n" +
-                              "Actual path component: \(path.lastPathComponent)"
-                throw XPCError.misconfiguredServer(description: message)
-            }
-            
-            return path.deletingLastPathComponent()
-        }
-        
-        let loginItemsDir = Bundle.main.bundleURL.deletingLastPathComponent() // removes the login item's app bundle
-        let libraryDir = try validatePathComponent(loginItemsDir, expectedLastComponent: "LoginItems")
-        let contentsDir = try validatePathComponent(libraryDir, expectedLastComponent: "Library")
-        let parentBundle = try validatePathComponent(contentsDir, expectedLastComponent: "Contents")
-        if parentBundle.pathExtension != "app" {
-            let message = "A login item must be located within a main app bundle, but the containing " +
-                          "directory is not an app bundle.\n" +
-                          "Expected path extension: app\n" +
-                          "Actual path extension: \(parentBundle.pathExtension)"
-            throw XPCError.misconfiguredServer(description: message)
+    private static func validateIsLoginItem(teamIdentifier: String) throws {
+        guard isThisProcessALoginItem else {
+            throw XPCError.misconfiguredServer(description: """
+            A login item must be an app bundle located within its parent bundle's Contents/Library/LoginItems directory.
+            Path:\(Bundle.main.bundleURL)
+            """)
         }
         
         if try isSandboxed() {
@@ -465,7 +428,5 @@ extension XPCMachServer {
                 throw XPCError.misconfiguredServer(description: message)
             }
         }
-        
-        return ParentBundleMessageAcceptor(parentBundleURL: parentBundle)
     }
 }
