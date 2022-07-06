@@ -60,7 +60,7 @@ public class SequentialResultProvider<S: Encodable> {
     deinit {
         // There's no need to run this on the serial queue as deinit does not run concurrently with anything else
         if !self.isFinished, let connection = connection {
-            // This intentionally doesn't call finished() because that would run async and by the time ir ran
+            // This intentionally doesn't call finished() because that would run async and by the time it ran
             // deinitialization may have (and in practice typically will have) already completed
             do {
                 var response = xpc_dictionary_create(nil, nil, 0)

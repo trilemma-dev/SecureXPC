@@ -1,6 +1,6 @@
 //
 //  XPCDecoderImpl.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-12.
 //

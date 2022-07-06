@@ -1,16 +1,18 @@
 //
 //  Transformation functions.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-12.
 //
 
 import Foundation
 
-internal func baseDecode<T>(value: xpc_object_t,
-						   xpcType: xpc_type_t,
-						   transform: (xpc_object_t) throws -> T,
-						   codingPath: [CodingKey]) throws -> T {
+internal func baseDecode<T>(
+    value: xpc_object_t,
+    xpcType: xpc_type_t,
+    transform: (xpc_object_t) throws -> T,
+    codingPath: [CodingKey]
+) throws -> T {
 	if xpc_get_type(value) == xpcType {
 		return try transform(value)
 	} else {
@@ -22,8 +24,10 @@ internal func baseDecode<T>(value: xpc_object_t,
 	}
 }
 
-internal func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
-																codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
+internal func intTransform<T: FixedWidthInteger & SignedInteger>(
+    _ type: T.Type,
+    codingPath: [CodingKey]
+) -> (xpc_object_t) throws -> T {
 	return { (object: xpc_object_t) in
 		let value = xpc_int64_get_value(object)
 		if value >= T.min && value <= T.max {
@@ -38,8 +42,10 @@ internal func intTransform<T: FixedWidthInteger & SignedInteger>(_ type: T.Type,
 	}
 }
 
-internal func uintTransform<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Type,
-																   codingPath: [CodingKey]) -> (xpc_object_t) throws -> T {
+internal func uintTransform<T: FixedWidthInteger & UnsignedInteger>(
+    _ type: T.Type,
+    codingPath: [CodingKey]
+) -> (xpc_object_t) throws -> T {
 	return { (object: xpc_object_t) in
 		let value = xpc_uint64_get_value(object)
 		if value <= T.max {

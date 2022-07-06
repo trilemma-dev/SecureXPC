@@ -29,7 +29,6 @@ enum XPCCoderError: Error {
     case onlyEncodableBySecureXPCFramework
 }
 
-
 /// Creates the static code representation for this running process.
 ///
 /// This is a conveniene wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
@@ -91,8 +90,10 @@ fileprivate struct UndocumentedAuditToken {
         defer { dlclose(handle) }
         guard let sym = dlsym(handle, "xpc_connection_get_audit_token") else {
             // Include macOS version number to assist in reproducing any reported issues
-            fatalError("Function xpc_connection_get_audit_token could not be loaded while running on " +
-                       ProcessInfo.processInfo.operatingSystemVersionString)
+            fatalError("""
+            Function xpc_connection_get_audit_token could not be loaded while running on
+            \(ProcessInfo.processInfo.operatingSystemVersionString)
+            """)
         }
         
         return unsafeBitCast(sym, to: get_audit_token.self)

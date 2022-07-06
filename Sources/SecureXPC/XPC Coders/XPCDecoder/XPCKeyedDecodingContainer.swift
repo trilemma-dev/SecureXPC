@@ -1,6 +1,6 @@
 //
 //  XPCKeyedDecodingContainer.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-12.
 //
@@ -140,7 +140,10 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
                                                   userInfo: self.userInfo))
 	}
 
-	func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type, forKey key: K) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
+	func nestedContainer<NestedKey>(
+        keyedBy type: NestedKey.Type,
+        forKey key: K
+    ) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
 		return KeyedDecodingContainer(try XPCKeyedDecodingContainer<NestedKey>(value: value(forKey: key),
 																			   codingPath: self.codingPath + [key],
                                                                                userInfo: self.userInfo))

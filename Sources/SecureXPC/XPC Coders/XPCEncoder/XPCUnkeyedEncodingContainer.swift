@@ -1,6 +1,6 @@
 //
 //  XPCUnkeyedEncodingContainer.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-12.
 //
@@ -181,7 +181,9 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
 		try value.encode(to: encoder)
 	}
 
-	func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
+	func nestedContainer<NestedKey>(
+        keyedBy keyType: NestedKey.Type
+    ) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
         self.dataBackedEncodingNoLongerPossible()
         
 		let nestedContainer = XPCKeyedEncodingContainer<NestedKey>(codingPath: self.codingPath)

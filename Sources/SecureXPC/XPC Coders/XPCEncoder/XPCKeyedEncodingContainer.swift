@@ -1,6 +1,6 @@
 //
 //  XPCKeyedEncodingContainer.swift
-//  
+//  SecureXPC
 //
 //  Created by Alexander Momchilov on 2021-11-12.
 //
@@ -22,16 +22,16 @@ internal class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPC
 		let dictionary = xpc_dictionary_create(nil, nil, 0)
 		for (key, value) in self.values {
 			try key.utf8CString.withUnsafeBufferPointer { keyPointer in
-				if let encodedValue = try value.encodedValue() {
-					// It is safe to assert the base address will never be nil as the buffer will always have data even
-					// if the string is empty
-					xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedValue)
-				} else {
-					let context = EncodingError.Context(codingPath: self.codingPath,
-														debugDescription: "This value failed to encode itself",
-														underlyingError: nil)
-					throw EncodingError.invalidValue(value, context)
-				}
+                guard let encodedValue = try value.encodedValue() else {
+                    let context = EncodingError.Context(codingPath: self.codingPath,
+                                                        debugDescription: "This value failed to encode itself",
+                                                        underlyingError: nil)
+                    throw EncodingError.invalidValue(value, context)
+                }
+                
+                // It is safe to assert the base address will never be nil as the buffer will always have data even
+                // if the string is empty
+                xpc_dictionary_set_value(dictionary, keyPointer.baseAddress!, encodedValue)
 			}
 		}
 
@@ -120,7 +120,10 @@ internal class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPC
 		try value.encode(to: encoder)
 	}
 
-	func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type, forKey key: K) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
+	func nestedContainer<NestedKey>(
+        keyedBy keyType: NestedKey.Type,
+        forKey key: K
+    ) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
 		let nestedContainer = XPCKeyedEncodingContainer<NestedKey>(codingPath: self.codingPath + [key])
 		self.setValue(nestedContainer, forKey: key)
 
@@ -175,4 +178,3 @@ internal class XPCKeyedEncodingContainer<K>: KeyedEncodingContainerProtocol, XPC
         self.setValue(XPCObject(object: value), forKey: key)
     }
 }
-
