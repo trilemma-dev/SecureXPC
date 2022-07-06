@@ -66,8 +66,10 @@ public class XPCRequestContext {
         } else if #available(macOS 10.15.0, *), let current = currentForTask {
             return current
         } else {
-            fatalError("\(XPCRequestContext.self) can only be accessed from within the thread or task of a closure " +
-                       "called by \(XPCServer.self).")
+            fatalError("""
+            \(XPCRequestContext.self) can only be accessed from within the thread or task of a closure called by \
+            \(XPCServer.self).
+            """)
         }
     }
     

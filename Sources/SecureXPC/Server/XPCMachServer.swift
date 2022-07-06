@@ -9,7 +9,7 @@ import Foundation
 
 /// A concrete implementation of ``XPCServer`` which acts as a server for an XPC Mach service.
 ///
-/// In the case of this framework, the XPC Service is expected to be communicated with by an `XPCMachClient`.
+/// In the case of this framework, the XPC Mach service is expected to be communicated with by an `XPCMachClient`.
 internal class XPCMachServer: XPCServer {
     /// Name of the service.
     private let machServiceName: String
@@ -146,7 +146,8 @@ extension XPCMachServer {
         
         // Embedded __launchd_plist section that has a Label entry which matches this executable name
         guard let launchdData = try? readEmbeddedPropertyList(sectionName: "__launchd_plist"),
-              let launchdPlist = try? PropertyListSerialization.propertyList(from: launchdData, format: nil) as? [String : Any],
+              let launchdPlist = try? PropertyListSerialization.propertyList(from: launchdData,
+                                                                             format: nil) as? [String : Any],
               let label = launchdPlist["Label"] as? String,
               executableURL.lastPathComponent == label else {
             return false
@@ -154,7 +155,8 @@ extension XPCMachServer {
         
         // Embedded __info_plist section with a SMAuthorizedClients entry
         guard let infoData = try? readEmbeddedPropertyList(sectionName: "__info_plist"),
-              let infoPlist = try? PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String : Any],
+              let infoPlist = try? PropertyListSerialization.propertyList(from: infoData,
+                                                                          format: nil) as? [String : Any],
               infoPlist.keys.contains("SMAuthorizedClients") else {
             return false
         }
@@ -366,8 +368,9 @@ extension XPCMachServer {
     
     internal static func forThisLoginItem() throws -> XPCMachServer {
         guard let teamIdentifier = try teamIdentifierForThisProcess() else {
-            throw XPCError.misconfiguredServer(description: "A login item must have a team identifier in order to " +
-                                                            "enable secure communication.")
+            throw XPCError.misconfiguredServer(description: """
+            A login item must have a team identifier in order to enable secure communication.
+            """)
         }
         try validateIsLoginItem(teamIdentifier: teamIdentifier)
         
@@ -376,8 +379,9 @@ extension XPCMachServer {
         //     LaunchServices implicitly registers a Mach service for the login item whose name is the same as the
         //     login item's bundle identifier.
         guard let bundleID = Bundle.main.bundleIdentifier else {
-            throw XPCError.misconfiguredServer(description: "The bundle identifier is missing; login items must have " +
-                                                            "one.")
+            throw XPCError.misconfiguredServer(description: """
+            The bundle identifier is missing; login items must have one.
+            """)
         }
         let clientRequirement = try XPCClientRequirement.and(.teamIdentifier(teamIdentifier), .sameParentBundle)
         
@@ -400,18 +404,21 @@ extension XPCMachServer {
             
             let entitlement = try readEntitlement(name: entitlementName)
             guard let entitlement = entitlement else {
-                throw XPCError.misconfiguredServer(description: "Application groups entitlement \(entitlementName) " +
-                                                                "is missing, but must be  present for a sandboxed " +
-                                                                "login item to communicate over XPC.")
+                throw XPCError.misconfiguredServer(description: """
+                Application groups entitlement \(entitlementName) is missing, but must be  present for a sandboxed \
+                login item to communicate over XPC.
+                """)
             }
             guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
-                throw XPCError.misconfiguredServer(description: "Application groups entitlement \(entitlementName) " +
-                                                                "must be an array of strings.")
+                throw XPCError.misconfiguredServer(description: """
+                Application groups entitlement \(entitlementName) must be an array of strings.
+                """)
             }
             let appGroups = try entitlement.map { (element: NSArray.Element) throws -> String in
                 guard let elementAsString = element as? String else {
-                    throw XPCError.misconfiguredServer(description: "Application groups entitlement " +
-                                                                    "\(entitlementName) must be an array of strings.")
+                    throw XPCError.misconfiguredServer(description: """
+                    Application groups entitlement \(entitlementName) must be an array of strings.
+                    """)
                 }
                 
                 return elementAsString
@@ -423,9 +430,10 @@ extension XPCMachServer {
             // So for XPC communication to succeed at least one app group must start with this login item's team
             // identifier followed by a period.
             if !appGroups.contains(where: { $0.starts(with: "\(teamIdentifier).") }) {
-                let message = "Application groups entitlement \(entitlementName) must contain at least one " +
-                              "application group for team identifier \(teamIdentifier)."
-                throw XPCError.misconfiguredServer(description: message)
+                throw XPCError.misconfiguredServer(description: """
+                Application groups entitlement \(entitlementName) must contain at least one application group for team \
+                identifier \(teamIdentifier).
+                """)
             }
         }
     }

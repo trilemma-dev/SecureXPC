@@ -409,8 +409,11 @@ public class XPCServer {
                 }
             }
         } else {
-            fatalError("Non-sync handler for route \(request.route.pathComponents) was found, but only sync routes " +
-                       "should be registrable on this OS version. Handler: \(handler)")
+            fatalError("""
+            Non-sync handler for route \(request.route.pathComponents) was found, but only sync routes should be \
+            registrable on this OS version.
+            Handler: \(handler)
+            """)
         }
     }
     
@@ -669,8 +672,9 @@ extension XPCServer {
                 } else if XPCMachServer.isThisProcessAnAgent {
                     return try XPCMachServer.forThisAgent()
                 } else {
-                    throw XPCError.misconfiguredServer(description: "Unable to auto-detect what type of XPC server " +
-                                                                    "this is. Please provide an explicit type.")
+                    throw XPCError.misconfiguredServer(description: """
+                    Unable to auto-detect what type of XPC server this is. Please provide an explicit type.
+                    """)
                 }
             case .xpcService:
                 return try XPCServiceServer.forThisXPCService()
@@ -724,30 +728,41 @@ fileprivate extension XPCHandler {
         var errorMessages = [String]()
         // Message
         if messageType == nil, request.containsPayload {
-            errorMessages.append("Request had a message of type \(String(describing: request.route.messageType)), " +
-                                 "but the handler registered with the server does not have a message parameter.")
+            errorMessages.append("""
+            Request had a message of type \(String(describing: request.route.messageType)), but the handler registered \
+            with the server does not have a message parameter.
+            """)
         } else if let messageType = messageType, !request.containsPayload {
-            errorMessages.append("Request did not contain a message, but the handler registered with the server has " +
-                                 "a message parameter of type \(messageType).")
+            errorMessages.append("""
+            Request did not contain a message, but the handler registered with the server has a message parameter of \
+            type \(messageType).
+            """)
         }
         
         // Reply
         if replyType == nil, reply != nil && request.route.expectsReply {
-            errorMessages.append("Request expects a reply of type \(String(describing: request.route.replyType)), " +
-                                 "but the handler registered with the server has no return value.")
+            errorMessages.append("""
+            Request expects a reply of type \(String(describing: request.route.replyType)), but the handler registered \
+            with the server has no return value.
+            """)
         } else if let replyType = replyType, reply == nil {
-            errorMessages.append("Request does not expect a reply, but the handler registered with the server has a " +
-                                 "return value of type \(replyType).")
+            errorMessages.append("""
+            Request does not expect a reply, but the handler registered with the server has a return value of type \
+            \(replyType).
+            """)
         }
         
-        // Reply sequence
+        // Sequential reply
         if sequentialReplyType != nil && request.route.sequentialReplyType == nil {
-            errorMessages.append("Request expects a sequential reply of type " +
-                                 String(describing: request.route.sequentialReplyType) + ", but the handler registered " +
-                                 "with the server does not generate a sequential reply.")
+            errorMessages.append("""
+            Request expects a sequential reply of type \(String(describing: request.route.sequentialReplyType)), but \
+            the handler registered with the server does not generate a sequential reply.
+            """)
         } else if sequentialReplyType == nil, let replySequenceType = request.route.sequentialReplyType {
-            errorMessages.append("Request does not expect a sequential reply, but the handler registered with the " +
-                                 "server has a sequential reply of type \(replySequenceType).")
+            errorMessages.append("""
+            Request does not expect a sequential reply, but the handler registered with the server has a sequential \
+            reply of type \(replySequenceType).
+            """)
         }
         
         if !errorMessages.isEmpty {

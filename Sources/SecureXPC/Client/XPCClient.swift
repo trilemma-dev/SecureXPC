@@ -484,8 +484,10 @@ public class XPCClient {
     // MARK: Send (private internals)
     
     /// Does the actual work of sending an XPC request which receives a response.
-    private func sendRequest<R: Decodable>(_ request: Request,
-                                           withResponse handler: @escaping XPCResponseHandler<R>) {
+    private func sendRequest<R: Decodable>(
+        _ request: Request,
+        withResponse handler: @escaping XPCResponseHandler<R>
+    ) {
         // Get the connection or inform the handler of failure and return
         let connection: xpc_connection_t
         do {
