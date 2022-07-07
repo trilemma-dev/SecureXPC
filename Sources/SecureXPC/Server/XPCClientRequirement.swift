@@ -7,9 +7,11 @@
 
 import Foundation
 
-/// Determines whether a client's request should be routed to a request handler.
+/// Determines whether a client's request should be trusted by an ``XPCServer``.
 ///
-/// Use a client requirement to retrieve a customized ``XPCServer`` instance:
+/// If a client is trusted, its requests will attempt to be routed to a registered route handler.
+///
+/// Use a client requirement to retrieve a customized `XPCServer` instance:
 /// ```swift
 /// let server = XPCServer.forThisProcess(
 ///   ofType: .machService(name: "com.example.service", requirement: try .sameTeamIdentifier))
@@ -42,22 +44,7 @@ public struct XPCClientRequirement {
     
     /// The requesting client must have the specified team identifier.
     public static func teamIdentifier(_ teamIdentifier: String) throws -> XPCClientRequirement {
-        // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
-        // In regards to subject.OU:
-        //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
-        // The "anchor apple generic" portion effectively means the certificate chain was signed by Apple
-        let requirementString = """
-        anchor apple generic and certificate leaf[subject.OU] = "\(teamIdentifier)"
-        """ as CFString
-        
-        var requirement: SecRequirement?
-        guard SecRequirementCreateWithString(requirementString, [], &requirement) == errSecSuccess,
-              let requirement = requirement else {
-            let message = "Security requirement could not be created; textual representation: \(requirementString)"
-            throw XPCError.internalFailure(description: message)
-        }
-        
-        return .secRequirement(requirement)
+        .secRequirement(try secRequirementForTeamIdentifier(teamIdentifier))
     }
     
     /// The requesting client must have the same team identifier as this server.
@@ -280,22 +267,6 @@ fileprivate struct ParentBundleMessageAcceptor: MessageAcceptor {
         }
         
         return true
-    }
-    
-    private func SecCodeCopyPath(_ code: SecCode) -> URL? {
-        var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess,
-              let staticCode = staticCode else {
-            return nil
-        }
-        
-        var path: CFURL?
-        guard Security.SecCodeCopyPath(staticCode, SecCSFlags(), &path) == errSecSuccess,
-              let path = (path as URL?)?.standardized else {
-            return nil
-        }
-        
-        return path
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {

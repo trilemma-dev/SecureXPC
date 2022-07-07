@@ -43,7 +43,7 @@ import Foundation
 /// Use cases for making one include:
 ///  - Allowing two processes which are not XPC services to communicate over XPC with each other. This is done by having one of those processes make an
 ///    anonymous server and send its ``XPCServer/endpoint`` to an XPC Mach service. The other process then needs to retrieve that endpoint from the XPC
-///    Mach service and create a client using ``XPCClient/forEndpoint(_:)``.
+///    Mach service and create a client using ``XPCClient/forEndpoint(_:withServerRequirement:)``.
 ///  - Testing code that would otherwise run as part of an XPC Mach service without needing to install a helper tool. However, note that this code won't run as root.
 ///
 /// ### Registering & Handling Routes
@@ -489,7 +489,7 @@ public class XPCServer {
         fatalError("Abstract Property")
     }
     
-    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:)`` to create a client.
+    /// Retrieve an endpoint for this XPC server and then use ``XPCClient/forEndpoint(_:withServerRequirement:)`` to create a client.
     ///
     /// Endpoints can be sent across an XPC connection.
     public var endpoint: XPCServerEndpoint {

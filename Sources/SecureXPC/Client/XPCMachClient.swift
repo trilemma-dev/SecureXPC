@@ -17,9 +17,9 @@ internal class XPCMachClient: XPCClient {
         .machService(name: machServiceName)
     }
 
-    internal init(machServiceName: String, connection: xpc_connection_t? = nil) {
+    internal init(machServiceName: String, serverRequirement: XPCServerRequirement) {
         self.machServiceName = machServiceName
-        super.init(connection: connection)
+        super.init(serverRequirement: serverRequirement)
     }
 
     /// Creates and returns a connection for the Mach service represented by this client.

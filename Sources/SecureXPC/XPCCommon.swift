@@ -68,6 +68,23 @@ func SecCodeCreateWithXPCConnection(_ connection: xpc_connection_t, andMessage m
     return code
 }
 
+/// Returns the path for the code instance or `nil` if it could not be determined.
+func SecCodeCopyPath(_ code: SecCode) -> URL? {
+    var staticCode: SecStaticCode?
+    guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess,
+          let staticCode = staticCode else {
+        return nil
+    }
+    
+    var path: CFURL?
+    guard Security.SecCodeCopyPath(staticCode, SecCSFlags(), &path) == errSecSuccess,
+          let path = (path as URL?)?.standardized else {
+        return nil
+    }
+    
+    return path
+}
+
 /// Encapsulates the undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`.
 fileprivate struct UndocumentedAuditToken {
     
@@ -152,4 +169,23 @@ func teamIdentifierForThisProcess() throws -> String? {
     }
 
     return info[kSecCodeInfoTeamIdentifier] as? String
+}
+
+func secRequirementForTeamIdentifier(_ teamIdentifier: String) throws -> SecRequirement {
+    // From https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html
+    // In regards to subject.OU:
+    //     In Apple issued developer certificates, this field contains the developer’s Team Identifier.
+    // The "anchor apple generic" portion effectively means the certificate chain was signed by Apple
+    let requirementString = """
+    anchor apple generic and certificate leaf[subject.OU] = "\(teamIdentifier)"
+    """ as CFString
+    
+    var requirement: SecRequirement?
+    guard SecRequirementCreateWithString(requirementString, [], &requirement) == errSecSuccess,
+          let requirement = requirement else {
+        let message = "Security requirement could not be created; textual representation: \(requirementString)"
+        throw XPCError.internalFailure(description: message)
+    }
+    
+    return requirement
 }

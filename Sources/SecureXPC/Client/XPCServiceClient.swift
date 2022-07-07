@@ -17,9 +17,9 @@ internal class XPCServiceClient: XPCClient {
         .xpcService(name: xpcServiceName)
     }
 
-    internal init(xpcServiceName: String, connection: xpc_connection_t? = nil) {
+    internal init(xpcServiceName: String, serverRequirement: XPCServerRequirement) {
         self.xpcServiceName = xpcServiceName
-        super.init(connection: connection)
+        super.init(serverRequirement: serverRequirement)
     }
     
     /// Creates and returns a connection for the XPC service represented by this client.
