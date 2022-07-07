@@ -695,13 +695,8 @@ public class XPCClient {
     public var serverIdentity: SecCode {
         get async throws {
             try await withUnsafeThrowingContinuation { continuation in
-                self.serverIdentity { (response: Result<SecCode, XPCError>) -> Void in
-                    switch response {
-                        case .success(let identity):
-                            continuation.resume(returning: identity)
-                        case .failure(let error):
-                            continuation.resume(throwing: error)
-                    }
+                self.serverIdentity { response in
+                    continuation.resume(with: response)
                 }
             }
         }
