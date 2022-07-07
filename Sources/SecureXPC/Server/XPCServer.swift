@@ -141,6 +141,7 @@ public class XPCServer {
     
     internal init(clientRequirement: XPCClientRequirement) {
         self.clientRequirement = clientRequirement
+        self.registerPackageInternalRoutes()
     }
     
     // MARK: Route registration
@@ -154,6 +155,11 @@ public class XPCServer {
         if let _ = self.routes.updateValue(handler, forKey: route) {
             fatalError("Route \(route.pathComponents) is already registered")
         }
+    }
+    
+    /// Registers package internal routes.
+    private func registerPackageInternalRoutes() {
+        self.registerRoute(PackageInternalRoutes.noopRoute) { }
     }
         
     /// Registers a route for a request without a message that does not receive a reply.

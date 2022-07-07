@@ -126,6 +126,9 @@ import Foundation
 /// - ``XPCSequentialResponseHandler``
 /// ### Client Information
 /// - ``connectionDescriptor``
+/// ### Server Information
+/// - ``serverIdentity``
+/// - ``serverIdentity(_:)``
 public class XPCClient {
     
     // MARK: Public factories
@@ -678,6 +681,66 @@ public class XPCClient {
     /// Creates and returns a connection for the service represented by this client.
     internal func createConnection() throws -> xpc_connection_t {
         fatalError("Abstract Method")
+    }
+    
+    // MARK: server identity
+    
+    /// A representation of the server's running program.
+    ///
+    /// The returned `SecCode` instance is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    ///
+    /// > Note: Accessing this property  involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
+    /// a `send` or `sendMessage` call.
+    @available(macOS 10.15.0, *)
+    public var serverIdentity: SecCode {
+        get async throws {
+            try await withUnsafeThrowingContinuation { continuation in
+                self.serverIdentity { response in
+                    continuation.resume(with: response)
+                }
+            }
+        }
+    }
+    
+    /// Provides a representation of the server's running program to the handler.
+    ///
+    /// The provided `SecCode` instance comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    ///
+    /// > Note: Calling this function involves cross-process communication with the server and is therefore subject to all of the same error conditions as making a
+    /// `send` or `sendMessage` call.
+    public func serverIdentity(_ handler: @escaping XPCResponseHandler<SecCode>) {
+        // Get the connection or inform the handler of failure and return
+        let connection: xpc_connection_t
+        do {
+            connection = try getConnection()
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+            return
+        }
+        
+        // Create request
+        let request: Request
+        do {
+            request = try Request(route: PackageInternalRoutes.noopRoute.route)
+        } catch {
+            handler(.failure(XPCError.asXPCError(error: error)))
+            return
+        }
+        
+        // Async send the request over XPC
+        xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
+            if xpc_get_type(reply) == XPC_TYPE_ERROR {
+                handler(.failure(XPCError.fromXPCObject(reply)))
+                return
+            }
+            
+            // It doesn't matter what the reply actually contains, we just need it to determine server identity
+            guard let serverIdentity = SecCodeCreateWithXPCConnection(connection, andMessage: reply) else {
+                handler(.failure(XPCError.internalFailure(description: "Unable to get server's SecCode")))
+                return
+            }
+            handler(.success(serverIdentity))
+        }
     }
 }
 
