@@ -26,6 +26,7 @@ import Foundation
 ///
 /// ## Topics
 /// ### Requirements
+/// - ``sameProcess``
 /// - ``sameBundle``
 /// - ``sameTeamIdentifier``
 /// - ``sameTeamIdentifierIfPresent``
@@ -35,12 +36,8 @@ import Foundation
 /// - ``and(_:_:)``
 /// - ``or(_:_:)``
 public struct XPCServerRequirement {
-    /// What actually performs the requirement validation
+    /// What actually performs the trust evaluation.
     private let serverAcceptor: ServerAcceptor
-    
-    internal func trustServer(_ serverIdentity: SecCode) -> Bool {
-        return true
-    }
     
     /// The server must satisfy the specified code signing security requirement.
     public static func secRequirement(_ requirement: SecRequirement) -> XPCServerRequirement {
@@ -65,18 +62,26 @@ public struct XPCServerRequirement {
         }
     }
     
+    // Exposing this publicly and having it be the default for a Mach service is a tradeoff of convenience vs security,
+    // but in practice any production application ought to have a team identifier so it's a clear improvement over not
+    // having any security requirement at all
     /// If this client has a team identifier, the server must have the same team identifier.
     ///
     /// If this client does not have a team identifier, any server will be trusted.
     public static var sameTeamIdentifierIfPresent: XPCServerRequirement {
-        get {
-            if let teamID = try? teamIdentifierForThisProcess(),
-               let teamIDRequirement = try? XPCServerRequirement.teamIdentifier(teamID) {
-                return teamIDRequirement
-            } else {
-                return .alwaysAccepting
-            }
-        }
+        (try? .sameTeamIdentifier) ?? .alwaysAccepting
+    }
+    
+    /// The server must be running in the same process.
+    ///
+    /// This is a convenient requirement when communicating with a server created via ``XPCServer/makeAnonymous()``.
+    public static var sameProcess: XPCServerRequirement {
+        // This is always safe to be public as a server requirement, unlike on the server side where in most cases it is
+        // not safe to be a client requirement. What's fundamentally different is that the server had to be running at
+        // the time this client communicated with it in order to ascertain its process id. There's no way for the server
+        // to have terminated *prior* to this client starting and still have returned a response. As such, if they both
+        // have the same process id then they *are* the same process.
+        XPCServerRequirement(serverAcceptor: SameProcessServerAcceptor())
     }
     
     /// The server must be within this client's bundle.
@@ -121,32 +126,43 @@ public struct XPCServerRequirement {
     internal static var alwaysAccepting: XPCServerRequirement {
         XPCServerRequirement(serverAcceptor: AlwaysAcceptingServerAcceptor())
     }
+    
+    /// Determines whether a server should be trusted.
+    internal func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
+        serverAcceptor.trustServer(serverIdentity)
+    }
 }
 
 fileprivate protocol ServerAcceptor {
     /// Determines whether to trust a server.
-    func trustServer(_ serverIdentity: SecCode) -> Bool
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool
 }
 
 /// This should only be used for XPC services which are application-scoped, so it's acceptable to assume the server is inheritently trusted.
 fileprivate struct AlwaysAcceptingServerAcceptor: ServerAcceptor {
-    func trustServer(_ serverIdentity: SecCode) -> Bool {
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
         true
+    }
+}
+
+fileprivate struct SameProcessServerAcceptor: ServerAcceptor {
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
+        getpid() == serverIdentity.processID
     }
 }
 
 fileprivate struct SecRequirementServerAcceptor: ServerAcceptor {
     let requirement: SecRequirement
     
-    func trustServer(_ serverIdentity: SecCode) -> Bool {
-        SecCodeCheckValidity(serverIdentity, SecCSFlags(), self.requirement) == errSecSuccess
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
+        SecCodeCheckValidity(serverIdentity.code, SecCSFlags(), self.requirement) == errSecSuccess
     }
 }
 
 /// Trusts a server which is located within this client's bundle.
 fileprivate struct SameBundleServerAcceptor: ServerAcceptor {
-    func trustServer(_ serverIdentity: SecCode) -> Bool {
-        guard let serverPathComponents = SecCodeCopyPath(serverIdentity)?.pathComponents else {
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
+        guard let serverPathComponents = SecCodeCopyPath(serverIdentity.code)?.pathComponents else {
             return false
         }
         let clientPathComponents = Bundle.main.bundleURL.pathComponents
@@ -166,7 +182,7 @@ fileprivate struct AndServerAcceptor: ServerAcceptor {
     let lhs: ServerAcceptor
     let rhs: ServerAcceptor
     
-    func trustServer(_ serverIdentity: SecCode) -> Bool {
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
         lhs.trustServer(serverIdentity) && rhs.trustServer(serverIdentity)
     }
 }
@@ -175,7 +191,7 @@ fileprivate struct OrServerAcceptor: ServerAcceptor {
     let lhs: ServerAcceptor
     let rhs: ServerAcceptor
     
-    func trustServer(_ serverIdentity: SecCode) -> Bool {
+    func trustServer(_ serverIdentity: XPCServerIdentity) -> Bool {
         lhs.trustServer(serverIdentity) || rhs.trustServer(serverIdentity)
     }
 }

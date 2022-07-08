@@ -149,7 +149,7 @@ public class XPCClient {
         /// name and matches the provided security requirement.
         ///
         /// By default a client for an XPC Mach service will trust a server with the same team identifier so long as this client has a team identifier. If this client does
-        /// not have a team identifier then any server will be trusted. To enforce a different server requirement use this case and specifiy your own
+        /// not have a team identifier then any server will be trusted. To enforce a different server requirement use this case and specify your own
         /// ``XPCServerRequirement``.
         ///
         /// Numerous helper tools & services can optionally communicate over XPC by using Mach services, including:
@@ -178,7 +178,7 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///   - named: The `CFBundleIdentifier` of the XPC service or the name of the XPC Mach service. For most Mach services the name is specified
-    ///            with the `MachServices` launchd property list entry; however, for login items the name is its`CFBundleIdentifier`.
+    ///            with the `MachServices` launchd property list entry (or similar); however, for login items the name is its`CFBundleIdentifier`.
     ///   - ofType: There are multiple different types of XPC clients and normally you do not need to concern yourself with this. However, if you are trying to
     ///             create a client for an XPC Mach service *and* you have an XPC service with a `CFBundleIdentifier` value that's the same as the
     ///             name of that Mach service, then you must call this function and explicitly set the type to
@@ -226,9 +226,17 @@ public class XPCClient {
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
     ///
     /// A server's endpoint is accesible via ``XPCServer/endpoint``. The endpoint can be sent across an XPC connection.
+    ///
+    /// - Parameters:
+    ///   - endpoint: The endpoint with which to establish a connection.
+    ///   - requirement: The requirement the server needs to meet in order for this client to communicate with it. By default only a server in the same process
+    ///                  will be trusted which will always work a server retrieved with ``XPCServer/makeAnonymous()``. However, for any server that
+    ///                  is running outside of this process, a non-default requirement such as ``XPCServerRequirement/sameTeamIdentifier`` will
+    ///                  need to be provided.
+    /// - Returns: <#description#>
     public static func forEndpoint(
         _ endpoint: XPCServerEndpoint,
-        withServerRequirement requirement: XPCServerRequirement = .sameTeamIdentifierIfPresent
+        withServerRequirement requirement: XPCServerRequirement = .sameProcess
     ) -> XPCClient {
         XPCEndpointClient(endpoint: endpoint, serverRequirement: requirement)
     }
@@ -707,12 +715,12 @@ public class XPCClient {
     
     /// A representation of the server's running program.
     ///
-    /// The returned `SecCode` instance is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The returned ``XPCServerIdentity``'s information is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
     ///
-    /// > Note: Accessing this property  involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
+    /// > Note: Accessing this property involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
     /// a `send` or `sendMessage` call.
     @available(macOS 10.15.0, *)
-    public var serverIdentity: SecCode {
+    public var serverIdentity: XPCServerIdentity {
         get async throws {
             try await withUnsafeThrowingContinuation { continuation in
                 self.serverIdentity { response in
@@ -724,11 +732,11 @@ public class XPCClient {
     
     /// Provides a representation of the server's running program to the handler.
     ///
-    /// The provided `SecCode` instance comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The provided ``XPCServerIdentity``'s information comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
     ///
     /// > Note: Calling this function involves cross-process communication with the server and is therefore subject to all of the same error conditions as making a
     /// `send` or `sendMessage` call.
-    public func serverIdentity(_ handler: @escaping XPCResponseHandler<SecCode>) {
+    public func serverIdentity(_ handler: @escaping XPCResponseHandler<XPCServerIdentity>) {
         self.withConnection { connectionResult in
             switch connectionResult {
                 case .success(let connection):
@@ -743,7 +751,10 @@ public class XPCClient {
     // Private implementation that has a connection passed in. This is needed because `withConnection` needs to call
     // this function when creating a new connection, while the public version calls `withConnection` which would result
     // in infinite recursion between these two functions.
-    private func serverIdentity(connection: xpc_connection_t, handler: @escaping XPCResponseHandler<SecCode>) {
+    private func serverIdentity(
+        connection: xpc_connection_t,
+        handler: @escaping XPCResponseHandler<XPCServerIdentity>
+    ) {
         // Create request
         let request: Request
         do {
@@ -761,10 +772,14 @@ public class XPCClient {
             }
             
             // It doesn't matter what the reply actually contains, we just need it to determine server identity
-            guard let serverIdentity = SecCodeCreateWithXPCConnection(connection, andMessage: reply) else {
+            guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: reply) else {
                 handler(.failure(XPCError.internalFailure(description: "Unable to get server's SecCode")))
                 return
             }
+            let serverIdentity = XPCServerIdentity(code: code,
+                                                   effectiveUserID: xpc_connection_get_euid(connection),
+                                                   effectiveGroupID: xpc_connection_get_egid(connection),
+                                                   processID: xpc_connection_get_pid(connection))
             handler(.success(serverIdentity))
         }
     }

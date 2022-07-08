@@ -99,11 +99,12 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``SequentialResult``
 - ``SequentialResultProvider``
 
-### Request Config & Info
+### Configuration & Information
 - ``XPCClientRequirement``
 - ``XPCServerRequirement``
 - ``XPCConnectionDescriptor``
 - ``XPCRequestContext``
+- ``XPCServerIdentity``
 
 ### Codable Containers
 - ``XPCFileDescriptorContainer``

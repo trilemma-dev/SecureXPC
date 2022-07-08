@@ -7,7 +7,7 @@
 
 import Foundation
 import XCTest
-import SecureXPC
+@testable import SecureXPC
 
 class ServerIdentityTests: XCTestCase {
     func testGetServerIdentity() async throws {
@@ -16,9 +16,13 @@ class ServerIdentityTests: XCTestCase {
         server.start()
         
         // Since the server is running in the same process as this test, the identity should be the same as this one
-        var currentIdentity: SecCode?
-        SecCodeCopySelf([], &currentIdentity)
+        var currentCode: SecCode?
+        SecCodeCopySelf([], &currentCode)
+        
         let serverIdentity = try await client.serverIdentity
-        XCTAssertEqual(serverIdentity, currentIdentity!)
+        XCTAssertEqual(serverIdentity.code, currentCode!)
+        XCTAssertEqual(serverIdentity.effectiveUserID, geteuid())
+        XCTAssertEqual(serverIdentity.effectiveGroupID, getegid())
+        XCTAssertEqual(serverIdentity.processID, getpid())
     }
 }
