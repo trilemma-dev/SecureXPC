@@ -8,7 +8,7 @@ While both can be used from Swift via its language bridging functionality, doing
 Swift usage throughout much of the codebase that it touches. For example to use `NSXPCConnection` requires that all data
 transferred over the XPC connection be annotated with `@objc`, conform to `NSSecureCoding` and be a `class` as `struct`s
 and `enum`s are not supported. Usage of the C API requires considerable manual boxing and unboxing of data types and
-with unsafe access required to transfer types such as string. In comparison, SecureXPC uses `Codable` and the Swift
+with unsafe access required to transfer types such as `String`. In comparison, SecureXPC uses `Codable` and the Swift
 compiler will automatically generate conformance for simple `struct`s and `enum`s.
 
 ## It's simple
@@ -19,8 +19,8 @@ for your client to receive an `AsyncThrowingStream` which can be populated as ne
 
 This simplicity is achieved in a few key ways:
 - Full Swift concurrency (`async` and `await`) support means there's no need to use callback closures
-- Bi-directional functionality is exposed as an `AsyncThrowingStream` instead of adhoc function calls and/or polling
-- Routing is built into SecureXPC, you don't have to roll your own solution as you would when using the C API
+- Bi-directional functionality is exposed as an `AsyncThrowingStream` instead of adhoc function calls
+- Routing is built into SecureXPC so you don't have to roll your own solution as you would when using the C API
 - Security is automatic in most cases
 
 ## It's secure
@@ -31,8 +31,8 @@ granted permissions to system resources such as the Mac's microphone or camera.
 
 SecureXPC automatically validates incoming connections for many types of common services such as those installed with
 `SMJobBless` and login items. For those not automatically supported, a simple declarative API allows for specifying
-client requirements such as only allowing connections from clients with the same team identifier. If desired
-requirements can be fully customized via Apple's
+client requirements such as only allowing connections from clients with the same team identifier as the server. If
+desired requirements can be highly customized via Apple's
 [code signing requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
 \*There are so many documented cases of these types of security vulnerabilities that it'd be hard to list them all out,
@@ -61,18 +61,18 @@ fit. The aforementioned deserialization behavior is by definition not applicable
 
 # My app and/or service is sandboxed, can I use SecureXPC?
 Absolutely. However, Apple places extensive restrictions on a sandboxed process's ability to establish XPC connections.
-An app may always communicate a bundled XPC service, but cannot establish a connection to an XPC Mach service.
+An app may always communicate a bundled XPC service, but cannot directly establish a connection to an XPC Mach service.
 
-# Can SecureXPC allow my sandboxed app to talk to an XPC Mach service?
-Yes, so long as you're able and willing to create a non-sandboxed XPC service. Non-sandboxed XPC services are able to
-create connections to the XPC Mach services. At a high level this looks like:
+# How can my sandboxed app to talk to an XPC Mach service?
+This can be achieved as long as you're able and willing to create a non-sandboxed XPC service. Non-sandboxed XPC
+services are able to create connections to the XPC Mach services. At a high level this would look like:
 
 XPC Mach service:
 - Registers a route which returns its endpoint.
 
 Non-sandboxed XPC service:
 - Creates a client which connects to the XPC Mach service.
-- Registers a route which returns the XPC Mach services endpoint. To do this registered handler uses the client to call
+- Registers a route which returns the XPC Mach services endpoint. To do this registered handler uses its client to call
   the XPC Mach service's route which returns its endpoint.
   
 Sandboxed app:
@@ -88,4 +88,5 @@ I don't know. If you've succesfully published a Mac App Store app with SecureXPC
 let me know.
 
 SecureXPC makes use of the private API `xpc_connection_get_audit_token` on macOS 10.15 and earlier (a public equivalent
-exists starting with macOS 11). I can imagine this might result in an app store rejection.
+exists starting with macOS 11). I can imagine this might result in the app being rejected. Otherwise only public APIs
+are used.
