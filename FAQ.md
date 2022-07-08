@@ -6,15 +6,28 @@ Apple provides two XPC frameworks, their [XPC C framework](https://developer.app
 ## Write idiomatic Swift
 While both can be used from Swift via its language bridging functionality, doing so requires significant non-idiomatic
 Swift usage throughout much of the codebase that it touches. For example to use `NSXPCConnection` requires that all data
-transferred over the XPC connection be annotated with `@objc`, conform to `NSSecureCoding` and be a `class` - `struct`s
-are not supported. Usage of the C API requires considerable manual boxing and unboxing of data types and with unsafe
-access required to transfer types such as string.
+transferred over the XPC connection be annotated with `@objc`, conform to `NSSecureCoding` and be a `class` as `struct`s
+and `enum`s are not supported. Usage of the C API requires considerable manual boxing and unboxing of data types and
+with unsafe access required to transfer types such as string. In comparison, SecureXPC uses `Codable` and the Swift
+compiler will automatically generate conformance for simple `struct`s and `enum`s.
+
+## It's simple
+XPC is very powerful, but can also be quite arcane. SecureXPC offers a simple yet powerful client server API. This is
+done by supporting most common scenarios while excluding a few less common ones. For example it takes just a few lines
+of code for your app to asynchronously call your server and get back a reponse. Only a little bit more code is needed
+for your client to receive an `AsyncThrowingStream` which can be populated as needed by the server.
+
+This simplicity is achieved in a few key ways:
+- Full Swift concurrency (`async` and `await`) support means there's no need to use callback closures
+- Bi-directional functionality is exposed as an `AsyncThrowingStream` instead of adhoc function calls and/or polling
+- Routing is built into SecureXPC, you don't have to roll your own solution as you would when using the C API
+- Security is automatic in most cases
 
 ## It's secure
 Mach services are by default accessible to any other non-sandboxed process on the system. This can (and often has\*)
 resulted in serious security vulnerabilities. This is rather obviously true for services running as root such as those
 installed with `SMJobBless`, but is also applicable for even sandboxed Mach services such as a login item which has been
-granted permissions to system resources such as the user's microphone or camera.
+granted permissions to system resources such as the Mac's microphone or camera.
 
 SecureXPC automatically validates incoming connections for many types of common services such as those installed with
 `SMJobBless` and login items. For those not automatically supported, a simple declarative API allows for specifying
@@ -28,18 +41,6 @@ but here are a few:
 - [Exploiting XPC in AntiVirus Software](https://youtu.be/zQlE7AzgGdI)
 - [OSX XPC Revisited - 3rd Party Application Flaws](https://youtu.be/KPzhTqwf0bA)
 - [Abusing & Security XPC in macOS apps](https://youtu.be/ezxD5M90Mmc)
-
-## It's simple
-XPC is very powerful, but it can also be very arcane. SecureXPC offers a simple yet powerful client server API. This is
-done by supporting most common scenarios while excluding a few less common ones. For example it takes just a few lines
-of code for your app to asynchronously call your server and get back a reponse. Only a little bit more code is needed
-for your client to receive an `AsyncThrowingStream` which can be populated on demand by the server as needed.
-
-This simplicity is achieved in a few key ways:
-- Full Swift concurrency (`async` and `await`) means there's no need to use handlers and closures
-- Bidirectional functionality is exposed as an `AsyncThrowingStream` instead of adhoc function calls
-- Routing is built into SecureXPC, you don't have to roll your own solution as you would when using the C API
-- Security is automatic
 
 # What are the differences between `Codable` vs `NSSecureCoding`?
 SecureXPC uses types conforming to Swift's `Codable` protocol to serialize data across the XPC connection. Due to the
