@@ -24,19 +24,19 @@ This simplicity is achieved in a few key ways:
 - Security is automatic in most cases
 
 ## It's secure
-Mach services are by default accessible to any other non-sandboxed process on the system. This can (and often has\*)
+XPC Mach services are by default accessible to any other non-sandboxed process on the system. This can (and often has\*)
 resulted in serious security vulnerabilities. This is rather obviously true for services running as root such as those
-installed with `SMJobBless`, but is also applicable for even sandboxed Mach services such as a login item which has been
-granted permissions to system resources such as the Mac's microphone or camera.
+installed with `SMJobBless`, but is also applicable for even sandboxed XPC Mach services such as a login item which has
+been granted permissions to system resources like the Mac's microphone or camera.
 
-SecureXPC automatically validates incoming connections for many types of common services such as those installed with
+SecureXPC automatically validates incoming connections for many types of common services including those installed with
 `SMJobBless` and login items. For those not automatically supported, a simple declarative API allows for specifying
 client requirements such as only allowing connections from clients with the same team identifier as the server. If
 desired requirements can be highly customized via Apple's
 [code signing requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
-\*There are so many documented cases of these types of security vulnerabilities that it'd be hard to list them all out,
-but here are a few:
+\*There are so many documented cases of these types of security vulnerabilities that it'd be hard to list them all out;
+here are a few:
 - [Don't Trust the PID!](https://saelo.github.io/presentations/warcon18_dont_trust_the_pid.pdf)
 - [Exploiting XPC in AntiVirus Software](https://youtu.be/zQlE7AzgGdI)
 - [OSX XPC Revisited - 3rd Party Application Flaws](https://youtu.be/KPzhTqwf0bA)
@@ -59,13 +59,23 @@ in an already initialized instance.
 While `Codable` can be implemented by any type, in practice value types such as `struct` and `enum` are the most natural
 fit. The aforementioned deserialization behavior is by definition not applicable to value types.
 
+# What versions of macOS does SecureXPC support?
+OS X 10.10 Yosemite through macOS 13 Ventura are currently supported. macOS 10.15 and later Swift concurrency may
+be used and currently there is full parity between the closure-based APIs and the Swift concurrency ones. (In the
+future some new functionality may be introduced that's only available as Swift concurrency variants.)
+
+Note that on macOS 11 and earlier, Swift concurrency may not be used in Command Line Tools. While the code will compile,
+it will crash at runtime. This is due to an [Apple limitation](https://developer.apple.com/forums/thread/701969)
+unrelated to SecureXPC.
+
 # My app and/or service is sandboxed, can I use SecureXPC?
 Absolutely. However, Apple places extensive restrictions on a sandboxed process's ability to establish XPC connections.
-An app may always communicate a bundled XPC service, but cannot directly establish a connection to an XPC Mach service.
+An app may always communicate with a bundled XPC service, but cannot directly establish a connection to an XPC Mach
+service.
 
 # How can my sandboxed app to talk to an XPC Mach service?
 This can be achieved as long as you're able and willing to create a non-sandboxed XPC service. Non-sandboxed XPC
-services are able to create connections to the XPC Mach services. At a high level this would look like:
+services are able to create connections to XPC Mach services. At a high level this would look like:
 
 XPC Mach service:
 - Registers a route which returns its endpoint.
