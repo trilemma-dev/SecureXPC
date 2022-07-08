@@ -60,9 +60,8 @@ While `Codable` can be implemented by any type, in practice value types such as 
 fit. The aforementioned deserialization behavior is by definition not applicable to value types.
 
 # What versions of macOS does SecureXPC support?
-OS X 10.10 Yosemite through macOS 13 Ventura are currently supported. macOS 10.15 and later Swift concurrency may
-be used and currently there is full parity between the closure-based APIs and the Swift concurrency ones. (In the
-future some new functionality may be introduced that's only available as Swift concurrency variants.)
+OS X 10.10 Yosemite through macOS 13 Ventura are supported. Starting with macOS 10.15, Swift concurrency may be used and
+currently there is full parity between the closure-based APIs and the Swift concurrency ones.
 
 Note that on macOS 11 and earlier, Swift concurrency may not be used in Command Line Tools. While the code will compile,
 it will crash at runtime. This is due to an [Apple limitation](https://developer.apple.com/forums/thread/701969)
