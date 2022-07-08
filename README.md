@@ -105,19 +105,5 @@ There are multiple types of clients which can be retrieved:
 
 ---
 
-# `Codable` vs `NSSecureCoding`
-SecureXPC uses types conforming to Swift's `Codable` protocol to serialize data across the XPC connection. Due to the
-nature of how `Codable` is defined, it is not possible for the same instance to be referenced from multiple other
-deserialized instances. This is in contrast to how
-[`NSSecureCoding`](https://developer.apple.com/documentation/foundation/nssecurecoding) behaves, which is used by
-[`NSXPCConnection`](https://developer.apple.com/documentation/foundation/nsxpcconnection) for serialization.
-
-While there are considerable similarities between these two serialization protocols, there is a significant difference
-in how deserialization occurs. A `Codable` conforming type is always decoded via its
-[initializer](https://developer.apple.com/documentation/swift/decodable/2894081-init) with no possibility of
-substitution. In contrast, an `NSSecureCoding` conforming type may use
-[`awakeAfter(using:)`](https://developer.apple.com/documentation/objectivec/nsobject/1417074-awakeafter) to substitute
-in an already initialized instance.
-
-While `Codable` can be implemented by any type, in practice value types such as `struct` and `enum` are the most natural
-fit. The aforementioned deserialization behavior is by definition not applicable to value types.
+# Questions you may have
+See the [FAQ](FAQ.md) for answers to questions you may have or didn't even realize you wanted answered.
