@@ -19,12 +19,12 @@ public enum XPCError: Error, Codable {
     case connectionInterrupted
     /// This XPC service will be terminated imminently.
     case terminationImminent
-    /// The connection to the server has already experienced an interruption and cannot be reestablished under any circumstances.
+    /// A request failed due to not meeting security requirements.
     ///
-    /// This is expected behavior when attempting to send a message to an anonymous server after the connection has been interrupted.
-    case connectionCannotBeReestablished
-    /// A request was not accepted by the server because it did not meet the server's security requirements or the server could not determine the identity of the
-    /// client.
+    /// On the server this occurs when a request was not accepted due to not meeting the server's ``XPCClientRequirement`` or being unable to identify
+    /// the client.
+    ///
+    /// On the client this occurs when a request was not made because the server does not meet the client's ``XPCServerRequirement``.
     case insecure
     /// A response cannot be sent because the client is no longer connected.
     case clientNotConnected
@@ -42,26 +42,20 @@ public enum XPCError: Error, Codable {
     case routeNotRegistered(routeName: [String])
     /// While the route associated with the incoming request is registered with the ``XPCServer``, the message and/or reply does not match the handler
     /// registered with the server.
-    ///
-    /// The first associated value is the route's name. The second is a descriptive error message.
     case routeMismatch(routeName:[String], description: String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
-    /// This process's configuration prevents an ``XPCServer`` being retrieved for it.
-    ///
-    /// The associated value describes why it could not be retrieved.
+    /// This process's configuration prevents an ``XPCServer`` being retrieved for it or an ``XPCClientRequirement`` for being created for it.
     case misconfiguredServer(description: String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.
     case handlerError(HandlerError)
+    /// This process's configuration prevents an ``XPCServerRequirement`` for being created for it.
+    case misconfiguredClient(description: String)
     /// An error internal to the SecureXPC framework.
-    ///
-    /// The associated string is a descriptive error message.
     case internalFailure(description: String)
     /// Unknown error occurred.
-    ///
-    /// The associated string is a descriptive error message.
     case unknown(description: String)
     
     /// Represents the provided error as an ``XPCError``.

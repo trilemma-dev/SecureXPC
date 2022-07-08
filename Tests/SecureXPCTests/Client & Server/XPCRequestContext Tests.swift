@@ -82,9 +82,9 @@ class XPCRequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCRequestContext.clientCode)
+            XCTAssertNotNil(XPCRequestContext.code)
             var staticCode: SecStaticCode?
-            SecCodeCopyStaticCode(XPCRequestContext.clientCode!, [], &staticCode)
+            SecCodeCopyStaticCode(XPCRequestContext.code!, [], &staticCode)
             var signingInfo: CFDictionary?
             SecCodeCopySigningInformation(staticCode!, [], &signingInfo)
             XCTAssertEqual((signingInfo! as NSDictionary)[kSecCodeInfoIdentifier] as? String, "com.apple.xctest")
@@ -102,7 +102,7 @@ class XPCRequestContextTest: XCTestCase {
         let clientCodeNotNil = self.expectation(description: "Client code should not be nil in this circumstance")
         
         server.registerRoute(route) {
-            if let clientCode = XPCRequestContext.clientCode {
+            if let clientCode = XPCRequestContext.code {
                 clientCodeNotNil.fulfill()
                 var staticCode: SecStaticCode?
                 SecCodeCopyStaticCode(clientCode, [], &staticCode)

@@ -81,7 +81,7 @@ import Foundation
 /// `replyType` (or `Void` if there is no reply) and a `Failure` of type ``XPCError``. If an error was thrown by the server while handling the request, it will
 /// be provided as an ``XPCError`` on failure.
 ///
-/// Closure-based functions also existing for sequential responses:
+/// Closure-based functions also exist for sequential responses:
 ///```swift
 /// let changesRoute = XPCRoute.named("config", "changes")
 ///                            .withSequentialReplyType(Config.self)
@@ -106,7 +106,7 @@ import Foundation
 /// ### Retrieving a Client
 /// - ``forService(named:ofType:)``
 /// - ``ServiceType``
-/// - ``forEndpoint(_:)``
+/// - ``forEndpoint(_:withServerRequirement:)``
 /// ### Sending Requests with Async
 /// - ``send(to:)-5b1ar``
 /// - ``send(to:)-18k1k``
@@ -142,10 +142,15 @@ public class XPCClient {
         /// will be returned to communicate with an XPC Mach service.
         ///
         /// If there is a Mach service you need to communicate with that has the same name as a bundled XPC service, explicitly retrieve the client by passing
-        /// ``machService`` as the type.
+        /// ``machService(serverRequirement:)`` as the type. Also use this approach if you would like to specify a non-default
+        /// ``XPCServerRequirement`` for the service.
         case autoDetect
         /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC Mach service with the provided
-        /// name.
+        /// name and matches the provided security requirement.
+        ///
+        /// By default a client for an XPC Mach service will trust a server with the same team identifier so long as this client has a team identifier. If this client does
+        /// not have a team identifier then any server will be trusted. To enforce a different server requirement use this case and specify your own
+        /// ``XPCServerRequirement``.
         ///
         /// Numerous helper tools & services can optionally communicate over XPC by using Mach services, including:
         /// - Helper tools installed with
@@ -154,7 +159,7 @@ public class XPCClient {
         /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
         /// - Launch Agents
         /// - Launch Daemons
-        case machService
+        case machService(serverRequirement: XPCServerRequirement)
         /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC service with the provided name.
         ///
         /// XPC services are helper tools which ship as part of an app and by default only that app can communicate with them.
@@ -173,19 +178,20 @@ public class XPCClient {
     ///
     /// - Parameters:
     ///   - named: The `CFBundleIdentifier` of the XPC service or the name of the XPC Mach service. For most Mach services the name is specified
-    ///            with the `MachServices` launchd property list entry; however, for login items the name is its`CFBundleIdentifier`.
+    ///            with the `MachServices` launchd property list entry (or similar); however, for login items the name is its`CFBundleIdentifier`.
     ///   - ofType: There are multiple different types of XPC clients and normally you do not need to concern yourself with this. However, if you are trying to
     ///             create a client for an XPC Mach service *and* you have an XPC service with a `CFBundleIdentifier` value that's the same as the
-    ///             name of that Mach service, then you must call this function and explicitly set the type to ``ServiceType/machService``. This is
-    ///             because auto detection will always choose the XPC service if one exists with the provided name.
+    ///             name of that Mach service, then you must call this function and explicitly set the type to
+    ///             ``ServiceType/machService(serverRequirement:)``. This is because auto detection will always choose the XPC service if one
+    ///             exists with the provided name.
     /// - Returns: A client configured to communicate with the named service.
     public static func forService(named serviceName: String, ofType type: ServiceType = .autoDetect) -> XPCClient {
         switch type {
             case .autoDetect:
                 if bundledXPCServiceIdentifiers.contains(serviceName) {
-                    return XPCServiceClient(xpcServiceName: serviceName)
+                    return XPCServiceClient(xpcServiceName: serviceName, serverRequirement: .alwaysAccepting)
                 } else {
-                    return XPCMachClient(machServiceName: serviceName)
+                    return XPCMachClient(machServiceName: serviceName, serverRequirement: .sameTeamIdentifierIfPresent)
                 }
             case .xpcService:
                 guard bundledXPCServiceIdentifiers.contains(serviceName) else {
@@ -196,9 +202,9 @@ public class XPCClient {
                     """)
                 }
                 
-                return XPCServiceClient(xpcServiceName: serviceName)
-            case .machService:
-                return XPCMachClient(machServiceName: serviceName)
+                return XPCServiceClient(xpcServiceName: serviceName, serverRequirement: .alwaysAccepting)
+            case .machService(let serverRequirement):
+                return XPCMachClient(machServiceName: serviceName, serverRequirement: serverRequirement)
         }
     }
     
@@ -220,37 +226,30 @@ public class XPCClient {
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
     ///
     /// A server's endpoint is accesible via ``XPCServer/endpoint``. The endpoint can be sent across an XPC connection.
-	public static func forEndpoint(_ endpoint: XPCServerEndpoint) -> XPCClient {
-        let connection = xpc_connection_create_from_endpoint(endpoint.endpoint)
-
-        xpc_connection_set_event_handler(connection, { (event: xpc_object_t) in
-            fatalError("It should be impossible for this connection to receive an event.")
-        })
-        xpc_connection_resume(connection)
-
-        switch endpoint.connectionDescriptor {
-            case .anonymous:
-                return XPCAnonymousClient(connection: connection, connectionDescriptor: .anonymous)
-            // XPCServiceServer creates an anonymous listener connection in order to provide an endpoint, so an
-            // anonymous client needs to be created to connect to it, but we want to preserve the connection descriptor
-            case .xpcService(_):
-                return XPCAnonymousClient(connection: connection, connectionDescriptor: endpoint.connectionDescriptor)
-            case .machService(name: let name):
-                return XPCMachClient(machServiceName: name, connection: connection)
-        }
+    ///
+    /// - Parameters:
+    ///   - endpoint: The endpoint with which to establish a connection.
+    ///   - requirement: The requirement the server needs to meet in order for this client to communicate with it. By default only a server in the same process
+    ///                  will be trusted which will always work a server retrieved with ``XPCServer/makeAnonymous()``. However, for any server that
+    ///                  is running outside of this process, a non-default requirement such as ``XPCServerRequirement/sameTeamIdentifier`` will
+    ///                  need to be provided.
+    /// - Returns: <#description#>
+    public static func forEndpoint(
+        _ endpoint: XPCServerEndpoint,
+        withServerRequirement requirement: XPCServerRequirement = .sameProcess
+    ) -> XPCClient {
+        XPCEndpointClient(endpoint: endpoint, serverRequirement: requirement)
     }
 
     // MARK: Implementation
-
+    
     private let inProgressSequentialReplies = InProgressSequentialReplies()
     
+    private let serverRequirement: XPCServerRequirement
     private var connection: xpc_connection_t? = nil
     
-    internal init(connection: xpc_connection_t? = nil) {
-        self.connection = connection
-        if let connection = connection {
-            xpc_connection_set_event_handler(connection, self.handleEvent(event:))
-        }
+    internal init(serverRequirement: XPCServerRequirement) {
+        self.serverRequirement = serverRequirement
     }
     
     // MARK: Send
@@ -283,9 +282,15 @@ public class XPCClient {
                 handler(.failure(XPCError.asXPCError(error: error)))
             }
         } else {
-            if let encoded = try? Request(route: route.route).dictionary,
-               let connection = try? getConnection() {
-                xpc_connection_send_message(connection, encoded)
+            if let encoded = try? Request(route: route.route).dictionary {
+                self.withConnection { result in
+                    switch result {
+                        case .success(let connection):
+                            xpc_connection_send_message(connection, encoded)
+                        case .failure(_):
+                            break
+                    }
+                }
             }
         }
     }
@@ -324,9 +329,15 @@ public class XPCClient {
                 handler(.failure(XPCError.asXPCError(error: error)))
             }
         } else {
-            if let encoded = try? Request(route: route.route, payload: message).dictionary,
-               let connection = try? getConnection() {
-                xpc_connection_send_message(connection, encoded)
+            if let encoded = try? Request(route: route.route, payload: message).dictionary {
+                self.withConnection { result in
+                    switch result {
+                        case .success(let connection):
+                            xpc_connection_send_message(connection, encoded)
+                        case .failure(_):
+                            break
+                    }
+                }
             }
         }
     }
@@ -491,39 +502,39 @@ public class XPCClient {
         _ request: Request,
         withResponse handler: @escaping XPCResponseHandler<R>
     ) {
-        // Get the connection or inform the handler of failure and return
-        let connection: xpc_connection_t
-        do {
-            connection = try getConnection()
-        } catch {
-            handler(.failure(XPCError.asXPCError(error: error)))
-            return
-        }
-        
-        // Async send the message over XPC
-        xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
-            let result: Result<R, XPCError>
-            if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
-                do {
-                    let response = try Response(dictionary: reply, route: request.route)
-                    if response.containsPayload {
-                        result = .success(try response.decodePayload(asType: R.self))
-                    } else if response.containsError {
-                        result = .failure(try response.decodeError())
-                    } else if R.self == EmptyResponse.self { // Special case for when an empty response is expected
-                        result = .success(EmptyResponse.instance as! R)
-                    } else {
-                        result = .failure(.internalFailure(description: "Response is not empty nor does it contain a " +
-                                                                        "payload or error"))
+        self.withConnection { connectionResult in
+            switch connectionResult {
+                case .success(let connection):
+                    // Async send the message over XPC
+                    xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
+                        let result: Result<R, XPCError>
+                        if xpc_get_type(reply) == XPC_TYPE_DICTIONARY {
+                            do {
+                                let response = try Response(dictionary: reply, route: request.route)
+                                if response.containsPayload {
+                                    result = .success(try response.decodePayload(asType: R.self))
+                                } else if response.containsError {
+                                    result = .failure(try response.decodeError())
+                                } else if R.self == EmptyResponse.self { // Special case for expected empty response
+                                    result = .success(EmptyResponse.instance as! R)
+                                } else {
+                                    result = .failure(.internalFailure(description: """
+                                    Response is not empty nor does it contain a payload or error
+                                    """))
+                                }
+                            } catch {
+                                result = .failure(XPCError.asXPCError(error: error))
+                            }
+                        } else {
+                            result = .failure(XPCError.fromXPCObject(reply))
+                        }
+                        self.handleError(event: reply)
+                        handler(result)
                     }
-                } catch {
-                    result = .failure(XPCError.asXPCError(error: error))
-                }
-            } else {
-                result = .failure(XPCError.fromXPCObject(reply))
+                case .failure(let error):
+                    handler(.failure(error))
+                    return
             }
-            self.handleError(event: reply)
-            handler(result)
         }
     }
     
@@ -559,38 +570,37 @@ public class XPCClient {
     
     /// Does the actual work of sending an XPC request which receives zero or more sequential responses.
     private func sendRequest<S: Decodable>(_ request: Request, handler: @escaping XPCSequentialResponseHandler<S>) {
-        // Get the connection or inform the handler of failure and return
-        let connection: xpc_connection_t
-        do {
-            connection = try getConnection()
-        } catch {
-            handler(.failure(XPCError.asXPCError(error: error)))
-            return
-        }
-        
-        let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
-        self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
-        
-        // Sending with reply means the server ought to be kept alive until the reply is sent back
-        // From https://developer.apple.com/documentation/xpc/1505586-xpc_transaction_begin:
-        //    A service with no outstanding transactions may automatically exit due to inactivity as determined by the
-        //    system... If a reply message is created, the transaction will end when the reply message is sent or
-        //    released.
-        xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
-            // From xpc_connection_send_message documentation:
-            //   If this API is used to send a message that is in reply to another message, there is no guarantee of
-            //   ordering between the invocations of the connection's event handler and the reply handler for that
-            //   message, even if they are targeted to the same queue.
-            //
-            // The net effect of this is we can't do much with the reply such as terminating the sequence or
-            // deregistering the handler because this reply will sometimes arrive before some of the out-of-band sends
-            // from the server to client are received. (This was attempted and it caused unit tests to fail
-            // non-deterministically.)
-            //
-            // But if this is an internal XPC error (for example because the server shut down), we can use this to
-            // update the connection's state.
-            if xpc_get_type(reply) == XPC_TYPE_ERROR {
-                self.handleError(event: reply)
+        self.withConnection { connectionResult in
+            switch connectionResult {
+                case .success(let connection):
+                    let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
+                    self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
+                    
+                    // Sending with reply means the server ought to be kept alive until the reply is sent back
+                    // From https://developer.apple.com/documentation/xpc/1505586-xpc_transaction_begin:
+                    //    A service with no outstanding transactions may automatically exit due to inactivity as
+                    //    determined by the system... If a reply message is created, the transaction will end when the
+                    //    reply message is sent or released.
+                    xpc_connection_send_message_with_reply(connection, request.dictionary, nil) { reply in
+                        // From xpc_connection_send_message documentation:
+                        //   If this API is used to send a message that is in reply to another message, there is no
+                        //   guarantee of ordering between the invocations of the connection's event handler and the
+                        //   reply handler for that message, even if they are targeted to the same queue.
+                        //
+                        // The net effect of this is we can't do much with the reply such as terminating the sequence or
+                        // deregistering the handler because this reply will sometimes arrive before some of the
+                        // out-of-band sends from the server to client are received. (This was attempted and it caused
+                        // unit tests to fail non-deterministically.)
+                        //
+                        // But if this is an internal XPC error (for example because the server shut down), we can use
+                        // this to update the connection's state.
+                        if xpc_get_type(reply) == XPC_TYPE_ERROR {
+                            self.handleError(event: reply)
+                        }
+                    }
+                case .failure(let error):
+                    handler(.failure(XPCError.asXPCError(error: error)))
+                    return
             }
         }
     }
@@ -616,17 +626,35 @@ public class XPCClient {
                 continuation.finish(throwing: nil)
         }
     }
-
-    private func getConnection() throws -> xpc_connection_t {
-        if let existingConnection = self.connection { return existingConnection }
-
-        let newConnection = try self.createConnection()
-        self.connection = newConnection
-
-        xpc_connection_set_event_handler(newConnection, self.handleEvent(event:))
-        xpc_connection_resume(newConnection)
-
-        return newConnection
+    
+    // Provides a connection, doing so asynchronously when a new connection needs to be created. A connection is only
+    // provided if it meets this client's server requirement.
+    private func withConnection(_ handler: @escaping (Result<xpc_connection_t, XPCError>) -> Void) {
+        // The connection is set to nil when certain error conditions are encountered, see `handleError(...)`
+        if let connection = self.connection {
+            handler(.success(connection))
+            return
+        }
+        
+        // The connection needs to be started (resumed) so that we can retrieve the server's identity
+        let connection = self.createConnection()
+        xpc_connection_set_event_handler(connection, self.handleEvent(event:))
+        xpc_connection_resume(connection)
+        
+        self.serverIdentity(connection: connection) { response in
+            switch response {
+                case .success(let serverIdentity):
+                    guard self.serverRequirement.trustServer(serverIdentity) else {
+                        handler(.failure(.insecure))
+                        return
+                    }
+                    self.connection = connection
+                    handler(.success(connection))
+                case .failure(let error):
+                    xpc_connection_cancel(connection)
+                    handler(.failure(error))
+            }
+        }
     }
     
     // MARK: Incoming event handling
@@ -679,7 +707,7 @@ public class XPCClient {
     }
 
     /// Creates and returns a connection for the service represented by this client.
-    internal func createConnection() throws -> xpc_connection_t {
+    internal func createConnection() -> xpc_connection_t {
         fatalError("Abstract Method")
     }
     
@@ -687,12 +715,12 @@ public class XPCClient {
     
     /// A representation of the server's running program.
     ///
-    /// The returned `SecCode` instance is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The returned ``XPCServerIdentity``'s information is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
     ///
-    /// > Note: Accessing this property  involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
+    /// > Note: Accessing this property involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
     /// a `send` or `sendMessage` call.
     @available(macOS 10.15.0, *)
-    public var serverIdentity: SecCode {
+    public var serverIdentity: XPCServerIdentity {
         get async throws {
             try await withUnsafeThrowingContinuation { continuation in
                 self.serverIdentity { response in
@@ -704,20 +732,29 @@ public class XPCClient {
     
     /// Provides a representation of the server's running program to the handler.
     ///
-    /// The provided `SecCode` instance comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The provided ``XPCServerIdentity``'s information comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
     ///
     /// > Note: Calling this function involves cross-process communication with the server and is therefore subject to all of the same error conditions as making a
     /// `send` or `sendMessage` call.
-    public func serverIdentity(_ handler: @escaping XPCResponseHandler<SecCode>) {
-        // Get the connection or inform the handler of failure and return
-        let connection: xpc_connection_t
-        do {
-            connection = try getConnection()
-        } catch {
-            handler(.failure(XPCError.asXPCError(error: error)))
-            return
+    public func serverIdentity(_ handler: @escaping XPCResponseHandler<XPCServerIdentity>) {
+        self.withConnection { connectionResult in
+            switch connectionResult {
+                case .success(let connection):
+                    self.serverIdentity(connection: connection, handler: handler)
+                case .failure(let error):
+                    handler(.failure(error))
+                    return
+            }
         }
-        
+    }
+    
+    // Private implementation that has a connection passed in. This is needed because `withConnection` needs to call
+    // this function when creating a new connection, while the public version calls `withConnection` which would result
+    // in infinite recursion between these two functions.
+    private func serverIdentity(
+        connection: xpc_connection_t,
+        handler: @escaping XPCResponseHandler<XPCServerIdentity>
+    ) {
         // Create request
         let request: Request
         do {
@@ -735,10 +772,14 @@ public class XPCClient {
             }
             
             // It doesn't matter what the reply actually contains, we just need it to determine server identity
-            guard let serverIdentity = SecCodeCreateWithXPCConnection(connection, andMessage: reply) else {
+            guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: reply) else {
                 handler(.failure(XPCError.internalFailure(description: "Unable to get server's SecCode")))
                 return
             }
+            let serverIdentity = XPCServerIdentity(code: code,
+                                                   effectiveUserID: xpc_connection_get_euid(connection),
+                                                   effectiveGroupID: xpc_connection_get_egid(connection),
+                                                   processID: xpc_connection_get_pid(connection))
             handler(.success(serverIdentity))
         }
     }

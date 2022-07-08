@@ -76,13 +76,11 @@ try client.sendMessage("Get Schwifty", to: route, withResponse: { response in
 See ``XPCClient`` for more on how to retrieve a client and send requests.
 
 ## Topics
-### Client and Server
+### Client & Server
 - ``XPCClient``
 - ``XPCServer``
 - ``XPCNonBlockingServer``
-- ``XPCClientRequirement``
 - ``XPCServerEndpoint``
-- ``XPCConnectionDescriptor``
 
 ### Routes
 - ``XPCRoute``
@@ -101,6 +99,12 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``SequentialResult``
 - ``SequentialResultProvider``
 
-### Other
-- ``XPCFileDescriptorContainer``
+### Configuration & Information
+- ``XPCClientRequirement``
+- ``XPCServerRequirement``
+- ``XPCConnectionDescriptor``
 - ``XPCRequestContext``
+- ``XPCServerIdentity``
+
+### Codable Containers
+- ``XPCFileDescriptorContainer``

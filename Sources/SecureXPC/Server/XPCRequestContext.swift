@@ -7,13 +7,13 @@
 
 import Foundation
 
-/// Provides information about the current request being handled by an ``XPCServer``.
+/// Information about the current request being handled by an ``XPCServer``.
 ///
 /// Accessing the properties exposed by this class is a programming error unless called from inside of a closure registered with and called by an `XPCServer`.
 ///
 /// ## Topics
 /// ### Client Information
-/// - ``clientCode``
+/// - ``code``
 /// - ``effectiveUserID``
 /// - ``effectiveGroupID``
 public class XPCRequestContext {
@@ -89,7 +89,7 @@ public class XPCRequestContext {
     }
     
     /// A represention of the client process.
-    public static var clientCode: SecCode? {
+    public static var code: SecCode? {
         SecCodeCreateWithXPCConnection(current.connection, andMessage: current.message)
     }
 }
