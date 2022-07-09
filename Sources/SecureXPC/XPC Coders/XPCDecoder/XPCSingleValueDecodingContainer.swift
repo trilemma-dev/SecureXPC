@@ -11,7 +11,7 @@ internal class XPCSingleValueDecodingContainer: SingleValueDecodingContainer {
 	var codingPath: [CodingKey] = []
     let userInfo: [CodingUserInfoKey : Any]
 
-	private let value: xpc_object_t
+    internal let value: xpc_object_t
 	private let type: xpc_type_t
 
     init(value: xpc_object_t, codingPath: [CodingKey], userInfo: [CodingUserInfoKey : Any]) {
