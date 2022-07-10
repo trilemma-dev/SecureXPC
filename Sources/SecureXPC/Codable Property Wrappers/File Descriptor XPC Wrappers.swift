@@ -154,7 +154,6 @@ extension FileDescriptorForXPC: FileDescriptorCodable {
 ///
 /// This property wrapper shares an underlying representation with ``DarwinFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
 /// may be used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing
-///
 /// message and/or reply types.
 @propertyWrapper public struct FileHandleForXPC {
     public var wrappedValue: FileHandle
