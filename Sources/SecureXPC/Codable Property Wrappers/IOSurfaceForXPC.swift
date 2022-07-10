@@ -9,10 +9,8 @@ import Foundation
 import IOSurface
 
 /// Wraps an [`IOSurface`](https://developer.apple.com/documentation/iosurface) such that it can be sent over an XPC connection.
-///
-/// > Warning: While the resulting value conforms to `Codable` it can only be encoded and decoded by `SecureXPC`.
 @available(macOS 10.12, *)
-@propertyWrapper public struct IOSurfaceXPCContainer {
+@propertyWrapper public struct IOSurfaceForXPC {
     public var wrappedValue: IOSurface
     
     public init(wrappedValue: IOSurface) {
@@ -23,7 +21,7 @@ import IOSurface
 // MARK: Codable
 
 @available(macOS 10.12, *)
-extension IOSurfaceXPCContainer: Encodable {
+extension IOSurfaceForXPC: Encodable {
     public func encode(to encoder: Encoder) throws {
         guard let xpcEncoder = encoder as? XPCEncoderImpl else {
             throw XPCCoderError.onlyEncodableBySecureXPCFramework
@@ -34,7 +32,7 @@ extension IOSurfaceXPCContainer: Encodable {
 }
 
 @available(macOS 10.12, *)
-extension IOSurfaceXPCContainer: Decodable {
+extension IOSurfaceForXPC: Decodable {
     public init(from decoder: Decoder) throws {
         guard let xpcDecoder = decoder as? XPCDecoderImpl else {
             throw XPCCoderError.onlyDecodableBySecureXPCFramework

@@ -106,7 +106,8 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCRequestContext``
 - ``XPCServerIdentity``
 
-### Codable Property Wrappers
-- ``FileDescriptorXPCContainer``
-- ``FileHandleXPCContainer``
-- ``IOSurfaceXPCContainer``
+### Property Wrappers
+- ``FileHandleForXPC``
+- ``FileDescriptorForXPC``
+- ``DarwinFileDescriptorForXPC``
+- ``IOSurfaceForXPC``

@@ -1,5 +1,5 @@
 //
-//  IOSurfaceXPCContainer Tests.swift
+//  IOSurfaceForXPC Tests.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2022-07-09
@@ -9,9 +9,9 @@ import IOSurface
 import CoreMedia
 import XCTest
 import System
-@testable import SecureXPC
+import SecureXPC
 
-final class IOSurfaceXPCContainerTests: XCTestCase {
+final class IOSurfaceForXPCTests: XCTestCase {
     
     public func testRoundTrip() async throws {
         let surfaceProps: [IOSurfacePropertyKey : Any] = [
@@ -24,9 +24,9 @@ final class IOSurfaceXPCContainerTests: XCTestCase {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         let route = XPCRoute.named("surface", "please")
-                            .withReplyType(IOSurfaceXPCContainer.self)
+                            .withReplyType(IOSurfaceForXPC.self)
         server.registerRoute(route) {
-            IOSurfaceXPCContainer(wrappedValue: IOSurface(properties: surfaceProps)!)
+            IOSurfaceForXPC(wrappedValue: IOSurface(properties: surfaceProps)!)
         }
         server.start()
         
