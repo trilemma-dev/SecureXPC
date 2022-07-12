@@ -47,10 +47,7 @@ private enum CodingKeys: String, CodingKey {
 
 extension XPCServerEndpoint: Encodable {
     public func encode(to encoder: Encoder) throws {
-        guard let xpcEncoder = encoder as? XPCEncoderImpl else {
-            throw XPCCoderError.onlyEncodableBySecureXPCFramework
-        }
-        
+        let xpcEncoder = try XPCEncoderImpl.asXPCEncoderImpl(encoder)
         let container = xpcEncoder.xpcContainer(keyedBy: CodingKeys.self)
         try container.encode(self.connectionDescriptor, forKey: CodingKeys.connectionDescriptor)
         container.encode(self.endpoint, forKey: CodingKeys.endpoint)
@@ -59,10 +56,7 @@ extension XPCServerEndpoint: Encodable {
 
 extension XPCServerEndpoint: Decodable {
     public init(from decoder: Decoder) throws {
-        guard let xpcDecoder = decoder as? XPCDecoderImpl else {
-            throw XPCCoderError.onlyDecodableBySecureXPCFramework
-        }
-        
+        let xpcDecoder = try XPCDecoderImpl.asXPCDecoderImpl(decoder)
         let container = try xpcDecoder.xpcContainer(keyedBy: CodingKeys.self)
         self.endpoint = try container.decodeEndpoint(forKey: CodingKeys.endpoint)
         self.connectionDescriptor = try container.decode(XPCConnectionDescriptor.self,

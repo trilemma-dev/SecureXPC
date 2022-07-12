@@ -18,6 +18,14 @@ internal class XPCDecoderImpl: Decoder {
         self.userInfo = userInfo
 	}
     
+    static func asXPCDecoderImpl(_ decoder: Decoder) throws -> XPCDecoderImpl {
+        guard let xpcDecoder = decoder as? XPCDecoderImpl else {
+            throw XPCCoderError.onlyDecodableBySecureXPC
+        }
+        
+        return xpcDecoder
+    }
+    
     // Internal implementation so that XPC-specific functions of the container can be accessed
     internal func xpcContainer<Key>(
         keyedBy type: Key.Type
@@ -44,7 +52,6 @@ internal class XPCDecoderImpl: Decoder {
                                         userInfo: self.userInfo)
     }
 
-    
 	func singleValueContainer() throws -> SingleValueDecodingContainer {
         xpcSingleValueContainer()
 	}

@@ -177,4 +177,8 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
     func decodeEndpoint(forKey key: K) throws -> xpc_endpoint_t {
         return try decode(key: key, xpcType: XPC_TYPE_ENDPOINT, transform: {$0})
     }
+    
+    func decodeFileDescriptor(forKey key: K) throws -> CInt {
+        return try decode(key: key, xpcType: XPC_TYPE_FD, transform: xpc_fd_dup)
+    }
 }

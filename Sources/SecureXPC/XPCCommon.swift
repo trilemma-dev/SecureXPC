@@ -20,18 +20,9 @@ func const(_ input: UnsafePointer<CChar>!) -> UnsafePointer<CChar>! {
 	return UnsafePointer(mutableCopy) // The result should never actually be mutated
 }
 
-/// Thrown by a "fake" `Codable` instance such as ``XPCServerEndpoint`` or ``XPCFileDescriptorContainer`` which are only capable of being
-/// encoded or decoded by the XPC coders, not an arbitrary coder.
-///
-/// This error is intentionally internal to the framework as we don't want API users to be trying to explicitly handle this specific case.
-enum XPCCoderError: Error {
-    case onlyDecodableBySecureXPCFramework
-    case onlyEncodableBySecureXPCFramework
-}
-
 /// Creates the static code representation for this running process.
 ///
-/// This is a conveniene wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
+/// This is a convenience wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
 func SecStaticCodeCopySelf() throws -> SecStaticCode {
     var currentCode: SecCode?
     var status = SecCodeCopySelf(SecCSFlags(), &currentCode)
