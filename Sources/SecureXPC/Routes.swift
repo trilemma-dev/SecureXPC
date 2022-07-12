@@ -112,11 +112,11 @@ public struct XPCRoute {
     /// Using an enum to enumerate these cases is intended to prevent invalid configurations such as having both a reply and a sequential reply.
     enum RouteConfig {
         case withoutMessageWithoutReply
-        case withoutMessageWithReply(Any.Type)
-        case withoutMessageWithSequentialReply(Any.Type)
-        case withMessageWithoutReply(Any.Type)
-        case withMessageWithReply(Any.Type, Any.Type)
-        case withMessageWithSequentialReply(Any.Type, Any.Type)
+        case withoutMessageWithReply(Codable.Type)
+        case withoutMessageWithSequentialReply(Codable.Type)
+        case withMessageWithoutReply(Codable.Type)
+        case withMessageWithReply(Codable.Type, Codable.Type)
+        case withMessageWithSequentialReply(Codable.Type, Codable.Type)
     }
     
     fileprivate init(namespace: Namespace,
