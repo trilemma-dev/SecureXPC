@@ -694,6 +694,13 @@ public class XPCClient {
 // Contains all of the `static` code that provides the entry points to retrieving an `XPCClient` instance.
 
 extension XPCClient {
+    
+    // Note: It's intentional that the naming and documentation for these entry points are ambiguous as to whether a
+    // new client is actually created or not; the wording "retrieved" and and "retrieval" is used instead of ever saying
+    // "created" (or similar). While in the current implementation a new client instance is always created, that could
+    // be changed in the future to return a cached one without any change to the API nor inconsistency with its
+    // documented behavior.
+    
     /// Provides a client to communicate with an XPC service.
     ///
     /// An XPC service is a helper tool which ships as part of your app and only your app can communicate with.
@@ -751,7 +758,7 @@ extension XPCClient {
     /// In order for this client to be able to communicate with the XPC Mach service, the service itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisProcess(ofType:)``.
     ///
-    /// > Note: Client creation always succeeds regardless of whether or not the XPC Mach service actually exists.
+    /// > Note: Client retrieval always succeeds regardless of whether or not the XPC Mach service exists.
     ///
     /// - Parameters:
     ///    - machServiceName: For most Mach services the name is specified with the `MachServices` launchd property list entry (or similar); however, for
