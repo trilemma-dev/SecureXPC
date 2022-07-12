@@ -20,11 +20,9 @@ func const(_ input: UnsafePointer<CChar>!) -> UnsafePointer<CChar>! {
 	return UnsafePointer(mutableCopy) // The result should never actually be mutated
 }
 
-
-
 /// Creates the static code representation for this running process.
 ///
-/// This is a conveniene wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
+/// This is a convenience wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
 func SecStaticCodeCopySelf() throws -> SecStaticCode {
     var currentCode: SecCode?
     var status = SecCodeCopySelf(SecCSFlags(), &currentCode)

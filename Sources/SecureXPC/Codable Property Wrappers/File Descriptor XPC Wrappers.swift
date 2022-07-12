@@ -10,46 +10,51 @@ import System
 
 // MARK: common implementation
 
-fileprivate protocol FileDescriptorCodable: Codable {
+private protocol FileDescriptorCodable: Codable {
+    init(descriptor: CInt, closeOnEncode: Bool)
     var descriptor: CInt { get }
     var closeOnEncode: Bool { get }
     func close() throws
-    init(descriptor: CInt)
+}
+
+private enum CodingKeys: String, CodingKey {
+    case descriptor
+    case closeOnEncode
 }
 
 extension FileDescriptorCodable {
     public func encode(to encoder: Encoder) throws {
-        let xpcEncoder = try XPCEncoderImpl.asXPCEncoderImpl(encoder)
-        let container = xpcEncoder.xpcSingleValueContainer()
-        guard let xpcEncodedForm = xpc_fd_create(self.descriptor) else {
+        let container = try XPCEncoderImpl.asXPCEncoderImpl(encoder).xpcContainer(keyedBy: CodingKeys.self)
+        guard let encodedDescriptor = xpc_fd_create(self.descriptor) else {
             let context = EncodingError.Context(codingPath: container.codingPath,
                                                 debugDescription: "Encoding failed for \(self.descriptor)",
                                                 underlyingError: nil)
             throw EncodingError.invalidValue(self.descriptor, context)
         }
-        if closeOnEncode {
+        
+        if self.closeOnEncode {
             try self.close()
         }
-        container.setAlreadyEncodedValue(xpcEncodedForm)
+        container.encode(encodedDescriptor, forKey: CodingKeys.descriptor)
+        try container.encode(self.closeOnEncode, forKey: CodingKeys.closeOnEncode)
     }
 }
 
 extension FileDescriptorCodable {
     public init(from decoder: Decoder) throws {
-        let xpcDecoder = try XPCDecoderImpl.asXPCDecoderImpl(decoder)
-        let container = xpcDecoder.xpcSingleValueContainer()
-        let xpcEncodedForm = try container.accessAsEncodedValue(xpcType: XPC_TYPE_FD)
-        let fd = xpc_fd_dup(xpcEncodedForm)
+        let container = try XPCDecoderImpl.asXPCDecoderImpl(decoder).xpcContainer(keyedBy: CodingKeys.self)
+        let descriptor = try container.decodeFileDescriptor(forKey: CodingKeys.descriptor)
         // From xpc_fd_dup documentation: If the descriptor could not be created or if the given object was not an XPC
         // file descriptor, -1 is returned.
-        if fd == -1 {
+        if descriptor == -1 {
             let context = DecodingError.Context(codingPath: container.codingPath,
                                                 debugDescription: "File descriptor could not be created",
                                                 underlyingError: nil)
             throw DecodingError.dataCorrupted(context)
         }
+        let closeOnEncode = try container.decode(Bool.self, forKey: CodingKeys.closeOnEncode)
         
-        self = Self.init(descriptor: fd)
+        self = Self.init(descriptor: descriptor, closeOnEncode: closeOnEncode)
     }
 }
 
@@ -76,9 +81,9 @@ extension FileDescriptorCodable {
 }
 
 extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
-    init(descriptor: CInt) {
+    init(descriptor: CInt, closeOnEncode: Bool) {
         self.wrappedValue = descriptor
-        self.closeOnEncode = true
+        self.closeOnEncode = closeOnEncode
     }
     
     var descriptor: CInt {
@@ -122,9 +127,9 @@ extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
 
 @available(macOS 11.0, *)
 extension FileDescriptorForXPC: FileDescriptorCodable {
-    init(descriptor: CInt) {
+    init(descriptor: CInt, closeOnEncode: Bool) {
         self.wrappedValue = FileDescriptor(rawValue: descriptor)
-        self.closeOnEncode = true
+        self.closeOnEncode = closeOnEncode
     }
     
     var descriptor: CInt {
@@ -160,9 +165,9 @@ extension FileDescriptorForXPC: FileDescriptorCodable {
 }
 
 extension FileHandleForXPC: FileDescriptorCodable {
-    init(descriptor: CInt) {
+    init(descriptor: CInt, closeOnEncode: Bool) {
         self.wrappedValue = FileHandle(fileDescriptor: descriptor)
-        self.closeOnEncode = true
+        self.closeOnEncode = closeOnEncode
     }
     
     var descriptor: CInt {
