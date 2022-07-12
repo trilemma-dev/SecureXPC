@@ -12,7 +12,6 @@ import Foundation
 /// In the case of this package, this is the only way to communicate with an `XPCAnonymousServer`. It is also how `XPCServiceServer` and
 /// `XPCMachServer` are communicated with when accessed via an ``XPCServer/endpoint`` returned for them.
 internal class XPCEndpointClient: XPCClient {
-    
     private let endpoint: XPCServerEndpoint
 
     internal init(endpoint: XPCServerEndpoint, serverRequirement: XPCServerRequirement) {

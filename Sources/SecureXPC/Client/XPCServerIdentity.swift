@@ -26,6 +26,6 @@ public struct XPCServerIdentity {
     /// The effective group id of the server process.
     public let effectiveGroupID: gid_t
     
-    /// It's intentional that the process id (PID) of the server process is not exposed since misuse of it can result in security vulnerabilities
+    /// It's intentional that the process id (PID) of the server process is not exposed since misuse of it can result in security vulnerabilities.
     internal let processID: pid_t
 }
