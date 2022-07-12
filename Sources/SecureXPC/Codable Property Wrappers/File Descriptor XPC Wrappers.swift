@@ -19,10 +19,7 @@ fileprivate protocol FileDescriptorCodable: Codable {
 
 extension FileDescriptorCodable {
     public func encode(to encoder: Encoder) throws {
-        guard let xpcEncoder = encoder as? XPCEncoderImpl else {
-            throw XPCCoderError.onlyEncodableBySecureXPCFramework
-        }
-        
+        let xpcEncoder = try XPCEncoderImpl.asXPCEncoderImpl(encoder)
         let container = xpcEncoder.xpcSingleValueContainer()
         guard let xpcEncodedForm = xpc_fd_create(self.descriptor) else {
             let context = EncodingError.Context(codingPath: container.codingPath,
@@ -39,10 +36,7 @@ extension FileDescriptorCodable {
 
 extension FileDescriptorCodable {
     public init(from decoder: Decoder) throws {
-        guard let xpcDecoder = decoder as? XPCDecoderImpl else {
-            throw XPCCoderError.onlyDecodableBySecureXPCFramework
-        }
-        
+        let xpcDecoder = try XPCDecoderImpl.asXPCDecoderImpl(decoder)
         let container = xpcDecoder.xpcSingleValueContainer()
         let xpcEncodedForm = try container.accessAsEncodedValue(xpcType: XPC_TYPE_FD)
         let fd = xpc_fd_dup(xpcEncodedForm)

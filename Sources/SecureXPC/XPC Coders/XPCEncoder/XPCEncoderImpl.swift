@@ -19,6 +19,14 @@ internal class XPCEncoderImpl: Encoder, XPCContainer {
 		self.codingPath = codingPath
 	}
     
+    static func asXPCEncoderImpl(_ encoder: Encoder) throws -> XPCEncoderImpl {
+        guard let xpcEncoder = encoder as? XPCEncoderImpl else {
+            throw XPCCoderError.onlyEncodableBySecureXPC
+        }
+        
+        return xpcEncoder
+    }
+    
     // Internal implementation so that XPC-specific functions of the container can be accessed
     internal func xpcContainer<Key>(keyedBy type: Key.Type) -> XPCKeyedEncodingContainer<Key> where Key: CodingKey {
         let container = XPCKeyedEncodingContainer<Key>(codingPath: self.codingPath)

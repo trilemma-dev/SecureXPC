@@ -23,10 +23,7 @@ import IOSurface
 @available(macOS 10.12, *)
 extension IOSurfaceForXPC: Encodable {
     public func encode(to encoder: Encoder) throws {
-        guard let xpcEncoder = encoder as? XPCEncoderImpl else {
-            throw XPCCoderError.onlyEncodableBySecureXPCFramework
-        }
-        
+        let xpcEncoder = try XPCEncoderImpl.asXPCEncoderImpl(encoder)
         xpcEncoder.xpcSingleValueContainer().setAlreadyEncodedValue(IOSurfaceCreateXPCObject(self.wrappedValue))
     }
 }
@@ -34,10 +31,7 @@ extension IOSurfaceForXPC: Encodable {
 @available(macOS 10.12, *)
 extension IOSurfaceForXPC: Decodable {
     public init(from decoder: Decoder) throws {
-        guard let xpcDecoder = decoder as? XPCDecoderImpl else {
-            throw XPCCoderError.onlyDecodableBySecureXPCFramework
-        }
-        
+        let xpcDecoder = try XPCDecoderImpl.asXPCDecoderImpl(decoder)
         let container = xpcDecoder.xpcSingleValueContainer()
         guard let ioSurface = IOSurfaceLookupFromXPCObject(container.value) else {
             let debugDescription = "IOSurfaceRef could not be looked up from \(container.value)"
