@@ -10,13 +10,30 @@ import Foundation
 /// An XPC client to make requests and receive responses from an ``XPCServer``.
 ///
 /// ### Retrieving a Client For a Service
-/// There are two different types of services you can communicate with using this client: XPC services and XPC Mach services. In most cases you do not need to
-/// know which type you'll be communicating with as this will be auto-detected, so creating a client only requires providing its name:
+/// There are two different types of services you can communicate with using this client: XPC services and XPC Mach services. If you are uncertain which type of
+/// service you're using, it's likely an XPC service.
+///
+/// #### XPC services
+/// These are helper tools which ship as part of your app and only your app can communicate with.
+///
+/// The name of the service must be specified when retrieving a client to talk to your XPC service; this is always the bundle identifier for the service:
 /// ```swift
-/// let client = XPCClient.forService(named: "com.example.myapp.service")
+/// let client = XPCClient.forXPCService(named: "com.example.myapp.service")
 /// ```
 ///
-/// It is possible to explicitly specify the type of client which will be returned and in some uncommon cases this is required. See ``ServiceType`` for details.
+/// #### XPC Mach services
+/// XPC Mach services are frequently provided by:
+/// - Helper tools installed with
+/// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+/// - Login items enabled with
+/// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+/// - Launch Agents
+/// - Launch Daemons
+///
+/// The name of the service must be specified when retrieving a client to talk to your XPC Mach service:
+/// ```swift
+/// let client = XPCClient.forXPCMachService(named: "com.example.service")
+/// ```
 ///
 /// ## Retrieving a Client For an Anonymous Server
 /// Clients can also be created from an ``XPCServerEndpoint`` which is the only way to create a client for an anonymous server:
@@ -104,8 +121,8 @@ import Foundation
 ///
 /// ## Topics
 /// ### Retrieving a Client
-/// - ``forService(named:ofType:)``
-/// - ``ServiceType``
+/// - ``forXPCService(named:)``
+/// - ``forXPCMachService(named:withServerRequirement:)``
 /// - ``forEndpoint(_:withServerRequirement:)``
 /// ### Sending Requests with Async
 /// - ``send(to:)-5b1ar``
@@ -672,85 +689,45 @@ public class XPCClient {
     }
 }
 
-
 // MARK: public factories
 
 // Contains all of the `static` code that provides the entry points to retrieving an `XPCClient` instance.
 
 extension XPCClient {
-    /// The type of service an ``XPCClient`` should be retrieved for.
-    public enum ServiceType {
-        /// Auto-detects what type of client to retrieve for the name provided to ``XPCClient/forService(named:ofType:)``.
-        ///
-        /// This is accomplished by finding the names (`CFBundleIdentifier`s) for each of the XPC services bundled with this app. If the name provided
-        /// to `forService(named:ofType:)` belongs to one of the XPC services then a client will be returned to communicate with it. Otherwise, a client
-        /// will be returned to communicate with an XPC Mach service.
-        ///
-        /// If there is a Mach service you need to communicate with that has the same name as a bundled XPC service, explicitly retrieve the client by passing
-        /// ``machService(serverRequirement:)`` as the type. Also use this approach if you would like to specify a non-default
-        /// ``XPCServerRequirement`` for the service.
-        case autoDetect
-        /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC Mach service with the provided
-        /// name and matches the provided security requirement.
-        ///
-        /// By default a client for an XPC Mach service will trust a server with the same team identifier so long as this client has a team identifier. If this client does
-        /// not have a team identifier then any server will be trusted. To enforce a different server requirement use this case and specify your own
-        /// ``XPCServerRequirement``.
-        ///
-        /// Numerous helper tools & services can optionally communicate over XPC by using Mach services, including:
-        /// - Helper tools installed with
-        /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
-        /// - Login items installed with
-        /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
-        /// - Launch Agents
-        /// - Launch Daemons
-        case machService(serverRequirement: XPCServerRequirement)
-        /// Ensures the client returned by ``XPCClient/forService(named:ofType:)`` communicates with an XPC service with the provided name.
-        ///
-        /// XPC services are helper tools which ship as part of an app and by default only that app can communicate with them.
-        ///
-        /// It is a programming error to specify this type and provide `forService(named:ofType:)` a name which does not correspond to an XPC service
-        /// bundled with the calling app. You may find this behavior helpful for debugging purposes.
-        case xpcService
-    }
     
-    /// Provides a client to communicate with a service.
+    // Note: It's intentional that the naming and documentation for these entry points are ambiguous as to whether a
+    // new client is actually created or not; the wording "retrieved" and and "retrieval" is used instead of ever saying
+    // "created" (or similar). While in the current implementation a new client instance is always created, that could
+    // be changed in the future to return a cached one without any change to the API nor inconsistency with its
+    // documented behavior.
+    
+    /// Provides a client to communicate with an XPC service.
     ///
-    /// In order for this client to be able to communicate with the service, the service itself must retrieve and configure an ``XPCServer`` by calling
+    /// An XPC service is a helper tool which ships as part of your app and only your app can communicate with.
+    ///
+    /// In order for this client to be able to communicate with the XPC service, the service itself must retrieve and configure an ``XPCServer`` by calling
     /// ``XPCServer/forThisProcess(ofType:)``.
     ///
-    /// > Note: This function can return successfully regardless of whether the service actually exists.
+    /// > Note: It is a fatal error to provide a name for an XPC service which does not correspond to an XPC service contained within this bundle.
+    ///
+    /// While there are no _explicit_ security requirements for the server, macOS enforces that the XPC service can only exist within this bundle and therefore is
+    /// expected to be trustworthy.
     ///
     /// - Parameters:
-    ///   - named: The `CFBundleIdentifier` of the XPC service or the name of the XPC Mach service. For most Mach services the name is specified
-    ///            with the `MachServices` launchd property list entry (or similar); however, for login items the name is its`CFBundleIdentifier`.
-    ///   - ofType: There are multiple different types of XPC clients and normally you do not need to concern yourself with this. However, if you are trying to
-    ///             create a client for an XPC Mach service *and* you have an XPC service with a `CFBundleIdentifier` value that's the same as the
-    ///             name of that Mach service, then you must call this function and explicitly set the type to
-    ///             ``ServiceType/machService(serverRequirement:)``. This is because auto detection will always choose the XPC service if one
-    ///             exists with the provided name.
+    ///   - serviceName: The bundle identifier (`CFBundleIdentifier`)  of the XPC service.
     /// - Returns: A client configured to communicate with the named service.
-    public static func forService(named serviceName: String, ofType type: ServiceType = .autoDetect) -> XPCClient {
-        switch type {
-            case .autoDetect:
-                if bundledXPCServiceIdentifiers.contains(serviceName) {
-                    return XPCServiceClient(xpcServiceName: serviceName, serverRequirement: .alwaysAccepting)
-                } else {
-                    return XPCMachClient(machServiceName: serviceName, serverRequirement: .sameTeamIdentifierIfPresent)
-                }
-            case .xpcService:
-                guard bundledXPCServiceIdentifiers.contains(serviceName) else {
-                    fatalError("""
-                    There is no bundled XPC service named \(serviceName)
-                    Available XPC service names are:
-                    \(bundledXPCServiceIdentifiers.joined(separator: "\n"))
-                    """)
-                }
-                
-                return XPCServiceClient(xpcServiceName: serviceName, serverRequirement: .alwaysAccepting)
-            case .machService(let serverRequirement):
-                return XPCMachClient(machServiceName: serviceName, serverRequirement: serverRequirement)
+    public static func forXPCService(named serviceName: String) -> XPCClient {
+        // This isn't necessary to do, as it's not harmful to create a client for a service which doesn't exist, but
+        // this makes it easier for API users to catch mistakes sooner; a likely one would be a typo in the service name
+        guard bundledXPCServiceIdentifiers.contains(serviceName) else {
+            fatalError("""
+            There is no bundled XPC service named \(serviceName)
+            Available XPC service names are:
+            \(bundledXPCServiceIdentifiers.joined(separator: "\n"))
+            """)
         }
+        
+        return XPCServiceClient(xpcServiceName: serviceName, serverRequirement: .alwaysAccepting)
     }
     
     /// The `CFBundleIdentifier` values for every `.xpc` file in the `Contents/XPCServices` of this app (if it exists).
@@ -767,6 +744,35 @@ extension XPCClient {
         
         return Set<String>(xpcBundleIDs)
     }()
+    
+    /// Provides a client to communicate with an XPC Mach service.
+    ///
+    /// XPC Mach services include:
+    /// - Helper tools installed with
+    /// [  `SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+    /// - Login items enabled with
+    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+    /// - Launch Agents
+    /// - Launch Daemons
+    ///
+    /// In order for this client to be able to communicate with the XPC Mach service, the service itself must retrieve and configure an ``XPCServer`` by calling
+    /// ``XPCServer/forThisProcess(ofType:)``.
+    ///
+    /// > Note: Client retrieval always succeeds regardless of whether or not the XPC Mach service exists.
+    ///
+    /// - Parameters:
+    ///    - machServiceName: For most Mach services the name is specified with the `MachServices` launchd property list entry (or similar); however, for
+    ///                       login items the name is its bundle identifier (`CFBundleIdentifier`).
+    ///    - serverRequirement: The requirement the server needs to meet in order for this client to communicate with it. By default this client will trust a
+    ///                         server with the same team identifier so long as this client has a team identifier; if this client does not have a team identifier
+    ///                         then any server will be trusted.
+    /// - Returns: A client configured to communicate with the named service.
+    public static func forXPCMachService(
+        named machServiceName: String,
+        withServerRequirement serverRequirement: XPCServerRequirement = .sameTeamIdentifierIfPresent
+    ) -> XPCClient {
+        XPCMachClient(machServiceName: machServiceName, serverRequirement: serverRequirement)
+    }
 
     /// Provides a client to communicate with the server corresponding to the provided endpoint.
     ///
@@ -774,16 +780,16 @@ extension XPCClient {
     ///
     /// - Parameters:
     ///   - endpoint: The endpoint with which to establish a connection.
-    ///   - requirement: The requirement the server needs to meet in order for this client to communicate with it. By default only a server in the same process
-    ///                  will be trusted which will always work a server retrieved with ``XPCServer/makeAnonymous()``. However, for any server that
-    ///                  is running outside of this process, a non-default requirement such as ``XPCServerRequirement/sameTeamIdentifier`` will
-    ///                  need to be provided.
-    /// - Returns: <#description#>
+    ///   - serverRequirement: The requirement the server needs to meet in order for this client to communicate with it. By default only a server in the same
+    ///                        process will be trusted which will always work a server retrieved with ``XPCServer/makeAnonymous()``. However, for
+    ///                        any server that is running outside of this process, a non-default requirement such as
+    ///                        ``XPCServerRequirement/sameTeamIdentifier`` will need to be provided.
+    /// - Returns: A client configured to communicate with the provided endpoint.
     public static func forEndpoint(
         _ endpoint: XPCServerEndpoint,
-        withServerRequirement requirement: XPCServerRequirement = .sameProcess
+        withServerRequirement serverRequirement: XPCServerRequirement = .sameProcess
     ) -> XPCClient {
-        XPCEndpointClient(endpoint: endpoint, serverRequirement: requirement)
+        XPCEndpointClient(endpoint: endpoint, serverRequirement: serverRequirement)
     }
 }
 
