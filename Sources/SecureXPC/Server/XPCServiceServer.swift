@@ -124,7 +124,7 @@ internal class XPCServiceServer: XPCServer {
             // bundle requirement should always succeed because as part of creating an XPCServiceServer a check is
             // performance that this process is located within a Contents/XPCServices directory.
             if let teamIDRequirement = try? XPCClientRequirement.sameTeamIdentifier {
-                self.clientRequirement = .and(try! .sameParentBundle, teamIDRequirement)
+                self.clientRequirement = try! .sameParentBundle && teamIDRequirement
             } else {
                 self.clientRequirement = try! .sameParentBundle
             }

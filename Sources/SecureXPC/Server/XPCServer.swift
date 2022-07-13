@@ -33,7 +33,7 @@ import Foundation
 ///
 /// See ``ProcessType`` for details.
 ///
-/// For any other type an `XPCServer` can be retrieved by explicitly creating a ``ProcessType/machService(name:requirement:)`` instance.
+/// For any other type an `XPCServer` can be retrieved by explicitly creating a ``ProcessType/machService(name:clientRequirement:)`` instance.
 ///
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program:
@@ -96,7 +96,7 @@ import Foundation
 /// - ``forThisProcess(ofType:)``
 /// - ``ProcessType``
 /// - ``makeAnonymous()``
-/// - ``makeAnonymous(withRequirement:)``
+/// - ``makeAnonymous(withClientRequirement:)``
 /// ### Registering Async Routes
 /// - ``registerRoute(_:handler:)-6htah``
 /// - ``registerRoute(_:handler:)-g7ww``
@@ -342,7 +342,7 @@ public class XPCServer {
             return
         }
         
-        guard self.clientRequirement.acceptMessage(connection: connection, message: event) else {
+        guard self.clientRequirement.shouldAcceptMessage(connection: connection, message: event) else {
             self.errorHandler.handle(.insecure)
             return
         }
@@ -539,11 +539,11 @@ extension XPCServer {
     /// > Note: If you only need this server to be communicated with by clients running in the same process, use ``makeAnonymous()`` instead.
     ///
     /// - Parameters:
-    ///   - withRequirement: If a request is received from a client, it will only be sent to a registered handler if it meets this requirement.
+    ///   - clientRequirement: If a request is received from a client, it will only be sent to a registered handler if it meets this requirement.
     public static func makeAnonymous(
-        withRequirement requirement: XPCClientRequirement
+        withClientRequirement clientRequirement: XPCClientRequirement
     ) -> XPCServer & XPCNonBlockingServer {
-        XPCAnonymousServer(clientRequirement: requirement)
+        XPCAnonymousServer(clientRequirement: clientRequirement)
     }
     
     /// The type of process an ``XPCServer`` should be retrieved for.
@@ -557,7 +557,7 @@ extension XPCServer {
         /// - ``daemon``
         /// - ``agent``
         ///
-        /// For any other ``machService(name:requirement:)`` must be used to explicitly specify this service's
+        /// For any other ``machService(name:clientRequirement:)`` must be used to explicitly specify this service's
         /// name and client requirements.
         case autoDetect
         /// A process that is an [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html)
@@ -582,7 +582,7 @@ extension XPCServer {
         /// The returned server will accept incoming requests from clients that meet _any_ of the `SMAuthorizedClients` requirements.
         ///
         /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
-        /// ``machService(name:requirement:)`` may be used instead to explicitly specify this service's name and client requirements.
+        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and client requirements.
         case blessedHelperTool
         
         /// A process that is a login item enabled with
@@ -598,7 +598,7 @@ extension XPCServer {
         /// the same team identifier as this login item.
         ///
         /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
-        /// ``machService(name:requirement:)`` may be used instead to explicitly specify this service's name and client requirements.
+        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and client requirements.
         case loginItem
         
         /// A process that is a launch daemon registered via
@@ -616,7 +616,7 @@ extension XPCServer {
         ///
         /// If this process does not meet these requirements or you would like to have different acceptance criteria for
         /// incoming requests then a
-        /// ``machService(name:requirement:)`` may be used instead to explicitly specify this service's name and
+        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and
         /// client requirements.
         @available(macOS 13.0, *)
         case daemon
@@ -636,7 +636,7 @@ extension XPCServer {
         ///
         /// If this process does not meet these requirements or you would like to have different acceptance criteria for
         /// incoming requests then a
-        /// ``machService(name:requirement:)`` may be used instead to explicitly specify this service's name and
+        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and
         /// client requirements.
         @available(macOS 13.0, *)
         case agent
@@ -650,9 +650,9 @@ extension XPCServer {
         /// any connecting clients:
         /// ```swift
         /// let server = XPCServer.forThisProcess(ofType: .machService(name: "com.example.service",
-        ///                                                            requirement: try .sameTeamIdentifier))
+        ///                                                            clientRequirement: try .sameTeamIdentifier))
         /// ```
-        case machService(name: String, requirement: XPCClientRequirement)
+        case machService(name: String, clientRequirement: XPCClientRequirement)
     }
     
     /// Returns the XPC server for this process.
@@ -662,7 +662,7 @@ extension XPCServer {
     /// > Important: No requests will be processed until ``startAndBlock()`` is called.
     ///
     /// By default this function will attempt to auto-detect which type of server this process represents. If this server's type cannot be detected then an error will be
-    /// thrown. To resolve this, explicitly provide a ``ProcessType`` and use ``ProcessType/machService(name:requirement:)`` for any
+    /// thrown. To resolve this, explicitly provide a ``ProcessType`` and use ``ProcessType/machService(name:clientRequirement:)`` for any
     /// configurations which do not have built-in support.
     public static func forThisProcess(ofType type: ProcessType = .autoDetect) throws -> XPCServer {
         switch type {

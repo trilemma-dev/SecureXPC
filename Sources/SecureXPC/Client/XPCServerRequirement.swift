@@ -12,16 +12,16 @@ import Foundation
 ///
 /// If a server is trusted, `send` and `sendMessage` calls will be sent to it.
 ///
-/// Use a server requirement to retrieve a customized ``XPCClient`` for a Mach service:
+/// Use a server requirement to retrieve a customized ``XPCClient`` for an XPC Mach service:
 /// ```swift
-/// let client = XPCClient.forService(named: "com.example.service", ofType:
-///   .machService(serverRequirement: try .sameBundle))
+/// let client = XPCClient.forXPCMachClient(named: "com.example.service",
+///     withServerRequirement: try .sameBundle)
 /// ```
 ///
-/// Requirements can also be combined with ``or(_:_:)`` as well as ``and(_:_:)``:
+/// Requirements can also be combined with `||` as well as `&&`:
 /// ```swift
 /// let client = XPCClient.forEndpoint(endpoint, withServerRequirement:
-///   .or(try .sameTeamIdentifier, try .teamIdentifier("Q55ZG849VX")))
+///     try .teamIdentifier("Q55ZG849VX") || try .sameTeamIdentifier)
 /// ```
 ///
 /// ## Topics
@@ -32,9 +32,6 @@ import Foundation
 /// - ``sameTeamIdentifierIfPresent``
 /// - ``teamIdentifier(_:)``
 /// - ``secRequirement(_:)``
-/// ### Logical Operators
-/// - ``and(_:_:)``
-/// - ``or(_:_:)``
 public struct XPCServerRequirement {
     /// What actually performs the trust evaluation.
     private let serverAcceptor: ServerAcceptor
@@ -111,12 +108,12 @@ public struct XPCServerRequirement {
     }
     
     /// The server must satisfy both requirements.
-    public static func and(_ lhs: XPCServerRequirement, _ rhs: XPCServerRequirement) -> XPCServerRequirement {
+    public static func && (lhs: XPCServerRequirement, rhs: XPCServerRequirement) -> XPCServerRequirement {
         XPCServerRequirement(serverAcceptor: AndServerAcceptor(lhs: lhs.serverAcceptor, rhs: rhs.serverAcceptor))
     }
     
     /// The server must satisfy at least one of the requirements.
-    public static func or(_ lhs: XPCServerRequirement, _ rhs: XPCServerRequirement) -> XPCServerRequirement {
+    public static func || (lhs: XPCServerRequirement, rhs: XPCServerRequirement) -> XPCServerRequirement {
         XPCServerRequirement(serverAcceptor: OrServerAcceptor(lhs: lhs.serverAcceptor, rhs: rhs.serverAcceptor))
     }
     
@@ -168,13 +165,14 @@ fileprivate struct SameBundleServerAcceptor: ServerAcceptor {
         let clientPathComponents = Bundle.main.bundleURL.pathComponents
         
         // If this is true there's no possibility of the server being equal to or a subdirectory of this client bundle.
-        // And importantly, this prevents going out of bounds when checking for equality/containment.
+        // Importantly it also means when zipping that serverPathComponents is never the shorter one causing an
+        // incorrect directory subset check.
         if serverPathComponents.count < clientPathComponents.count {
             return false
         }
         
         // Each component in the client path must be present in the server's path
-        return serverPathComponents.suffix(clientPathComponents.count) == clientPathComponents
+        return zip(serverPathComponents, clientPathComponents).allSatisfy(==)
     }
 }
 

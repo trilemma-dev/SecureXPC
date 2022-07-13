@@ -198,7 +198,7 @@ extension XPCMachServer {
             }
             
             if let currentRequirement = clientRequirement {
-                clientRequirement = .or(currentRequirement, .secRequirement(requirement))
+                clientRequirement = currentRequirement || .secRequirement(requirement)
             } else {
                 clientRequirement = .secRequirement(requirement)
             }
@@ -383,7 +383,7 @@ extension XPCMachServer {
             The bundle identifier is missing; login items must have one.
             """)
         }
-        let clientRequirement = try XPCClientRequirement.and(.teamIdentifier(teamIdentifier), .sameParentBundle)
+        let clientRequirement: XPCClientRequirement = try .teamIdentifier(teamIdentifier) || .sameParentBundle
         
         return try getXPCMachServer(named: bundleID, clientRequirement: clientRequirement)
     }
