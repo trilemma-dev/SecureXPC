@@ -108,9 +108,9 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         let route = XPCRoute.named("fd", "provider")
-                            .withReplyType(DarwinFileDescriptorForXPC.self)
+                            .withReplyType(POSIXFileDescriptorForXPC.self)
         server.registerRoute(route) {
-            DarwinFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
+            POSIXFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
         }
         server.start()
         
@@ -124,7 +124,7 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
     func testDarwinFileDescriptor_PropertyWrapper() async throws {
         struct SecureDocument: Codable {
             var securityLevel: Int
-            @DarwinFileDescriptorForXPC var document: Int32
+            @POSIXFileDescriptorForXPC var document: Int32
         }
         
         let server = XPCServer.makeAnonymous()
@@ -148,11 +148,11 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         let serverRoute = XPCRoute.named("fd", "provider")
-                                .withReplyType(DarwinFileDescriptorForXPC.self)
+                                .withReplyType(POSIXFileDescriptorForXPC.self)
         let clientRoute = XPCRoute.named("fd", "provider")
                                 .withReplyType(FileDescriptorForXPC.self)
         server.registerRoute(serverRoute) {
-            DarwinFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
+            POSIXFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
         }
         server.start()
         
@@ -166,7 +166,7 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
     func testAutomaticBridging_PropertyWrapper() async throws {
         struct ServerSecureDocument: Codable {
             var securityLevel: Int
-            @DarwinFileDescriptorForXPC var document: Int32
+            @POSIXFileDescriptorForXPC var document: Int32
         }
         
         struct ClientSecureDocument: Codable {

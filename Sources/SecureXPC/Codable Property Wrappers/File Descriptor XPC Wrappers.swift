@@ -58,19 +58,19 @@ extension FileDescriptorCodable {
     }
 }
 
-// MARK: Darwin file descriptor
+// MARK: POSIX file descriptor
 
-/// Wraps a Darwin file descriptor such that it can be sent over an XPC connection.
+/// Wraps a POSIX file descriptor such that it can be sent over an XPC connection.
 ///
 /// By default the provided file descriptor will be closed once it has been encoded.
 ///
-/// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `DarwinFileDescriptorForXPC` must be the
+/// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `POSIXFileDescriptorForXPC` must be the
 /// specified type, not `CInt`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
 ///
 /// This property wrapper shares an underlying representation with ``FileHandleForXPC`` and ``FileDescriptorForXPC`` and therefore may be used
 /// interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
 /// reply types.
-@propertyWrapper public struct DarwinFileDescriptorForXPC {
+@propertyWrapper public struct POSIXFileDescriptorForXPC {
     public var wrappedValue: CInt
     fileprivate let closeOnEncode: Bool
     
@@ -80,7 +80,7 @@ extension FileDescriptorCodable {
     }
 }
 
-extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
+extension POSIXFileDescriptorForXPC: FileDescriptorCodable {
     init(descriptor: CInt, closeOnEncode: Bool) {
         self.wrappedValue = descriptor
         self.closeOnEncode = closeOnEncode
@@ -111,7 +111,7 @@ extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileDescriptorForXPC` must be the specified type,
 /// not `FileDescriptor`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``DarwinFileDescriptorForXPC`` and ``FileHandleForXPC`` and therefore may be
+/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileHandleForXPC`` and therefore may be
 /// used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
 /// reply types.
 @available(macOS 11.0, *)
@@ -151,7 +151,7 @@ extension FileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileHandleForXPC` must be the specified type, not
 /// `FileHandle`. This is not applicable when transferring a type which _contains_ a wrapped file handle as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``DarwinFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
+/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
 /// may be used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing
 /// message and/or reply types.
 @propertyWrapper public struct FileHandleForXPC {
@@ -180,5 +180,81 @@ extension FileHandleForXPC: FileDescriptorCodable {
         } else {
             wrappedValue.closeFile()
         }
+    }
+}
+
+// Test
+
+extension FileHandle: FileHandleCodable {
+    
+    static func create(descriptor: CInt, closeOnEncode: Bool) -> Self {
+        FileHandle(fileDescriptor: descriptor)
+    }
+    
+    var descriptor: CInt {
+        self.fileDescriptor
+    }
+    
+    var closeOnEncode: Bool {
+        true
+    }
+    
+    func closeHandle() throws {
+        if #available(macOS 10.15, *) {
+            try self.close()
+        } else {
+            self.closeFile()
+        }
+    }
+}
+
+
+private protocol FileHandleCodable: Codable {
+    static func create(descriptor: CInt, closeOnEncode: Bool) -> Self
+    
+    var descriptor: CInt { get }
+    var closeOnEncode: Bool { get }
+    func closeHandle() throws
+    //func close() throws
+}
+
+private enum FileHandleCodingKeys: String, CodingKey {
+    case descriptor
+    case closeOnEncode
+}
+
+extension FileHandleCodable {
+    public func encode(to encoder: Encoder) throws {
+        let container = try XPCEncoderImpl.asXPCEncoderImpl(encoder).xpcContainer(keyedBy: FileHandleCodingKeys.self)
+        guard let encodedDescriptor = xpc_fd_create(self.descriptor) else {
+            let context = EncodingError.Context(codingPath: container.codingPath,
+                                                debugDescription: "Encoding failed for \(self.descriptor)",
+                                                underlyingError: nil)
+            throw EncodingError.invalidValue(self.descriptor, context)
+        }
+        
+        if self.closeOnEncode {
+            try self.closeHandle()
+        }
+        container.encode(encodedDescriptor, forKey: FileHandleCodingKeys.descriptor)
+        try container.encode(self.closeOnEncode, forKey: FileHandleCodingKeys.closeOnEncode)
+    }
+}
+
+extension FileHandleCodable {
+    public init(from decoder: Decoder) throws {
+        let container = try XPCDecoderImpl.asXPCDecoderImpl(decoder).xpcContainer(keyedBy: FileHandleCodingKeys.self)
+        let descriptor = try container.decodeFileDescriptor(forKey: FileHandleCodingKeys.descriptor)
+        // From xpc_fd_dup documentation: If the descriptor could not be created or if the given object was not an XPC
+        // file descriptor, -1 is returned.
+        if descriptor == -1 {
+            let context = DecodingError.Context(codingPath: container.codingPath,
+                                                debugDescription: "File descriptor could not be created",
+                                                underlyingError: nil)
+            throw DecodingError.dataCorrupted(context)
+        }
+        let closeOnEncode = try container.decode(Bool.self, forKey: FileHandleCodingKeys.closeOnEncode)
+        
+        self = Self.create(descriptor: descriptor, closeOnEncode: closeOnEncode)
     }
 }
