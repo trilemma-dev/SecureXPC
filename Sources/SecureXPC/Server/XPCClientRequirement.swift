@@ -13,14 +13,15 @@ import Foundation
 ///
 /// Use a client requirement to retrieve a customized `XPCServer` instance:
 /// ```swift
-/// let server = XPCServer.forThisProcess(
-///   ofType: .machService(name: "com.example.service", requirement: try .sameTeamIdentifier))
+/// let server = XPCServer.forThisProcess(ofType: .machService(
+///     name: "com.example.service",
+///     clientRequirement: try .sameTeamIdentifier))
 /// ```
 ///
-/// Requirements can be combined with ``or(_:_:)`` as well as ``and(_:_:)``:
+/// Requirements can be combined with `||` as well as `&&`:
 /// ```swift
-/// let server = XPCServer.makeAnonymous(
-///   withRequirement: .or(try .sameTeamIdentifier, try .teamIdentifier("Q55ZG849VX")))
+/// let server = XPCServer.makeAnonymous(withClientRequirement:
+///     try .sameTeamIdentifier || try .teamIdentifier("Q55ZG849VX")))
 /// ```
 ///
 /// ## Topics
@@ -30,9 +31,6 @@ import Foundation
 /// - ``teamIdentifier(_:)``
 /// - ``parentDesignatedRequirement`` 
 /// - ``secRequirement(_:)``
-/// ### Logical Operators
-/// - ``and(_:_:)``
-/// - ``or(_:_:)``
 public struct XPCClientRequirement {
     /// What actually performs the requirement validation
     private let messageAcceptor: MessageAcceptor
@@ -90,12 +88,12 @@ public struct XPCClientRequirement {
     }
     
     /// The requesting client must satisfy both requirements.
-    public static func and(_ lhs: XPCClientRequirement, _ rhs: XPCClientRequirement) -> XPCClientRequirement {
+    public static func && (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> XPCClientRequirement {
         XPCClientRequirement(messageAcceptor: AndMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
     }
     
     /// The requesting client must satisfy at least one of the requirements.
-    public static func or(_ lhs: XPCClientRequirement, _ rhs: XPCClientRequirement) -> XPCClientRequirement {
+    public static func || (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> XPCClientRequirement {
         XPCClientRequirement(messageAcceptor: OrMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
     }
     
@@ -116,8 +114,8 @@ public struct XPCClientRequirement {
     }
     
     /// Determines whether an incoming message should be accepted.
-    internal func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        self.messageAcceptor.acceptMessage(connection: connection, message: message)
+    internal func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        self.messageAcceptor.shouldAcceptMessage(connection: connection, message: message)
     }
     
     // MARK: Helpers
@@ -147,7 +145,7 @@ extension XPCClientRequirement: Equatable {
 
 fileprivate protocol MessageAcceptor {
     /// Determines whether an incoming message should be accepted.
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool
     
     /// Whether the `acceptor` is equivalent to this one.
     func isEqual(to acceptor: MessageAcceptor) -> Bool
@@ -155,19 +153,19 @@ fileprivate protocol MessageAcceptor {
 
 /// This should only be used by XPC services which are by default application-scoped, so it's acceptable to assume they're inheritently safe.
 fileprivate struct AlwaysAcceptingMessageAcceptor: MessageAcceptor {
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         true
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {
-        type(of: acceptor) == AlwaysAcceptingMessageAcceptor.self
+        acceptor is AlwaysAcceptingMessageAcceptor
     }
 }
 
 /// This is intended for use by `XPCAnonymousServer`.
 fileprivate struct SameProcessMessageAcceptor: MessageAcceptor {
     /// Accepts a message only if it is coming from this process.
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         // In the case of an XPCAnonymousServer, all of the connections must be created after the server itself was
         // created. As such, the process containing the server must always exist first and so no other process can
         // have the same PID while that process is still running. While it's possible the process now corresponding to
@@ -177,7 +175,7 @@ fileprivate struct SameProcessMessageAcceptor: MessageAcceptor {
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {
-        type(of: acceptor) == SameProcessMessageAcceptor.self
+        acceptor is SameProcessMessageAcceptor
     }
 }
 
@@ -195,7 +193,7 @@ fileprivate struct SecRequirementsMessageAcceptor: MessageAcceptor {
     /// Accepts a message if it meets at least one of the provided `requirements`.
     ///
     /// If the `SecCode` of the process belonging to the other side of the connection could be not be determined, `false` is always returned.
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         do {
             try expandSandboxIfNecessary(message: message)
         } catch {
@@ -241,7 +239,7 @@ fileprivate struct ParentBundleMessageAcceptor: MessageAcceptor {
         self.parentBundleURL = parentBundleURL
     }
     
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
         do {
             try expandSandboxIfNecessary(message: message)
         } catch {
@@ -254,19 +252,14 @@ fileprivate struct ParentBundleMessageAcceptor: MessageAcceptor {
         }
         
         // If this is true there's no possibility of the client being equal to or a subdirectory of the parent bundle.
-        // And importantly, this prevents indexing out of bounds when iterate through to check equality/containment.
+        // And importantly, this ensures that when zipping the server path components is never the shorter one causing
+        // an incorrect directory subset check.
         if clientPath.pathComponents.count < parentBundleURL.pathComponents.count {
             return false
         }
         
         // Validate the each component in the client path is present in the parent bundle path in the same order
-        for i in 0..<parentBundleURL.pathComponents.count {
-            if parentBundleURL.pathComponents[i] != clientPath.pathComponents[i] {
-                return false
-            }
-        }
-        
-        return true
+        return zip(parentBundleURL.pathComponents, clientPath.pathComponents).allSatisfy(==)
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {
@@ -288,9 +281,9 @@ fileprivate struct AndMessageAcceptor: MessageAcceptor {
         self.rhs = rhs
     }
     
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        lhs.acceptMessage(connection: connection, message: message) &&
-        rhs.acceptMessage(connection: connection, message: message)
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.shouldAcceptMessage(connection: connection, message: message) &&
+        rhs.shouldAcceptMessage(connection: connection, message: message)
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {
@@ -312,9 +305,9 @@ fileprivate struct OrMessageAcceptor: MessageAcceptor {
         self.rhs = rhs
     }
     
-    func acceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-        lhs.acceptMessage(connection: connection, message: message) ||
-        rhs.acceptMessage(connection: connection, message: message)
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        lhs.shouldAcceptMessage(connection: connection, message: message) ||
+        rhs.shouldAcceptMessage(connection: connection, message: message)
     }
     
     func isEqual(to acceptor: MessageAcceptor) -> Bool {

@@ -68,12 +68,11 @@ func SecCodeCopyPath(_ code: SecCode) -> URL? {
     }
     
     var path: CFURL?
-    guard Security.SecCodeCopyPath(staticCode, SecCSFlags(), &path) == errSecSuccess,
-          let path = (path as URL?)?.standardized else {
+    guard Security.SecCodeCopyPath(staticCode, SecCSFlags(), &path) == errSecSuccess else {
         return nil
     }
     
-    return path
+    return (path as URL?)?.standardized
 }
 
 /// Encapsulates the undocumented function `void xpc_connection_get_audit_token(xpc_connection_t, audit_token_t *)`.
