@@ -42,7 +42,7 @@ final class XPCServerCreationTests: XCTestCase {
     
     // Expectation: server can be created without throwing
     func testRetrieveMachServerOnce() throws {
-        _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.foo", requirement: .sameProcess ))
+        _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.foo", clientRequirement: .sameProcess))
     }
     
     // Expectation: same server is successfully returned for the same name and the same requirements
@@ -56,9 +56,9 @@ final class XPCServerCreationTests: XCTestCase {
         
         // The same server instance should be returned each time
         let server1 = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.bar",
-                                                                        requirement: .secRequirement(requirement1!)))
+                                                                        clientRequirement: .secRequirement(requirement1!)))
         let server2 = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.bar",
-                                                                        requirement: .secRequirement(requirement2!)))
+                                                                        clientRequirement: .secRequirement(requirement2!)))
         XCTAssertIdentical(server1, server2)
     }
     
@@ -68,14 +68,14 @@ final class XPCServerCreationTests: XCTestCase {
         SecRequirementCreateWithString("identifier \"foo.bar\"" as CFString, [], &requirement)
         
         _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.biz",
-                                                              requirement: .secRequirement(requirement!)))
+                                                              clientRequirement: .secRequirement(requirement!)))
 
         var otherRequirement: SecRequirement?
         SecRequirementCreateWithString("identifier \"fizz.buzz\"" as CFString, [], &otherRequirement)
         
         do {
             _ = try XPCServer.forThisProcess(ofType: .machService(name: "com.example.biz",
-                                                                  requirement: .secRequirement(otherRequirement!)))
+                                                                  clientRequirement: .secRequirement(otherRequirement!)))
             XCTFail("No error was thrown. \(XPCError.conflictingClientRequirements) should have been thrown.")
         } catch XPCError.conflictingClientRequirements {
             // Expected behavior

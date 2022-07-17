@@ -102,9 +102,9 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         XCTAssertEqual(pathForFileDescriptor(fileDescriptor: document.fileDescriptor), currentPath())
     }
     
-    // MARK: Darwin file descriptor
+    // MARK: POSIX file descriptor
     
-    func testDarwinFileDescriptor_DirectInit() async throws {
+    func testPOSIXFileDescriptor_DirectInit() async throws {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         let route = XPCRoute.named("fd", "provider")
@@ -121,7 +121,7 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         XCTAssertEqual(pathForFileDescriptor(fileDescriptor: descriptor), currentPath())
     }
     
-    func testDarwinFileDescriptor_PropertyWrapper() async throws {
+    func testPOSIXFileDescriptor_PropertyWrapper() async throws {
         struct SecureDocument: Codable {
             var securityLevel: Int
             @POSIXFileDescriptorForXPC var document: Int32
