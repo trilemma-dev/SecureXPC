@@ -58,19 +58,19 @@ extension FileDescriptorCodable {
     }
 }
 
-// MARK: Darwin file descriptor
+// MARK: POSIX file descriptor
 
-/// Wraps a Darwin file descriptor such that it can be sent over an XPC connection.
+/// Wraps a POSIX file descriptor such that it can be sent over an XPC connection.
 ///
 /// By default the provided file descriptor will be closed once it has been encoded.
 ///
-/// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `DarwinFileDescriptorForXPC` must be the
+/// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `POSIXFileDescriptorForXPC` must be the
 /// specified type, not `CInt`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
 ///
 /// This property wrapper shares an underlying representation with ``FileHandleForXPC`` and ``FileDescriptorForXPC`` and therefore may be used
 /// interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
 /// reply types.
-@propertyWrapper public struct DarwinFileDescriptorForXPC {
+@propertyWrapper public struct POSIXFileDescriptorForXPC {
     public var wrappedValue: CInt
     fileprivate let closeOnEncode: Bool
     
@@ -80,7 +80,7 @@ extension FileDescriptorCodable {
     }
 }
 
-extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
+extension POSIXFileDescriptorForXPC: FileDescriptorCodable {
     init(descriptor: CInt, closeOnEncode: Bool) {
         self.wrappedValue = descriptor
         self.closeOnEncode = closeOnEncode
@@ -111,7 +111,7 @@ extension DarwinFileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileDescriptorForXPC` must be the specified type,
 /// not `FileDescriptor`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``DarwinFileDescriptorForXPC`` and ``FileHandleForXPC`` and therefore may be
+/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileHandleForXPC`` and therefore may be
 /// used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
 /// reply types.
 @available(macOS 11.0, *)
@@ -151,7 +151,7 @@ extension FileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileHandleForXPC` must be the specified type, not
 /// `FileHandle`. This is not applicable when transferring a type which _contains_ a wrapped file handle as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``DarwinFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
+/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
 /// may be used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing
 /// message and/or reply types.
 @propertyWrapper public struct FileHandleForXPC {
