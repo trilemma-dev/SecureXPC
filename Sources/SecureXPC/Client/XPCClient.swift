@@ -122,7 +122,7 @@ import Foundation
 /// ## Topics
 /// ### Retrieving a Client
 /// - ``forXPCService(named:)``
-/// - ``forXPCMachService(named:withServerRequirement:)``
+/// - ``forMachService(named:withServerRequirement:)``
 /// - ``forEndpoint(_:withServerRequirement:)``
 /// ### Sending Requests with Async
 /// - ``send(to:)-5b1ar``
@@ -706,7 +706,7 @@ extension XPCClient {
     /// An XPC service is a helper tool which ships as part of your app and only your app can communicate with.
     ///
     /// In order for this client to be able to communicate with the XPC service, the service itself must retrieve and configure an ``XPCServer`` by calling
-    /// ``XPCServer/forThisProcess(ofType:)``.
+    /// ``XPCServer/forThisXPCService()``.
     ///
     /// > Note: It is a fatal error to provide a name for an XPC service which does not correspond to an XPC service contained within this bundle.
     ///
@@ -756,7 +756,7 @@ extension XPCClient {
     /// - Launch Daemons
     ///
     /// In order for this client to be able to communicate with the XPC Mach service, the service itself must retrieve and configure an ``XPCServer`` by calling
-    /// ``XPCServer/forThisProcess(ofType:)``.
+    /// ``XPCServer/forMachService(withCriteria:)``.
     ///
     /// > Note: Client retrieval always succeeds regardless of whether or not the XPC Mach service exists.
     ///
@@ -767,7 +767,7 @@ extension XPCClient {
     ///                         server with the same team identifier so long as this client has a team identifier; if this client does not have a team identifier
     ///                         then any server will be trusted.
     /// - Returns: A client configured to communicate with the named service.
-    public static func forXPCMachService(
+    public static func forMachService(
         named machServiceName: String,
         withServerRequirement serverRequirement: XPCServerRequirement = .sameTeamIdentifierIfPresent
     ) -> XPCClient {

@@ -39,7 +39,7 @@ See ``XPCRoute`` to learn more about how to create routes.
 In one program retrieve a server, register those routes, and then start the server:
 ```swift
     ...
-    let server = XPCServer.forThisProcess()
+    let server = <# server retrieval here #>
     server.registerRoute(route, handler: bedazzle)
     server.startAndBlock()
 }

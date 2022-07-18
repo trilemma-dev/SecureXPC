@@ -13,9 +13,8 @@ import Foundation
 ///
 /// Use a client requirement to retrieve a customized `XPCServer` instance:
 /// ```swift
-/// let server = XPCServer.forThisProcess(ofType: .machService(
-///     name: "com.example.service",
-///     clientRequirement: try .sameTeamIdentifier))
+/// let server = try XPCServer.forMachService(withCriteria:
+///   .forLoginItem(withClientRequirement: try .parentDesignatedRequirement))
 /// ```
 ///
 /// Requirements can be combined with `||` as well as `&&`:
