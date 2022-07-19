@@ -9,8 +9,9 @@ import Foundation
 
 /// Wraps an array to optimize how it is sent over an XPC connection.
 ///
-/// Arrays of the following type are supported by this property wrapper: `Bool`, `Double`, `Float`, `UInt`, `UInt8`, `UInt16`, `UInt32`, `UInt64`,
-/// `Int`, `Int8`, `Int16`, `Int32`, and `Int64`.
+/// Arrays of the following type are automatically supported by this property wrapper: `Bool`, `Double`, `Float`, `UInt`, `UInt8`, `UInt16`, `UInt32`,
+/// `UInt64`, `Int`, `Int8`, `Int16`, `Int32`, and `Int64`. You may add support for your own trivial types by having them conform to
+/// ``XPCOptimizableArrayElement``.
 ///
 /// Usage of this property wrapper is never required and has no benefit when the array is either the message or reply type for an ``XPCRoute``.  When transferring
 /// a type which _contains_ an array property it is more efficient both in runtime and memory usage to wrap it using this property wrapper.
@@ -57,68 +58,73 @@ extension ArrayOptimizedForXPC: Decodable {
 
 // MARK: Helper functions
 
-internal func encodeArrayAsData(value: Any) -> xpc_object_t? {
-    func directEncodeArray<E>(_ array: [E]) -> xpc_object_t {
-        array.withUnsafeBytes { xpc_data_create($0.baseAddress, array.count * MemoryLayout<E>.stride) }
+// Exposes a small portion of Array without needing to know the type of the array
+private protocol TypeErasedArray {
+    static var elementType: Any.Type { get }
+    static var elementStride: Int { get }
+    var elementCount: Int { get }
+    func withUnsafePointer<R>(_ body: (UnsafeRawPointer?) throws -> R) rethrows -> R
+    init(pointer: UnsafeRawPointer, count: Int)
+}
+
+extension Array: TypeErasedArray {
+    static var elementType: Any.Type {
+        Element.self
     }
     
-    if let array = value as? [Bool] {   return directEncodeArray(array) }
-    if let array = value as? [Double] { return directEncodeArray(array) }
-    if let array = value as? [Float] {  return directEncodeArray(array) }
-    if let array = value as? [UInt] {   return directEncodeArray(array) }
-    if let array = value as? [UInt8] {  return directEncodeArray(array) }
-    if let array = value as? [UInt16] { return directEncodeArray(array) }
-    if let array = value as? [UInt32] { return directEncodeArray(array) }
-    if let array = value as? [UInt64] { return directEncodeArray(array) }
-    if let array = value as? [Int] {    return directEncodeArray(array) }
-    if let array = value as? [Int8] {   return directEncodeArray(array) }
-    if let array = value as? [Int16] {  return directEncodeArray(array) }
-    if let array = value as? [Int32] {  return directEncodeArray(array) }
-    if let array = value as? [Int64] {  return directEncodeArray(array) }
+    static var elementStride: Int {
+        MemoryLayout<Element>.stride
+    }
     
-    return nil
+    var elementCount: Int {
+        self.count
+    }
+    
+    func withUnsafePointer<R>(_ body: (UnsafeRawPointer?) throws -> R) rethrows -> R {
+        // Only trivial types (also known as "Plain Old Data" or "POD" for short) can have their data accessed safely
+        // via withUnsafeBytes for an array (this is documented behavior for withUnsafeBytes)
+        guard _isPOD(Element.self) else {
+            fatalError("\(Element.self) is not trivial")
+        }
+        
+        return try self.withUnsafeBytes{ try body($0.baseAddress) }
+    }
+    
+    init(pointer: UnsafeRawPointer, count: Int) {
+        let boundPointer = pointer.bindMemory(to: Element.self, capacity: count)
+        let bufferPointer = UnsafeBufferPointer(start: boundPointer, count: count)
+        self = Self.init(bufferPointer)
+    }
+}
+
+internal func encodeArrayAsData(value: Any) -> xpc_object_t? {
+    guard let array = value as? TypeErasedArray, type(of: array).elementType is XPCOptimizableArrayElement.Type else {
+        return nil
+    }
+    
+    return array.withUnsafePointer { xpc_data_create($0, array.elementCount * type(of: array).elementStride) }
 }
 
 internal func decodeDataAsArray<T>(arrayType: T.Type, arrayAsData: xpc_object_t) -> T? {
-    func directDecodeArray<E>(_ pointer: UnsafeRawPointer, length: Int, type: E.Type) -> [E] {
-        let count = length / MemoryLayout<E>.stride
-        let boundPointer = pointer.bindMemory(to: E.self, capacity: count)
-        let bufferPoint = UnsafeBufferPointer(start: boundPointer, count: count)
-        
-        return Array<E>(bufferPoint)
-    }
-    
     guard xpc_get_type(arrayAsData) == XPC_TYPE_DATA else {
         return nil
     }
-    
     guard let pointer = xpc_data_get_bytes_ptr(arrayAsData) else {
         return nil
     }
-    let length = xpc_data_get_length(arrayAsData)
+    guard let arrayType = arrayType as? TypeErasedArray.Type,
+          arrayType.elementType is XPCOptimizableArrayElement.Type else {
+        return nil
+    }
     
-    if arrayType == [Bool].self {   return directDecodeArray(pointer, length: length, type: Bool.self) as? T }
-    if arrayType == [Double].self { return directDecodeArray(pointer, length: length, type: Double.self) as? T }
-    if arrayType == [Float].self {  return directDecodeArray(pointer, length: length, type: Float.self) as? T }
-    if arrayType == [UInt].self {   return directDecodeArray(pointer, length: length, type: UInt.self) as? T }
-    if arrayType == [UInt8].self {  return directDecodeArray(pointer, length: length, type: UInt8.self) as? T }
-    if arrayType == [UInt16].self { return directDecodeArray(pointer, length: length, type: UInt16.self) as? T }
-    if arrayType == [UInt32].self { return directDecodeArray(pointer, length: length, type: UInt32.self) as? T }
-    if arrayType == [UInt64].self { return directDecodeArray(pointer, length: length, type: UInt64.self) as? T }
-    if arrayType == [Int].self {    return directDecodeArray(pointer, length: length, type: Int.self) as? T }
-    if arrayType == [Int8].self {   return directDecodeArray(pointer, length: length, type: Int8.self) as? T }
-    if arrayType == [Int16].self {  return directDecodeArray(pointer, length: length, type: Int16.self) as? T }
-    if arrayType == [Int32].self {  return directDecodeArray(pointer, length: length, type: Int32.self) as? T }
-    if arrayType == [Int64].self {  return directDecodeArray(pointer, length: length, type: Int64.self) as? T }
-    
-    return nil
+    return arrayType.init(pointer: pointer, count: xpc_data_get_length(arrayAsData) / arrayType.elementStride) as? T
 }
 
 // MARK: type constraining protocol
 
 /// Constrains the array elements supported by ``ArrayOptimizedForXPC``.
 ///
-/// >Warning: Do not implement this protocol.
+/// >Warning: Only trivial types (meaning `_isPOD()` returns `true`) may safely implement this protocol.
 public protocol XPCOptimizableArrayElement: Codable { }
 
 extension Bool: XPCOptimizableArrayElement {}
