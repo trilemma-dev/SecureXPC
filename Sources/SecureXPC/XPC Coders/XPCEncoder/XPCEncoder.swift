@@ -17,6 +17,10 @@ enum XPCEncoder {
     /// - Throws: If unable to encode the value.
     /// - Returns: Value as an XPC object.
     static func encode<T: Encodable>(_ value: T) throws -> xpc_object_t {
+        if let encodedValue = directEncode(value) {
+            return encodedValue
+        }
+        
         let encoder = XPCEncoderImpl(codingPath: [CodingKey]())
         try value.encode(to: encoder)
         guard let encodedValue = try encoder.encodedValue() else {
@@ -27,5 +31,15 @@ enum XPCEncoder {
         }
         
         return encodedValue
+    }
+    
+    /// For `Data` and arrays of certain fixed size value types, completely bypasses their `Encodable` implementation. If not applicable, `nil` is returned.
+    private static func directEncode<T: Encodable>(_ value: T) -> xpc_object_t? {
+        if let data = value as? Data {
+            return data.withUnsafeBytes { xpc_data_create($0.baseAddress, data.count) }
+        }
+        
+        // Try direct encoding as an array
+        return encodeArrayAsData(value: value)
     }
 }

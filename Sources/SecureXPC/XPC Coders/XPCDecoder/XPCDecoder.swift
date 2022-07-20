@@ -64,10 +64,12 @@ enum XPCDecoder {
         object: xpc_object_t,
         userInfo: [CodingUserInfoKey : Any] = [ : ]
     ) throws -> T {
-        let decoder = XPCDecoderImpl(value: object, codingPath: [CodingKey](), userInfo: userInfo)
+        if let decodedValue = directDecode(type, object: object) {
+            return decodedValue
+        }
         
         do {
-            return try T(from: decoder)
+            return try T(from: XPCDecoderImpl(value: object, codingPath: [CodingKey](), userInfo: userInfo))
         } catch {
             let context = DecodingError.Context(codingPath: [CodingKey](),
                                                 debugDescription: "\(T.self) initializer threw an error",
@@ -85,5 +87,15 @@ enum XPCDecoder {
                                                 underlyingError: nil)
             throw DecodingError.typeMismatch(xpc_object_t.self, context)
         }
+    }
+    
+    /// For `Data` and arrays of certain fixed size value types, completely bypasses their `Decodable` implementation. If not applicable, `nil` is returned.
+    private static func directDecode<T: Decodable>(_ type: T.Type, object: xpc_object_t) -> T? {
+        if type == Data.self, xpc_get_type(object) == XPC_TYPE_DATA, let pointer = xpc_data_get_bytes_ptr(object) {
+            return Data(bytes: pointer, count: xpc_data_get_length(object)) as? T
+        }
+        
+        // Try direct decoding as an array
+        return decodeDataAsArray(arrayType: type, arrayAsData: object)
     }
 }

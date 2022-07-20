@@ -14,7 +14,7 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
     /// Optimized alternative to `values` which works in the case where all of the encoded values are of a guaranteed fixed length.
     ///
     /// See `supportedDataTypes` for the supported types.
-    private var valuesAsData: Data?
+    private var valuesAsData: DispatchData?
     
     /// The types which can be encoded directly to data. These types have a guaranteed fixed byte length for the given Mac this code is running on.
     /// Note while `UInt` and `Int` can vary in length, they'll always be the same on both sides of the XPC connection as it's local only.
@@ -31,31 +31,29 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
 	init(codingPath: [CodingKey]) {
 		self.codingPath = codingPath
 		self.values = [XPCContainer]()
-        self.valuesAsData = Data()
+        self.valuesAsData = DispatchData.empty
 	}
 
 	func encodedValue() throws -> xpc_object_t? {
-        let value: xpc_object_t
-        if let valuesAsData = valuesAsData { // data-backed optimization worked out, so use it
-            value = valuesAsData.withUnsafeBytes { pointer in
-                xpc_data_create(pointer.baseAddress, valuesAsData.count)
-            }
-        } else { // otherwise, fall back to creating an XPC array
-            let array = xpc_array_create(nil, 0)
-            for element in values {
-                if let elementValue = try element.encodedValue() {
-                    xpc_array_append_value(array, elementValue)
-                } else {
-                    let context = EncodingError.Context(codingPath: self.codingPath,
-                                                        debugDescription: "This value failed to encode itself",
-                                                        underlyingError: nil)
-                    throw EncodingError.invalidValue(element, context)
-                }
-            }
-            value = array
+        // Data-backed optimization worked out, so use it
+        if let valuesAsData = valuesAsData {
+            return xpc_data_create_with_dispatch_data(valuesAsData as __DispatchData)
         }
         
-        return value
+        // Otherwise, fall back to creating an XPC array
+        let array = xpc_array_create(nil, 0)
+        for element in values {
+            guard let elementValue = try element.encodedValue() else {
+                let context = EncodingError.Context(codingPath: self.codingPath,
+                                                    debugDescription: "This value failed to encode itself",
+                                                    underlyingError: nil)
+                throw EncodingError.invalidValue(element, context)
+            }
+            
+            xpc_array_append_value(array, elementValue)
+        }
+        
+        return array
 	}
 
 	private func append(_ container: XPCContainer) {
@@ -72,15 +70,15 @@ internal class XPCUnkeyedEncodingContainer : UnkeyedEncodingContainer, XPCContai
         if valuesAsData == nil {
             return
         }
-        
-        if XPCUnkeyedEncodingContainer.supportedDataTypes.contains(where: { $0 == T.self }) {
-            var value = value
-            withUnsafeBytes(of: &value) { pointer in
-                let reboundPointer = pointer.bindMemory(to: UInt8.self)
-                valuesAsData?.append(reboundPointer.baseAddress!, count: pointer.count)
-            }
-        } else { // this value can't be encoded directly as data, so nil out valuesAsData
+        // This value can't be encoded directly as data, so nil out valuesAsData
+        guard XPCUnkeyedEncodingContainer.supportedDataTypes.contains(where: { $0 == T.self }) else {
             valuesAsData = nil
+            return
+        }
+        
+        var value = value
+        withUnsafeBytes(of: &value) { pointer in
+            valuesAsData?.append(pointer)
         }
     }
     

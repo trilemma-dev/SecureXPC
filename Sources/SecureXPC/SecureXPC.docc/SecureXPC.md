@@ -111,3 +111,6 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``FileDescriptorForXPC``
 - ``POSIXFileDescriptorForXPC``
 - ``IOSurfaceForXPC``
+- ``DataOptimizedForXPC``
+- ``ArrayOptimizedForXPC``
+- ``Trivial``
