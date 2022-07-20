@@ -109,7 +109,6 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 ### Codable Conformance
 - ``FileHandleForXPC``
 - ``FileDescriptorForXPC``
-- ``POSIXFileDescriptorForXPC``
 - ``IOSurfaceForXPC``
 - ``DataOptimizedForXPC``
 - ``ArrayOptimizedForXPC``

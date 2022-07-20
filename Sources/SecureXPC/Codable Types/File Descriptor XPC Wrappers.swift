@@ -58,49 +58,6 @@ extension FileDescriptorCodable {
     }
 }
 
-// MARK: POSIX file descriptor
-
-/// Wraps a POSIX file descriptor such that it can be sent over an XPC connection.
-///
-/// By default the provided file descriptor will be closed once it has been encoded.
-///
-/// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `POSIXFileDescriptorForXPC` must be the
-/// specified type, not `CInt`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
-///
-/// This property wrapper shares an underlying representation with ``FileHandleForXPC`` and ``FileDescriptorForXPC`` and therefore may be used
-/// interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
-/// reply types.
-@propertyWrapper public struct POSIXFileDescriptorForXPC {
-    public var wrappedValue: CInt
-    fileprivate let closeOnEncode: Bool
-    
-    public init(wrappedValue: CInt, closeOnEncode: Bool = true) {
-        self.wrappedValue = wrappedValue
-        self.closeOnEncode = closeOnEncode
-    }
-}
-
-extension POSIXFileDescriptorForXPC: FileDescriptorCodable {
-    init(descriptor: CInt, closeOnEncode: Bool) {
-        self.wrappedValue = descriptor
-        self.closeOnEncode = closeOnEncode
-    }
-    
-    var descriptor: CInt {
-        wrappedValue
-    }
-    
-    func close() throws {
-        let closeResult = Darwin.close(wrappedValue)
-        guard closeResult == 0 else {
-            throw XPCError.unknown(description: """
-            Unable to close file descriptor: \(wrappedValue)
-            Result code: \(closeResult)
-            """)
-        }
-    }
-}
-
 // MARK: FileDescriptor
 
 /// Wraps a [`FileDescriptor`](https://developer.apple.com/documentation/system/filedescriptor) such that it can be sent over an XPC
@@ -111,9 +68,8 @@ extension POSIXFileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileDescriptorForXPC` must be the specified type,
 /// not `FileDescriptor`. This is not applicable when transferring a type which _contains_ a wrapped file descriptor as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileHandleForXPC`` and therefore may be
-/// used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing message and/or
-/// reply types.
+/// This property wrapper shares an underlying representation with ``FileHandleForXPC`` and therefore may be used interchangeably between the server and
+/// client. However, to make use of such functionality requires routes with identical names and differing message and/or reply types.
 @available(macOS 11.0, *)
 @propertyWrapper public struct FileDescriptorForXPC {
     public var wrappedValue: FileDescriptor
@@ -151,9 +107,8 @@ extension FileDescriptorForXPC: FileDescriptorCodable {
 /// When creating an ``XPCRoute`` that directly transfers this type as either the message or reply type, `FileHandleForXPC` must be the specified type, not
 /// `FileHandle`. This is not applicable when transferring a type which _contains_ a wrapped file handle as one of its properties.
 ///
-/// This property wrapper shares an underlying representation with ``POSIXFileDescriptorForXPC`` and ``FileDescriptorForXPC`` and therefore
-/// may be used interchangeably between the server and client. However, to make use of such functionality requires routes with identical names and differing
-/// message and/or reply types.
+/// This property wrapper shares an underlying representation with ``FileDescriptorForXPC`` and therefore may be used interchangeably between the server
+/// and client. However, to make use of such functionality requires routes with identical names and differing message and/or reply types.
 @propertyWrapper public struct FileHandleForXPC {
     public var wrappedValue: FileHandle
     fileprivate let closeOnEncode: Bool
