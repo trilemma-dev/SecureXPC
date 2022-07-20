@@ -15,7 +15,8 @@ internal class XPCServiceServer: XPCServer {
     internal static var isThisProcessAnXPCService: Bool {
         // To be an XPC service this process needs to have a package type of XPC!, have an xpc file extension, and be
         // located in its parent's Contents/XPCServices directory
-        return mainBundlePackageInfo().packageType == "XPC!" &&
+        // See https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
+        mainBundlePackageInfo().packageType == "XPC!" &&
         Bundle.main.bundleURL.pathExtension == "xpc" &&
         Bundle.main.bundleURL.deletingLastPathComponent().pathComponents.suffix(2) == ["Contents", "XPCServices"]
     }
@@ -32,10 +33,7 @@ internal class XPCServiceServer: XPCServer {
     /// Connections received for the anonymous listener connection while the server is not started
     private var pendingConnections = [xpc_connection_t]()
         
-    internal static func forThisXPCService() throws -> XPCServiceServer {
-        // An XPC service's package type must be equal to "XPC!", see Apple's documentation for details
-        // https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html#//apple_ref/doc/uid/10000172i-SW6-SW6
-        
+    internal static func getXPCServiceServer() throws -> XPCServiceServer {
         guard isThisProcessAnXPCService else {
             throw XPCError.misconfiguredServer(description: """
             This process is not an XPC service.

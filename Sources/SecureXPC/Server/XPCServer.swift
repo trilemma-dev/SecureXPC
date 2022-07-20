@@ -10,18 +10,26 @@ import Foundation
 /// An XPC server to receive requests from and send responses to an ``XPCClient``.
 ///
 /// ### Retrieving a Server
-/// Typically this is as easy as:
-/// ```swift
-/// let server = try XPCServer.forThisProcess()
-/// ```
+/// There are two different types of services you can retrieve a server for: XPC services and XPC Mach services. If you're uncertain which type of service you're
+/// using, it's likely an XPC service.
+///
+/// Anonymous servers can also be created which do not correspond to an XPC service or XPC Mach service.
 ///
 /// #### XPC services
-/// The above will always work for any
-/// [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html).
-/// XPC services are helper tools which ship as part of an app and that by default only that app can communicate with.
+/// These are helper tools which ship as part of your app and only your app can communicate with.
+///
+/// To retrieve a server for an XPC service:
+/// ```swift
+/// let server = try XPCServer.forThisXPCService()
+/// ```
 ///
 /// #### XPC Mach services
-/// Common XPC Mach services will also just work with no additional configuration:
+/// In most cases, to retrieve a server for an XPC Mach service:
+/// ```swift
+/// let server = try XPCServer.forMachService()
+/// ```
+///
+/// This will automatically work for many common configurations including:
 /// - Helper tools installed using
 /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
 /// - Login items enabled with
@@ -31,9 +39,8 @@ import Foundation
 /// - Agents registered via
 /// [`SMAppService.agent(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945409-agent)
 ///
-/// See ``ProcessType`` for details.
-///
-/// For any other type an `XPCServer` can be retrieved by explicitly creating a ``ProcessType/machService(name:clientRequirement:)`` instance.
+/// See ``XPCServer/forMachService(withCriteria:)`` for details and how to retrieve a server for any XPC Mach service or to customize the
+/// requirements of connecting clients.
 ///
 /// #### Anonymous servers
 /// An anonymous server can be created by any macOS program:
@@ -93,8 +100,10 @@ import Foundation
 ///
 /// ## Topics
 /// ### Retrieving a Server
-/// - ``forThisProcess(ofType:)``
-/// - ``ProcessType``
+/// - ``forThisXPCService()``
+/// - ``forMachService()``
+/// - ``forMachService(withCriteria:)``
+/// - ``MachServiceCriteria``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(withClientRequirement:)``
 /// ### Registering Async Routes
@@ -546,155 +555,66 @@ extension XPCServer {
         XPCAnonymousServer(clientRequirement: clientRequirement)
     }
     
-    /// The type of process an ``XPCServer`` should be retrieved for.
-    public enum ProcessType {
-        /// Auto-detects what type of server to create for this process.
-        ///
-        /// Auto-detection currently supports:
-        /// - ``xpcService``
-        /// - ``blessedHelperTool``
-        /// - ``loginItem``
-        /// - ``daemon``
-        /// - ``agent``
-        ///
-        /// For any other ``machService(name:clientRequirement:)`` must be used to explicitly specify this service's
-        /// name and client requirements.
-        case autoDetect
-        /// A process that is an [XPC service](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html)
-        ///
-        /// By default the returned server will accept incoming requests from any client without any _explicit_ security requirements; however, macOS itself only
-        /// allows the containing application to make such incoming requests. If you retrieve the ``XPCServer/endpoint`` for an XPC service, this will
-        /// upgrade the security requirements of the server and require all requests to be from the same containing application bundle. If this XPC service has a
-        /// Team ID then incoming requests will also need to be from processes with the same Team ID.
-        case xpcService
-        /// A process that is a helper tool installed with
-        /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless).
-        ///
-        /// For a server to be automatically created for this process the following requirements must be met:
-        ///   - The launchd property list embedded in this helper tool must have exactly one entry for its `MachServices` dictionary
-        ///   - The info property list embedded in this helper tool must have at least one element in its
-        ///   [`SMAuthorizedClients`](https://developer.apple.com/documentation/bundleresources/information_property_list/smauthorizedclients)
-        ///   array
-        ///   - Every element in the `SMAuthorizedClients` array must be a valid security requirement
-        ///     - To be valid, it must be creatable by
-        ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring)
-        ///
-        /// The returned server will accept incoming requests from clients that meet _any_ of the `SMAuthorizedClients` requirements.
-        ///
-        /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
-        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and client requirements.
-        case blessedHelperTool
-        
-        /// A process that is a login item enabled with
-        /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
-        ///
-        /// For a server to be automatically created for this process the following requirements must be met:
-        ///   - This bundle for this process must have a team identifier
-        ///   - If this is a sandboxed login item, the
-        ///     [`com.apple.security.application-groups`](https://developer.apple.com/documentation/bundleresources/entitlements/com_apple_security_application-groups)
-        ///     entitlement must be present and one of the application groups must have the same team identifier as this login item
-        ///
-        /// The returned server will accept incoming requests from the main app or helper tools contained within the main app bundle. Additionally they must have
-        /// the same team identifier as this login item.
-        ///
-        /// If this process does not meet these requirements or you would like to have different acceptance criteria for incoming requests then a
-        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and client requirements.
-        case loginItem
-        
-        /// A process that is a launch daemon registered via
-        /// [`SMAppService.daemon(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon).
-        ///
-        /// This does **not** include launch daemons manually registered via a property list in
-        /// `/Library/LaunchDaemons/`.
-        ///
-        /// For a server to automatically be created for this process the containing app's
-        /// `Contents/Library/LaunchDaemons` must contain exactly one distinct `MachServices` key in one (or more)
-        /// property lists where the `BundleProgram` corresponds to this executable.
-        ///
-        /// The returned server will accept incoming requests from a client which meets the designated requirement of
-        /// the containing app (meaning in most cases only the containing app's requests will be accepted).
-        ///
-        /// If this process does not meet these requirements or you would like to have different acceptance criteria for
-        /// incoming requests then a
-        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and
-        /// client requirements.
-        @available(macOS 13.0, *)
-        case daemon
-        
-        /// A process that is a launch agent registered via
-        /// [`SMAppService.agent(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945409-agent).
-        ///
-        /// This does **not** include launch agent manually registered via a property list in
-        /// `~/Library/LaunchAgents` or `/Library/LaunchAgents`.
-        ///
-        /// For a server to automatically be created for this process the containing app's
-        /// `Contents/Library/LaunchAgents` must contain exactly one distinct `MachServices` key in one (or more)
-        /// property lists where the `BundleProgram` corresponds to this executable.
-        ///
-        /// The returned server will accept incoming requests from a client which has the same team identifier as this
-        /// executable.
-        ///
-        /// If this process does not meet these requirements or you would like to have different acceptance criteria for
-        /// incoming requests then a
-        /// ``machService(name:clientRequirement:)`` may be used instead to explicitly specify this service's name and
-        /// client requirements.
-        @available(macOS 13.0, *)
-        case agent
-        
-        /// A process that is running as an XPC Mach service.
-        ///
-        /// Use this case to explicitly provide a service name and define the requirement for connecting clients. This allows for retrieving a server for any Launch
-        /// Daemons and Launch Agents as well as customizing client requirements for process types with built-in support.
-        ///
-        /// Because many processes on the system can talk to an XPC Mach service, when retrieving a server it is required that you specify the requirement of
-        /// any connecting clients:
-        /// ```swift
-        /// let server = XPCServer.forThisProcess(ofType: .machService(name: "com.example.service",
-        ///                                                            clientRequirement: try .sameTeamIdentifier))
-        /// ```
-        case machService(name: String, clientRequirement: XPCClientRequirement)
-    }
-    
-    /// Returns the XPC server for this process.
-    ///
-    /// The request acceptance behavior of the returned service will depend on what type of ``ProcessType`` this server was created for.
+    /// Provides a server for this XPC service.
     ///
     /// > Important: No requests will be processed until ``startAndBlock()`` is called.
     ///
-    /// By default this function will attempt to auto-detect which type of server this process represents. If this server's type cannot be detected then an error will be
-    /// thrown. To resolve this, explicitly provide a ``ProcessType`` and use ``ProcessType/machService(name:clientRequirement:)`` for any
-    /// configurations which do not have built-in support.
-    public static func forThisProcess(ofType type: ProcessType = .autoDetect) throws -> XPCServer {
-        switch type {
-            case .autoDetect:
-                if XPCServiceServer.isThisProcessAnXPCService {
-                    return try XPCServiceServer.forThisXPCService()
-                } else if XPCMachServer.isThisProcessABlessedHelperTool {
-                    return try XPCMachServer.forThisBlessedHelperTool()
-                } else if XPCMachServer.isThisProcessALoginItem {
-                    return try XPCMachServer.forThisLoginItem()
-                } else if XPCMachServer.isThisProcessADaemon {
-                    return try XPCMachServer.forThisDaemon()
-                } else if XPCMachServer.isThisProcessAnAgent {
-                    return try XPCMachServer.forThisAgent()
-                } else {
-                    throw XPCError.misconfiguredServer(description: """
-                    Unable to auto-detect what type of XPC server this is. Please provide an explicit type.
-                    """)
-                }
-            case .xpcService:
-                return try XPCServiceServer.forThisXPCService()
-            case .blessedHelperTool:
-                return try XPCMachServer.forThisBlessedHelperTool()
-            case .loginItem:
-                return try XPCMachServer.forThisLoginItem()
-            case .daemon:
-                return try XPCMachServer.forThisDaemon()
-            case .agent:
-                return try XPCMachServer.forThisAgent()
-            case .machService(let name, let requirement):
-                return try XPCMachServer.getXPCMachServer(named: name, clientRequirement: requirement)
-        }
+    /// - Returns: A server instance configured for this XPC service.
+    public static func forThisXPCService() throws -> XPCServer {
+        try XPCServiceServer.getXPCServiceServer()
+    }
+    
+    /// Provides an auto-configured server for the registered XPC Mach service.
+    ///
+    /// Auto-configuration is supported for:
+    /// - Helper tools installed using
+    /// [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+    /// - Login items enabled with
+    /// [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+    /// - Daemons registered via
+    /// [`SMAppService.daemon(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon)
+    /// - Agents registered via
+    /// [`SMAppService.agent(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945409-agent)
+    ///
+    /// Auto-configuration will succeed so long as there is exactly one Mach service present. (For login items this is implicit and always true.) When there are
+    /// multiple Mach services present or this package lacks built-in support, ``XPCServer/forMachService(withCriteria:)`` must be called instead.
+    /// That function can also be used in order to specify a non-default ``XPCClientRequirement``.
+    ///
+    /// Because many processes on the system can talk to an XPC Mach service, a retrieved a server will always be configured with a default
+    /// `XPCClientRequirement` that is customized based on the process the server is running in. See ``XPCServer/MachServiceCriteria`` for
+    /// details on the defaults used and how to customize them.
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
+    ///
+    /// In most cases where only one server is being used, then `startAndBlock()` should be called once all route registration and server configuration has
+    /// been completed.
+    ///
+    /// - Returns: A server instance configured for the XPC Mach service.
+    public static func forMachService() throws -> XPCServer & XPCNonBlockingServer {
+        try forMachService(withCriteria: try MachServiceCriteria.autoConfigure())
+    }
+    
+    /// Provides a server for the specified XPC Mach service.
+    ///
+    /// This function should be used to retrieve a server:
+    /// - for a Mach service that lacks built-in support
+    /// - when this process offers multiple Mach services
+    /// - with non-default client requirement for a type with built-in support
+    ///
+    /// > Important: No requests will be processed until ``startAndBlock()`` or ``XPCNonBlockingServer/start()`` is called.
+    ///
+    /// If this process offers multiple XPC Mach services it should retrieve each server, register routes, use ``XPCNonBlockingServer/start()`` to start
+    /// each server without blocking, and then call
+    /// [`dispatchMain()`](https://developer.apple.com/documentation/dispatch/1452860-dispatchmain) or use some other mechanism
+    /// such as a run loop to keep this process running.
+    ///
+    /// - Parameters:
+    ///   - criteria: The service for which a server should be retrieved and the requirement used to validate connecting clients.
+    /// - Returns: A server instance configured for the XPC Mach service.
+    public static func forMachService(
+        withCriteria criteria: MachServiceCriteria
+    ) throws -> XPCServer & XPCNonBlockingServer {
+        try XPCMachServer.getXPCMachServer(criteria: criteria)
     }
 }
 
