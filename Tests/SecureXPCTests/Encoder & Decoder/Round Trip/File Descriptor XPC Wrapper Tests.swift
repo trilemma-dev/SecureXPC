@@ -102,57 +102,17 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         XCTAssertEqual(pathForFileDescriptor(fileDescriptor: document.fileDescriptor), currentPath())
     }
     
-    // MARK: POSIX file descriptor
-    
-    func testPOSIXFileDescriptor_DirectInit() async throws {
-        let server = XPCServer.makeAnonymous()
-        let client = XPCClient.forEndpoint(server.endpoint)
-        let route = XPCRoute.named("fd", "provider")
-                            .withReplyType(POSIXFileDescriptorForXPC.self)
-        server.registerRoute(route) {
-            POSIXFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
-        }
-        server.start()
-        
-        let container = try await client.send(to: route)
-        let descriptor = container.wrappedValue
-        defer { close(descriptor) }
-        
-        XCTAssertEqual(pathForFileDescriptor(fileDescriptor: descriptor), currentPath())
-    }
-    
-    func testPOSIXFileDescriptor_PropertyWrapper() async throws {
-        struct SecureDocument: Codable {
-            var securityLevel: Int
-            @POSIXFileDescriptorForXPC var document: Int32
-        }
-        
-        let server = XPCServer.makeAnonymous()
-        let client = XPCClient.forEndpoint(server.endpoint)
-        let route = XPCRoute.named("secure", "document")
-                            .withReplyType(SecureDocument.self)
-        server.registerRoute(route) {
-            SecureDocument(securityLevel: 5, document: open(self.currentPath(), O_RDONLY))
-        }
-        server.start()
-        
-        let document = try await client.send(to: route).document
-        defer { close(document) }
-        
-        XCTAssertEqual(pathForFileDescriptor(fileDescriptor: document), currentPath())
-    }
-    
     // MARK: Automatic bridging
     
     func testAutomaticBridging_DirectInit() async throws {
         let server = XPCServer.makeAnonymous()
         let client = XPCClient.forEndpoint(server.endpoint)
         let serverRoute = XPCRoute.named("fd", "provider")
-                                .withReplyType(POSIXFileDescriptorForXPC.self)
+                                .withReplyType(FileHandleForXPC.self)
         let clientRoute = XPCRoute.named("fd", "provider")
                                 .withReplyType(FileDescriptorForXPC.self)
         server.registerRoute(serverRoute) {
-            POSIXFileDescriptorForXPC(wrappedValue: open(self.currentPath(), O_RDONLY))
+            FileHandleForXPC(wrappedValue: FileHandle(forReadingAtPath: self.currentPath())!, closeOnEncode: true)
         }
         server.start()
         
@@ -166,7 +126,7 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
     func testAutomaticBridging_PropertyWrapper() async throws {
         struct ServerSecureDocument: Codable {
             var securityLevel: Int
-            @POSIXFileDescriptorForXPC var document: Int32
+            @FileDescriptorForXPC var document: FileDescriptor
         }
         
         struct ClientSecureDocument: Codable {
@@ -181,7 +141,7 @@ final class FileDescriptorXPCContainerTests: XCTestCase {
         let clientRoute = XPCRoute.named("secure", "document")
                                 .withReplyType(ClientSecureDocument.self)
         server.registerRoute(serverRoute) {
-            ServerSecureDocument(securityLevel: 5, document: open(self.currentPath(), O_RDONLY))
+            ServerSecureDocument(securityLevel: 5, document: FileDescriptor(rawValue: open(self.currentPath(), O_RDONLY)))
         }
         server.start()
         
