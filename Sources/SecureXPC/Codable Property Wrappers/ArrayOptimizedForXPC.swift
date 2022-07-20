@@ -10,12 +10,15 @@ import Foundation
 /// Wraps an array to optimize how it is sent over an XPC connection.
 ///
 /// Arrays of the following type are automatically supported by this property wrapper: `Bool`, `Double`, `Float`, `UInt`, `UInt8`, `UInt16`, `UInt32`,
-/// `UInt64`, `Int`, `Int8`, `Int16`, `Int32`, and `Int64`. You may add support for your own trivial types by having them conform to
-/// ``XPCOptimizableArrayElement``.
+/// `UInt64`, `Int`, `Int8`, `Int16`, `Int32`, and `Int64`. You may add support for your own trivial types by having them conform to ``Trivial``.
 ///
 /// Usage of this property wrapper is never required and has no benefit when the array is either the message or reply type for an ``XPCRoute``.  When transferring
 /// a type which _contains_ an array property it is more efficient both in runtime and memory usage to wrap it using this property wrapper.
-@propertyWrapper public struct ArrayOptimizedForXPC<Element: XPCOptimizableArrayElement> {
+@propertyWrapper public struct ArrayOptimizedForXPC<Element: Trivial & Codable> {
+    // Note: There's no actual need for Element to conform to Codable, but doing so provides consistency between areas
+    // which are wrapped with this property wrapper vs those that are not. Also it's easy for most trivial types to
+    // become Codable conforming simplying by declaring conformance; the compiler will autogenerate the implementation.
+    
     public var wrappedValue: [Element]
     
     public init(wrappedValue: [Element]) {
@@ -98,7 +101,9 @@ extension Array: TypeErasedArray {
 }
 
 internal func encodeArrayAsData(value: Any) -> xpc_object_t? {
-    guard let array = value as? TypeErasedArray, type(of: array).elementType is XPCOptimizableArrayElement.Type else {
+    guard let array = value as? TypeErasedArray,
+          type(of: array).elementType is Trivial.Type,
+          type(of: array).elementType is Codable.Type else {
         return nil
     }
     
@@ -113,30 +118,10 @@ internal func decodeDataAsArray<T>(arrayType: T.Type, arrayAsData: xpc_object_t)
         return nil
     }
     guard let arrayType = arrayType as? TypeErasedArray.Type,
-          arrayType.elementType is XPCOptimizableArrayElement.Type else {
+          arrayType.elementType is Trivial.Type,
+          arrayType.elementType is Codable.Type else {
         return nil
     }
     
     return arrayType.init(pointer: pointer, count: xpc_data_get_length(arrayAsData) / arrayType.elementStride) as? T
 }
-
-// MARK: type constraining protocol
-
-/// Constrains the array elements supported by ``ArrayOptimizedForXPC``.
-///
-/// >Warning: Only trivial types (meaning `_isPOD()` returns `true`) may safely implement this protocol.
-public protocol XPCOptimizableArrayElement: Codable { }
-
-extension Bool: XPCOptimizableArrayElement {}
-extension Double: XPCOptimizableArrayElement {}
-extension Float: XPCOptimizableArrayElement {}
-extension UInt: XPCOptimizableArrayElement {}
-extension UInt8: XPCOptimizableArrayElement {}
-extension UInt16: XPCOptimizableArrayElement {}
-extension UInt32: XPCOptimizableArrayElement {}
-extension UInt64: XPCOptimizableArrayElement {}
-extension Int: XPCOptimizableArrayElement {}
-extension Int8: XPCOptimizableArrayElement {}
-extension Int16: XPCOptimizableArrayElement {}
-extension Int32: XPCOptimizableArrayElement {}
-extension Int64: XPCOptimizableArrayElement {}
