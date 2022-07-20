@@ -106,7 +106,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCRequestContext``
 - ``XPCServerIdentity``
 
-### Property Wrappers
+### Codable Conformance
 - ``FileHandleForXPC``
 - ``FileDescriptorForXPC``
 - ``POSIXFileDescriptorForXPC``
