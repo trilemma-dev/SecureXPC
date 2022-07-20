@@ -15,7 +15,7 @@ import Foundation
 /// Usage of this property wrapper is never required and has no benefit when the array is either the message or reply type for an ``XPCRoute``.  When transferring
 /// a type which _contains_ an array property it is more efficient both in runtime and memory usage to wrap it using this property wrapper.
 @propertyWrapper public struct ArrayOptimizedForXPC<Element: Trivial & Codable> {
-    // Note: There's no actual need for Element to conform to Codable, but doing so provides consistency between areas
+    // Note: There's no actual need for Element to conform to Codable, but doing so provides consistency between arrays
     // which are wrapped with this property wrapper vs those that are not. Also it's easy for most trivial types to
     // become Codable conforming simplying by declaring conformance; the compiler will autogenerate the implementation.
     
