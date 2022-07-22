@@ -8,8 +8,9 @@
 // The internals of how this works are a bit complicated and this complexity is rooted in the fact property wrapper
 // initializers can't throw (and that even if they could, that would be rather inconvenient to use in many cases). So
 // instead work is delayed until the first time encode(to:) is called since it's not actually needed until then.
-// Fundamentally there are two categories of runtime failures: creating a cross-process semaphore and mapping shared
-// memory. These are recoverable errors and so it's inappropriate to use fatalError() to avoid this complexity.
+// Fundamentally there are two categories of runtime failures: creating a cross-process semaphore (which is used as a
+// mutex) and mapping shared memory. These are recoverable errors and so it's inappropriate to use fatalError() to avoid
+// this complexity.
 //
 // Overview of how things work:
 // - SharedTrivial<T: Trivial> has a single variable of type SharedState<T> which is an enum that's either in a shared
@@ -25,7 +26,8 @@
 //       encoding can only happen serially.
 // - When in a shared state, no serial dispatch queue is used.
 //     - Meaning any subsequent encodes do not involve a dispatch queue.
-// - When in a shared state, a cross-process semaphore is used to coordinate access/modification of the wrapped value.
+// - When in a shared state, a mutex (in the form of a cross-process semaphore) is used to coordinate
+//   access/modification of the wrapped value.
 //
 // Note: An alternative approach to this was prototyped which was just a "box", not a property wrapper, which eagerly
 // threw on initialization. In practice it was much less ergonomic to make use of.
@@ -137,23 +139,23 @@ private class NotShared<T> {
 }
 
 private class Shared<T> {
-    /// Semaphore used to prevent concurrent access and modification to the wrapped value.
-    private var semaphore: semaphore_t {
-        self.semaphoreMemory.pointee
+    /// Mutex used to prevent concurrent access and modification to the wrapped value.
+    private var mutex: semaphore_t {
+        self.mutexMemory.pointee
     }
-    private let semaphoreMemory: UnsafeMutablePointer<semaphore_t>
-    private let semaphoreMemoryXPCBox: xpc_object_t
+    private let mutexMemory: UnsafeMutablePointer<semaphore_t>
+    private let mutexMemoryXPCBox: xpc_object_t
     
-    /// Semaphore guarded access to the wrapped value.
+    /// Mutex guarded access to the wrapped value.
     var wrappedValue: T {
         get {
-            semaphore_wait(self.semaphore)
-            defer { semaphore_signal(self.semaphore) }
+            semaphore_wait(self.mutex)
+            defer { semaphore_signal(self.mutex) }
             return self.wrappedValueMemory.pointee
         }
         set {
-            semaphore_wait(self.semaphore)
-            defer { semaphore_signal(self.semaphore) }
+            semaphore_wait(self.mutex)
+            defer { semaphore_signal(self.mutex) }
             self.wrappedValueMemory.pointee = newValue
         }
     }
@@ -161,29 +163,28 @@ private class Shared<T> {
     private let wrappedValueMemoryXPCBox: xpc_object_t
     
     init(notSharedState: NotShared<T>) throws {
-        // Create semaphore to coordinate access to the wrapped value's shared memory
-        var semaphore = semaphore_t()
-        // 1 for the last argument is the semaphore's initial value, it must be 1 (not 0) in order start with a wait
-        // call (otherwise it would wait/block indefinitely)
-        let semaphoreCreationResult = semaphore_create(mach_task_self_, &semaphore, SYNC_POLICY_FIFO, 1)
-        guard semaphoreCreationResult == KERN_SUCCESS else {
+        // Create a mutex (using a cross-process semaphore) to coordinate access to the wrapped value's shared memory.
+        // For the semaphore to behave like a mutex, the last argument to semaphore_create(...) must be 1.
+        var mutex = semaphore_t()
+        let result = semaphore_create(mach_task_self_, &mutex, SYNC_POLICY_FIFO, 1)
+        guard result == KERN_SUCCESS else {
             let errorMessage: String
-            if let machErrorMessage = mach_error_string(semaphoreCreationResult) {
+            if let machErrorMessage = mach_error_string(result) {
                 errorMessage = String(cString: machErrorMessage)
             } else {
-                errorMessage = "Error code: \(semaphoreCreationResult)"
+                errorMessage = "Error code: \(result)"
             }
-            throw SharedTrivialError.semaphore(message: errorMessage)
+            throw SharedTrivialError.mutex(message: errorMessage)
         }
         
-        // Both the semaphore and the value need to be mapped into shared memory
-        (self.semaphoreMemory, self.semaphoreMemoryXPCBox) = try share(semaphore)
+        // Both the mutex and the value need to be mapped into shared memory
+        (self.mutexMemory, self.mutexMemoryXPCBox) = try share(mutex)
         (self.wrappedValueMemory, self.wrappedValueMemoryXPCBox) = try share(notSharedState.wrappedValue)
     }
     
     deinit {
         munmap(self.wrappedValueMemory, MemoryLayout<T>.stride)
-        munmap(self.semaphoreMemory, MemoryLayout<semaphore_t>.stride)
+        munmap(self.mutexMemory, MemoryLayout<semaphore_t>.stride)
     }
     
     // MARK: "Codable"
@@ -193,21 +194,21 @@ private class Shared<T> {
     // to this class.
     
     private enum CodingKeys: String, CodingKey {
-        case semaphore
+        case mutex
         case wrappedValue
     }
     
     func encode(to encoder: Encoder) throws {
         let container = try XPCEncoderImpl.asXPCEncoderImpl(encoder).xpcContainer(keyedBy: CodingKeys.self)
-        container.encode(self.semaphoreMemoryXPCBox, forKey: CodingKeys.semaphore)
-        container.encode(self.wrappedValueMemoryXPCBox, forKey: CodingKeys.wrappedValue)
+        container.encode(self.mutexMemoryXPCBox, forKey: .mutex)
+        container.encode(self.wrappedValueMemoryXPCBox, forKey: .wrappedValue)
     }
     
     required init(from decoder: Decoder) throws {
         let container = try XPCDecoderImpl.asXPCDecoderImpl(decoder).xpcContainer(keyedBy: CodingKeys.self)
-        self.semaphoreMemory = try container.decodeSharedMemory(forKey: .semaphore)
+        self.mutexMemory = try container.decodeSharedMemory(forKey: .mutex)
                                             .bindMemory(to: semaphore_t.self, capacity: 1)
-        self.semaphoreMemoryXPCBox = try container.asSharedMemoryXPCObject(forKey: .semaphore)
+        self.mutexMemoryXPCBox = try container.asSharedMemoryXPCObject(forKey: .mutex)
         self.wrappedValueMemory = try container.decodeSharedMemory(forKey: .wrappedValue)
                                                .bindMemory(to: T.self, capacity: 1)
         self.wrappedValueMemoryXPCBox = try container.asSharedMemoryXPCObject(forKey: .wrappedValue)
@@ -232,5 +233,5 @@ private func share<E>(_ value: E) throws -> (UnsafeMutablePointer<E>, xpc_object
 // beyond the fact that an error *did* occur.
 private enum SharedTrivialError: Error {
     case mmapFailed(type: Any.Type, stride: Int)
-    case semaphore(message: String)
+    case mutex(message: String)
 }
