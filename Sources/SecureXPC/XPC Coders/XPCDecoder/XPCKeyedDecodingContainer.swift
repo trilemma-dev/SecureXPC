@@ -181,4 +181,22 @@ internal class XPCKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerPr
     func decodeFileDescriptor(forKey key: K) throws -> CInt {
         return try decode(key: key, xpcType: XPC_TYPE_FD, transform: xpc_fd_dup)
     }
+    
+    func decodeSharedMemory(forKey key: K) throws -> UnsafeMutableRawPointer {
+        return try decode(key: key, xpcType: XPC_TYPE_SHMEM) {
+            var sharedMemoryPointer: UnsafeMutableRawPointer?
+            guard xpc_shmem_map($0, &sharedMemoryPointer) > 0, let sharedMemoryPointer = sharedMemoryPointer else {
+                let context = DecodingError.Context(codingPath: self.codingPath,
+                                                    debugDescription: "Unable to map shared memory",
+                                                    underlyingError: nil)
+                throw DecodingError.dataCorrupted(context)
+            }
+            
+            return sharedMemoryPointer
+        }
+    }
+    
+    func asSharedMemoryXPCObject(forKey key: K) throws -> xpc_object_t {
+        return try decode(key: key, xpcType: XPC_TYPE_SHMEM, transform: {$0})
+    }
 }
