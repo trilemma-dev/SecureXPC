@@ -8,6 +8,9 @@
 import Foundation
 import SecureXPC
 
+// This code run as a launch agent, which is created by LaunchAgent.swift.
+// Make sure to only reference SecureXPC and Shared.swift; anything else will fail when compiling.
+
 let server = try createServer()
 
 server.registerRoute(SharedRoutes.echoRoute) { $0 }

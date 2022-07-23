@@ -1,5 +1,5 @@
 //
-//  LaunchAgentTests.swift
+//  LaunchAgent Tests.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2022-07-22
