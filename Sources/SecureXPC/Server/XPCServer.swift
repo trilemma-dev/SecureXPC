@@ -104,6 +104,7 @@ import Foundation
 /// - ``forMachService()``
 /// - ``forMachService(withCriteria:)``
 /// - ``MachServiceCriteria``
+/// - ``ClientRequirement``
 /// - ``makeAnonymous()``
 /// - ``makeAnonymous(withClientRequirement:)``
 /// ### Registering Async Routes
@@ -128,6 +129,7 @@ import Foundation
 /// - ``startAndBlock()``
 /// - ``XPCNonBlockingServer/start()``
 /// ### Server State
+/// - ``RequestContext``
 /// - ``connectionDescriptor``
 /// - ``endpoint``
 public class XPCServer {
@@ -146,9 +148,9 @@ public class XPCServer {
     public var handlerQueue = DispatchQueue.global()
     
     /// Used to determine whether an incoming XPC message from a client should be processed and handed off to a registered route.
-    internal var clientRequirement: XPCClientRequirement
+    internal var clientRequirement: XPCServer.ClientRequirement
     
-    internal init(clientRequirement: XPCClientRequirement) {
+    internal init(clientRequirement: XPCServer.ClientRequirement) {
         self.clientRequirement = clientRequirement
         self.registerPackageInternalRoutes()
     }
@@ -387,7 +389,7 @@ public class XPCServer {
             // that largely abstracts away the concept of a client at all. As such, by default the target queue is
             // concurrent. (Although if an API user sets the target queue to be serial that's supported too.)
             self.handlerQueue.async {
-                XPCRequestContext.setForCurrentThread(connection: connection, message: message) {
+                XPCServer.RequestContext.setForCurrentThread(connection: connection, message: message) {
                     var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
                     do {
                         try handler.handle(request: request, server: self, connection: connection, reply: &reply)
@@ -399,7 +401,7 @@ public class XPCServer {
                 }
             }
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
-            XPCRequestContext.setForTask(connection: connection, message: message) {
+            XPCServer.RequestContext.setForTask(connection: connection, message: message) {
                 // Creating a task allows it to begin running immediately, operating similar to a concurrent
                 // DispatchQueue. However, the difference is there's no built in support to enforce serial execution.
                 // From Task:
@@ -538,7 +540,7 @@ extension XPCServer {
     ///
     /// Only a client created from an anonymous server's endpoint can communicate with that server. Retrieve the ``XPCServer/endpoint`` and send it
     /// across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required that you
-    /// specify the ``XPCClientRequirement`` for any connecting clients:
+    /// specify the ``XPCServer/ClientRequirement`` for any connecting clients:
     /// ```swift
     /// let server = XPCServer.makeAnonymous(withRequirement: .sameTeamIdentifier)
     /// ```
@@ -550,7 +552,7 @@ extension XPCServer {
     /// - Parameters:
     ///   - clientRequirement: If a request is received from a client, it will only be sent to a registered handler if it meets this requirement.
     public static func makeAnonymous(
-        withClientRequirement clientRequirement: XPCClientRequirement
+        withClientRequirement clientRequirement: XPCServer.ClientRequirement
     ) -> XPCServer & XPCNonBlockingServer {
         XPCAnonymousServer(clientRequirement: clientRequirement)
     }
@@ -578,7 +580,7 @@ extension XPCServer {
     ///
     /// Auto-configuration will succeed so long as there is exactly one Mach service present. (For login items this is implicit and always true.) When there are
     /// multiple Mach services present or this package lacks built-in support, ``XPCServer/forMachService(withCriteria:)`` must be called instead.
-    /// That function can also be used in order to specify a non-default ``XPCClientRequirement``.
+    /// That function can also be used in order to specify a non-default ``XPCServer/ClientRequirement``.
     ///
     /// Because many processes on the system can talk to an XPC Mach service, a retrieved a server will always be configured with a default
     /// `XPCClientRequirement` that is customized based on the process the server is running in. See ``XPCServer/MachServiceCriteria`` for

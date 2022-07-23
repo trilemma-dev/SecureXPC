@@ -7,47 +7,51 @@
 
 import Foundation
 
-/// Determines whether a client's request should be trusted by an ``XPCServer``.
-///
-/// If a client is trusted, its requests will attempt to be routed to a registered route handler.
-///
-/// Use a client requirement to retrieve a customized `XPCServer` instance:
-/// ```swift
-/// let server = try XPCServer.forMachService(withCriteria:
-///   .forLoginItem(withClientRequirement: try .parentDesignatedRequirement))
-/// ```
-///
-/// Requirements can be combined with `||` as well as `&&`:
-/// ```swift
-/// let server = XPCServer.makeAnonymous(withClientRequirement:
-///     try .sameTeamIdentifier || try .teamIdentifier("Q55ZG849VX")))
-/// ```
-///
-/// ## Topics
-/// ### Requirements
-/// - ``sameParentBundle``
-/// - ``sameTeamIdentifier``
-/// - ``teamIdentifier(_:)``
-/// - ``parentDesignatedRequirement`` 
-/// - ``secRequirement(_:)``
-public struct XPCClientRequirement {
-    /// What actually performs the requirement validation
-    private let messageAcceptor: MessageAcceptor
-    
+public extension XPCServer {
+    /// Determines whether a client's request should be trusted by an ``XPCServer``.
+    ///
+    /// If a client is trusted, its requests will attempt to be routed to a registered route handler.
+    ///
+    /// Use a client requirement to retrieve a customized `XPCServer` instance:
+    /// ```swift
+    /// let server = try XPCServer.forMachService(withCriteria:
+    ///   .forLoginItem(withClientRequirement: try .parentDesignatedRequirement))
+    /// ```
+    ///
+    /// Requirements can be combined with `||` as well as `&&`:
+    /// ```swift
+    /// let server = XPCServer.makeAnonymous(withClientRequirement:
+    ///     try .sameTeamIdentifier || try .teamIdentifier("Q55ZG849VX")))
+    /// ```
+    ///
+    /// ## Topics
+    /// ### Requirements
+    /// - ``sameParentBundle``
+    /// - ``sameTeamIdentifier``
+    /// - ``teamIdentifier(_:)``
+    /// - ``parentDesignatedRequirement``
+    /// - ``secRequirement(_:)``
+    struct ClientRequirement {
+        /// What actually performs the requirement validation
+        private let messageAcceptor: MessageAcceptor
+    }
+}
+
+extension XPCServer.ClientRequirement {
     /// The requesting client must satisfy the specified code signing security requirement.
-    public static func secRequirement(_ requirement: SecRequirement) -> XPCClientRequirement {
-        XPCClientRequirement(messageAcceptor: SecRequirementsMessageAcceptor([requirement]))
+    public static func secRequirement(_ requirement: SecRequirement) -> XPCServer.ClientRequirement {
+        XPCServer.ClientRequirement(messageAcceptor: SecRequirementsMessageAcceptor([requirement]))
     }
     
     /// The requesting client must have the specified team identifier.
-    public static func teamIdentifier(_ teamIdentifier: String) throws -> XPCClientRequirement {
+    public static func teamIdentifier(_ teamIdentifier: String) throws -> XPCServer.ClientRequirement {
         .secRequirement(try secRequirementForTeamIdentifier(teamIdentifier))
     }
     
     /// The requesting client must have the same team identifier as this server.
     ///
     /// - Throws: If this server does not have a team identifier.
-    public static var sameTeamIdentifier: XPCClientRequirement {
+    public static var sameTeamIdentifier: XPCServer.ClientRequirement {
         get throws {
             guard let teamID = try teamIdentifierForThisProcess() else {
                 throw XPCError.misconfiguredServer(description: "This server does not have a team identifier")
@@ -60,16 +64,17 @@ public struct XPCClientRequirement {
     /// The requesting client must be within the same parent bundle as this server.
     ///
     /// - Throws: If this server is not part of a bundle.
-    public static var sameParentBundle: XPCClientRequirement {
+    public static var sameParentBundle: XPCServer.ClientRequirement {
         get throws {
-            XPCClientRequirement(messageAcceptor: ParentBundleMessageAcceptor(parentBundleURL: try parentBundleURL))
+            XPCServer.ClientRequirement(
+                messageAcceptor: ParentBundleMessageAcceptor(parentBundleURL: try parentBundleURL))
         }
     }
     
     /// The requesting client must satisfy the designated requirement of the parent bundle.
     ///
     /// - Throws: If this server has no parent bundle.
-    public static var parentDesignatedRequirement: XPCClientRequirement {
+    public static var parentDesignatedRequirement: XPCServer.ClientRequirement {
         get throws {
             let parentBundleURL = try parentBundleURL
             var parentCode: SecStaticCode?
@@ -87,28 +92,36 @@ public struct XPCClientRequirement {
     }
     
     /// The requesting client must satisfy both requirements.
-    public static func && (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> XPCClientRequirement {
-        XPCClientRequirement(messageAcceptor: AndMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
+    public static func && (
+        lhs: XPCServer.ClientRequirement,
+        rhs: XPCServer.ClientRequirement
+    ) -> XPCServer.ClientRequirement {
+        XPCServer.ClientRequirement(messageAcceptor: AndMessageAcceptor(lhs: lhs.messageAcceptor,
+                                                                        rhs: rhs.messageAcceptor))
     }
     
     /// The requesting client must satisfy at least one of the requirements.
-    public static func || (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> XPCClientRequirement {
-        XPCClientRequirement(messageAcceptor: OrMessageAcceptor(lhs: lhs.messageAcceptor, rhs: rhs.messageAcceptor))
+    public static func || (
+        lhs: XPCServer.ClientRequirement,
+        rhs: XPCServer.ClientRequirement
+    ) -> XPCServer.ClientRequirement {
+        XPCServer.ClientRequirement(messageAcceptor: OrMessageAcceptor(lhs: lhs.messageAcceptor,
+                                                                       rhs: rhs.messageAcceptor))
     }
     
     // MARK: Internal
     
     // This is intentionally not publicly exposed, it's only intended for default use by `XPCServiceServer`
-    internal static var alwaysAccepting: XPCClientRequirement {
-        XPCClientRequirement(messageAcceptor: AlwaysAcceptingMessageAcceptor())
+    internal static var alwaysAccepting: XPCServer.ClientRequirement {
+        XPCServer.ClientRequirement(messageAcceptor: AlwaysAcceptingMessageAcceptor())
     }
     
     
     // This is intentionally not publicly exposed as it's only safe to use for an `XPCAnonymousServer`
     // See SameProcessMessageAcceptor for more details
-    internal static var sameProcess: XPCClientRequirement {
+    internal static var sameProcess: XPCServer.ClientRequirement {
         get {
-            XPCClientRequirement(messageAcceptor: SameProcessMessageAcceptor())
+            XPCServer.ClientRequirement(messageAcceptor: SameProcessMessageAcceptor())
         }
     }
     
@@ -132,8 +145,8 @@ public struct XPCClientRequirement {
     }
 }
 
-extension XPCClientRequirement: Equatable {
-    public static func == (lhs: XPCClientRequirement, rhs: XPCClientRequirement) -> Bool {
+extension XPCServer.ClientRequirement: Equatable {
+    public static func == (lhs: XPCServer.ClientRequirement, rhs: XPCServer.ClientRequirement) -> Bool {
         return lhs.messageAcceptor.isEqual(to: rhs.messageAcceptor)
     }
 }

@@ -17,7 +17,7 @@ internal class XPCServiceClient: XPCClient {
         .xpcService(name: xpcServiceName)
     }
 
-    internal init(xpcServiceName: String, serverRequirement: XPCServerRequirement) {
+    internal init(xpcServiceName: String, serverRequirement: XPCClient.ServerRequirement) {
         self.xpcServiceName = xpcServiceName
         super.init(serverRequirement: serverRequirement)
     }

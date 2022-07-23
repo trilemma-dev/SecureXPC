@@ -21,10 +21,10 @@ public enum XPCError: Error, Codable {
     case terminationImminent
     /// A request failed due to not meeting security requirements.
     ///
-    /// On the server this occurs when a request was not accepted due to not meeting the server's ``XPCClientRequirement`` or being unable to identify
-    /// the client.
+    /// On the server this occurs when a request was not accepted due to not meeting the server's ``XPCServer/ClientRequirement`` or being unable to
+    /// identify the client.
     ///
-    /// On the client this occurs when a request was not made because the server does not meet the client's ``XPCServerRequirement``.
+    /// On the client this occurs when a request was not made because the server does not meet the client's ``XPCClient/ServerRequirement``.
     case insecure
     /// A response cannot be sent because the client is no longer connected.
     case clientNotConnected
@@ -45,13 +45,13 @@ public enum XPCError: Error, Codable {
     case routeMismatch(routeName:[String], description: String)
     /// A server already exists for this named XPC Mach service and therefore another server can't be returned with different client requirements.
     case conflictingClientRequirements
-    /// This process's configuration prevents an ``XPCServer`` being retrieved for it or an ``XPCClientRequirement`` for being created for it.
+    /// This process's configuration prevents an ``XPCServer`` being retrieved for it or an ``XPCServer/ClientRequirement`` for being created for it.
     case misconfiguredServer(description: String)
     /// An error thrown by a handler registered with a ``XPCServer`` route when processing a client's request.
     ///
     /// The associated value represents, and possibly contains, the error.
     case handlerError(HandlerError)
-    /// This process's configuration prevents an ``XPCServerRequirement`` for being created for it.
+    /// This process's configuration prevents an ``XPCClient/ServerRequirement`` for being created for it.
     case misconfiguredClient(description: String)
     /// An error internal to the SecureXPC framework.
     case internalFailure(description: String)

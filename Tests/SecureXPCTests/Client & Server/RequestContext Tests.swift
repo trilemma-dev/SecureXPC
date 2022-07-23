@@ -1,5 +1,5 @@
 //
-//  XPCRequestContextTest.swift
+//  RequestContextTest.swift
 //  
 //
 //  Created by Josh Kaplan on 2022-02-23.
@@ -9,7 +9,7 @@ import Foundation
 import XCTest
 import SecureXPC
 
-class XPCRequestContextTest: XCTestCase {
+class RequestContextTest: XCTestCase {
     
     func testGetEffectiveUserID_async() async throws {
         let route = XPCRoute.named("does", "nothing")
@@ -18,7 +18,7 @@ class XPCRequestContextTest: XCTestCase {
         
         server.registerRoute(route) { () async -> Void in
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveUserID
+            _ = XPCServer.RequestContext.effectiveUserID
         }
         server.start()
         
@@ -34,7 +34,7 @@ class XPCRequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveUserID
+            _ = XPCServer.RequestContext.effectiveUserID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -50,7 +50,7 @@ class XPCRequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCRequestContext.effectiveGroupID)
+            XCTAssertNotNil(XPCServer.RequestContext.effectiveGroupID)
         }
         server.start()
         
@@ -66,7 +66,7 @@ class XPCRequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCRequestContext.effectiveGroupID
+            _ = XPCServer.RequestContext.effectiveGroupID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -82,9 +82,9 @@ class XPCRequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCRequestContext.code)
+            XCTAssertNotNil(XPCServer.RequestContext.code)
             var staticCode: SecStaticCode?
-            SecCodeCopyStaticCode(XPCRequestContext.code!, [], &staticCode)
+            SecCodeCopyStaticCode(XPCServer.RequestContext.code!, [], &staticCode)
             var signingInfo: CFDictionary?
             SecCodeCopySigningInformation(staticCode!, [], &signingInfo)
             XCTAssertEqual((signingInfo! as NSDictionary)[kSecCodeInfoIdentifier] as? String, "com.apple.xctest")
@@ -102,7 +102,7 @@ class XPCRequestContextTest: XCTestCase {
         let clientCodeNotNil = self.expectation(description: "Client code should not be nil in this circumstance")
         
         server.registerRoute(route) {
-            if let clientCode = XPCRequestContext.code {
+            if let clientCode = XPCServer.RequestContext.code {
                 clientCodeNotNil.fulfill()
                 var staticCode: SecStaticCode?
                 SecCodeCopyStaticCode(clientCode, [], &staticCode)

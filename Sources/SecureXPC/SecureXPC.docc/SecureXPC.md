@@ -81,6 +81,7 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCServer``
 - ``XPCNonBlockingServer``
 - ``XPCServerEndpoint``
+- ``XPCConnectionDescriptor``
 
 ### Routes
 - ``XPCRoute``
@@ -98,13 +99,6 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 ### Sequential Results
 - ``SequentialResult``
 - ``SequentialResultProvider``
-
-### Configuration & Information
-- ``XPCClientRequirement``
-- ``XPCServerRequirement``
-- ``XPCConnectionDescriptor``
-- ``XPCRequestContext``
-- ``XPCServerIdentity``
 
 ### Codable Conformance
 - ``FileHandleForXPC``
