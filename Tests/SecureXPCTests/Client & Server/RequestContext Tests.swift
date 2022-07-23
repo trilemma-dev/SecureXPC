@@ -18,7 +18,7 @@ class RequestContextTest: XCTestCase {
         
         server.registerRoute(route) { () async -> Void in
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCServer.RequestContext.effectiveUserID
+            _ = XPCServer.ClientIdentity.effectiveUserID
         }
         server.start()
         
@@ -34,7 +34,7 @@ class RequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCServer.RequestContext.effectiveUserID
+            _ = XPCServer.ClientIdentity.effectiveUserID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -50,7 +50,7 @@ class RequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCServer.RequestContext.effectiveGroupID)
+            XCTAssertNotNil(XPCServer.ClientIdentity.effectiveGroupID)
         }
         server.start()
         
@@ -66,7 +66,7 @@ class RequestContextTest: XCTestCase {
         
         server.registerRoute(route) {
             // If this fails it'll fatalError, so all we're doing here is ensuring that doesn't happen
-            _ = XPCServer.RequestContext.effectiveGroupID
+            _ = XPCServer.ClientIdentity.effectiveGroupID
             contextValueAccessed.fulfill()
         }
         server.start()
@@ -82,9 +82,9 @@ class RequestContextTest: XCTestCase {
         let client = XPCClient.forEndpoint(server.endpoint)
         
         server.registerRoute(route) { () async -> Void in
-            XCTAssertNotNil(XPCServer.RequestContext.code)
+            XCTAssertNotNil(XPCServer.ClientIdentity.code)
             var staticCode: SecStaticCode?
-            SecCodeCopyStaticCode(XPCServer.RequestContext.code!, [], &staticCode)
+            SecCodeCopyStaticCode(XPCServer.ClientIdentity.code!, [], &staticCode)
             var signingInfo: CFDictionary?
             SecCodeCopySigningInformation(staticCode!, [], &signingInfo)
             XCTAssertEqual((signingInfo! as NSDictionary)[kSecCodeInfoIdentifier] as? String, "com.apple.xctest")
@@ -102,7 +102,7 @@ class RequestContextTest: XCTestCase {
         let clientCodeNotNil = self.expectation(description: "Client code should not be nil in this circumstance")
         
         server.registerRoute(route) {
-            if let clientCode = XPCServer.RequestContext.code {
+            if let clientCode = XPCServer.ClientIdentity.code {
                 clientCodeNotNil.fulfill()
                 var staticCode: SecStaticCode?
                 SecCodeCopyStaticCode(clientCode, [], &staticCode)

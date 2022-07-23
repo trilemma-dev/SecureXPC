@@ -129,7 +129,7 @@ import Foundation
 /// - ``startAndBlock()``
 /// - ``XPCNonBlockingServer/start()``
 /// ### Server State
-/// - ``RequestContext``
+/// - ``ClientIdentity``
 /// - ``connectionDescriptor``
 /// - ``endpoint``
 public class XPCServer {
@@ -389,7 +389,7 @@ public class XPCServer {
             // that largely abstracts away the concept of a client at all. As such, by default the target queue is
             // concurrent. (Although if an API user sets the target queue to be serial that's supported too.)
             self.handlerQueue.async {
-                XPCServer.RequestContext.setForCurrentThread(connection: connection, message: message) {
+                XPCServer.ClientIdentity.setForCurrentThread(connection: connection, message: message) {
                     var reply = handler.shouldCreateReply ? xpc_dictionary_create_reply(message) : nil
                     do {
                         try handler.handle(request: request, server: self, connection: connection, reply: &reply)
@@ -401,7 +401,7 @@ public class XPCServer {
                 }
             }
         } else if #available(macOS 10.15.0, *), let handler = handler as? XPCHandlerAsync {
-            XPCServer.RequestContext.setForTask(connection: connection, message: message) {
+            XPCServer.ClientIdentity.setForTask(connection: connection, message: message) {
                 // Creating a task allows it to begin running immediately, operating similar to a concurrent
                 // DispatchQueue. However, the difference is there's no built in support to enforce serial execution.
                 // From Task:

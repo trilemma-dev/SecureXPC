@@ -1,5 +1,5 @@
 //
-//  RequestContext.swift
+//  ClientIdentity.swift
 //  SecureXPC
 //
 //  Created by Josh Kaplan on 2022-02-22.
@@ -8,7 +8,7 @@
 import Foundation
 
 public extension XPCServer {
-    /// Information about the current request being handled by an ``XPCServer``.
+    /// Information about the client making a current request being handled by an ``XPCServer``.
     ///
     /// Accessing the properties exposed by this class is a programming error unless called from inside of a closure registered with and called by an
     /// `XPCServer`.
@@ -18,7 +18,7 @@ public extension XPCServer {
     /// - ``code``
     /// - ``effectiveUserID``
     /// - ``effectiveGroupID``
-    class RequestContext {
+    class ClientIdentity {
         private let connection: xpc_connection_t
         private let message: xpc_object_t
         
@@ -31,7 +31,7 @@ public extension XPCServer {
         
         @available(macOS 10.15.0, *)
         @TaskLocal
-        private static var currentForTask: XPCServer.RequestContext?
+        private static var currentForTask: XPCServer.ClientIdentity?
         
         @available(macOS 10.15.0, *)
         @discardableResult internal static func setForTask<Success, Failure>(
@@ -39,7 +39,7 @@ public extension XPCServer {
             message: xpc_object_t,
             operation: () throws -> Task<Success, Failure>
         ) rethrows -> Task<Success, Failure> {
-            try $currentForTask.withValue(XPCServer.RequestContext(connection: connection, message: message)) {
+            try $currentForTask.withValue(XPCServer.ClientIdentity(connection: connection, message: message)) {
                 try operation()
             }
         }
@@ -53,7 +53,7 @@ public extension XPCServer {
             message: xpc_object_t,
             operation: () throws -> R
         ) rethrows -> R {
-            Thread.current.threadDictionary[contextKey] = XPCServer.RequestContext(connection: connection,
+            Thread.current.threadDictionary[contextKey] = XPCServer.ClientIdentity(connection: connection,
                                                                                    message: message)
             let result = try operation()
             Thread.current.threadDictionary.removeObject(forKey: contextKey)
@@ -63,14 +63,14 @@ public extension XPCServer {
         
         // MARK: current context
         
-        private static var current: XPCServer.RequestContext {
-            if let current = Thread.current.threadDictionary[contextKey] as? XPCServer.RequestContext {
+        private static var current: XPCServer.ClientIdentity {
+            if let current = Thread.current.threadDictionary[contextKey] as? XPCServer.ClientIdentity {
                 return current
             } else if #available(macOS 10.15.0, *), let current = currentForTask {
                 return current
             } else {
                 fatalError("""
-                \(XPCServer.RequestContext.self) can only be accessed from within the thread or task of a closure \
+                \(XPCServer.ClientIdentity.self) can only be accessed from within the thread or task of a closure \
                 called by \(XPCServer.self).
                 """)
             }
@@ -96,5 +96,4 @@ public extension XPCServer {
             SecCodeCreateWithXPCConnection(current.connection, andMessage: current.message)
         }
     }
-
 }
