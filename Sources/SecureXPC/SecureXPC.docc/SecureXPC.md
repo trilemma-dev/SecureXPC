@@ -92,13 +92,13 @@ See ``XPCClient`` for more on how to retrieve a client and send requests.
 - ``XPCRouteWithMessageWithReply``
 - ``XPCRouteWithMessageWithSequentialReply``
 
-### Errors
-- ``XPCError``
-- ``HandlerError``
-
 ### Sequential Results
 - ``SequentialResult``
 - ``SequentialResultProvider``
+
+### Errors
+- ``XPCError``
+- ``HandlerError``
 
 ### Codable Conformance
 - ``FileHandleForXPC``
