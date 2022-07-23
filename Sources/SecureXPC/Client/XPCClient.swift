@@ -124,6 +124,7 @@ import Foundation
 /// - ``forXPCService(named:)``
 /// - ``forMachService(named:withServerRequirement:)``
 /// - ``forEndpoint(_:withServerRequirement:)``
+/// - ``ServerRequirement``
 /// ### Sending Requests with Async
 /// - ``send(to:)-5b1ar``
 /// - ``send(to:)-18k1k``
@@ -144,15 +145,16 @@ import Foundation
 /// ### Client Information
 /// - ``connectionDescriptor``
 /// ### Server Information
-/// - ``serverIdentity``
+/// - ``serverIdentity-swift.property``
 /// - ``serverIdentity(_:)``
+/// - ``ServerIdentity-swift.struct``
 public class XPCClient {
     
     private let inProgressSequentialReplies = InProgressSequentialReplies()
-    private let serverRequirement: XPCServerRequirement
+    private let serverRequirement: XPCClient.ServerRequirement
     private var connection: xpc_connection_t? = nil
     
-    internal init(serverRequirement: XPCServerRequirement) {
+    internal init(serverRequirement: XPCClient.ServerRequirement) {
         self.serverRequirement = serverRequirement
     }
     
@@ -619,12 +621,13 @@ public class XPCClient {
     
     /// A representation of the server's running program.
     ///
-    /// The returned ``XPCServerIdentity``'s information is provided by macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The returned ``XPCClient/ServerIdentity-swift.struct``'s information is provided by macOS itself and cannot be misrepresented
+    /// (intentionally or otherwise) by the server.
     ///
     /// > Note: Accessing this property involves cross-process communication with the server and is therefore subject to all of the same error conditions as making
     /// a `send` or `sendMessage` call.
     @available(macOS 10.15.0, *)
-    public var serverIdentity: XPCServerIdentity {
+    public var serverIdentity: XPCClient.ServerIdentity {
         get async throws {
             try await withUnsafeThrowingContinuation { continuation in
                 self.serverIdentity { response in
@@ -636,11 +639,12 @@ public class XPCClient {
     
     /// Provides a representation of the server's running program to the handler.
     ///
-    /// The provided ``XPCServerIdentity``'s information comes from macOS itself and cannot be misrepresented (intentionally or otherwise) by the server.
+    /// The provided ``XPCClient/ServerIdentity-swift.struct``'s information comes from macOS itself and cannot be misrepresented (intentionally
+    /// or otherwise) by the server.
     ///
     /// > Note: Calling this function involves cross-process communication with the server and is therefore subject to all of the same error conditions as making a
     /// `send` or `sendMessage` call.
-    public func serverIdentity(_ handler: @escaping XPCResponseHandler<XPCServerIdentity>) {
+    public func serverIdentity(_ handler: @escaping XPCResponseHandler<XPCClient.ServerIdentity>) {
         self.withConnection { connectionResult in
             switch connectionResult {
                 case .success(let connection):
@@ -657,7 +661,7 @@ public class XPCClient {
     // in infinite recursion between these two functions.
     private func serverIdentity(
         connection: xpc_connection_t,
-        handler: @escaping XPCResponseHandler<XPCServerIdentity>
+        handler: @escaping XPCResponseHandler<XPCClient.ServerIdentity>
     ) {
         // Create request
         let request: Request
@@ -680,10 +684,10 @@ public class XPCClient {
                 handler(.failure(XPCError.internalFailure(description: "Unable to get server's SecCode")))
                 return
             }
-            let serverIdentity = XPCServerIdentity(code: code,
-                                                   effectiveUserID: xpc_connection_get_euid(connection),
-                                                   effectiveGroupID: xpc_connection_get_egid(connection),
-                                                   processID: xpc_connection_get_pid(connection))
+            let serverIdentity = XPCClient.ServerIdentity(code: code,
+                                                          effectiveUserID: xpc_connection_get_euid(connection),
+                                                          effectiveGroupID: xpc_connection_get_egid(connection),
+                                                          processID: xpc_connection_get_pid(connection))
             handler(.success(serverIdentity))
         }
     }
@@ -769,7 +773,7 @@ extension XPCClient {
     /// - Returns: A client configured to communicate with the named service.
     public static func forMachService(
         named machServiceName: String,
-        withServerRequirement serverRequirement: XPCServerRequirement = .sameTeamIdentifierIfPresent
+        withServerRequirement serverRequirement: XPCClient.ServerRequirement = .sameTeamIdentifierIfPresent
     ) -> XPCClient {
         XPCMachClient(machServiceName: machServiceName, serverRequirement: serverRequirement)
     }
@@ -783,11 +787,11 @@ extension XPCClient {
     ///   - serverRequirement: The requirement the server needs to meet in order for this client to communicate with it. By default only a server in the same
     ///                        process will be trusted which will always work a server retrieved with ``XPCServer/makeAnonymous()``. However, for
     ///                        any server that is running outside of this process, a non-default requirement such as
-    ///                        ``XPCServerRequirement/sameTeamIdentifier`` will need to be provided.
+    ///                        ``XPCClient/ServerRequirement/sameTeamIdentifier`` will need to be provided.
     /// - Returns: A client configured to communicate with the provided endpoint.
     public static func forEndpoint(
         _ endpoint: XPCServerEndpoint,
-        withServerRequirement serverRequirement: XPCServerRequirement = .sameProcess
+        withServerRequirement serverRequirement: XPCClient.ServerRequirement = .sameProcess
     ) -> XPCClient {
         XPCEndpointClient(endpoint: endpoint, serverRequirement: serverRequirement)
     }

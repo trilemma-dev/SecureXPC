@@ -14,7 +14,7 @@ import Foundation
 internal class XPCEndpointClient: XPCClient {
     private let endpoint: XPCServerEndpoint
 
-    internal init(endpoint: XPCServerEndpoint, serverRequirement: XPCServerRequirement) {
+    internal init(endpoint: XPCServerEndpoint, serverRequirement: XPCClient.ServerRequirement) {
         self.endpoint = endpoint
         super.init(serverRequirement: serverRequirement)
     }

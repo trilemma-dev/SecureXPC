@@ -17,7 +17,7 @@ internal class XPCMachClient: XPCClient {
         .machService(name: machServiceName)
     }
 
-    internal init(machServiceName: String, serverRequirement: XPCServerRequirement) {
+    internal init(machServiceName: String, serverRequirement: XPCClient.ServerRequirement) {
         self.machServiceName = machServiceName
         super.init(serverRequirement: serverRequirement)
     }

@@ -22,7 +22,7 @@ internal class XPCServiceServer: XPCServer {
     }
     
     /// The server itself, there can only ever be one per process as there is only ever one named connection that exists for an XPC service
-    private static let service = XPCServiceServer(clientRequirement: XPCClientRequirement.alwaysAccepting)
+    private static let service = XPCServiceServer(clientRequirement: .alwaysAccepting)
     
     /// Whether this server has been started.
     private var started = false
@@ -121,7 +121,7 @@ internal class XPCServiceServer: XPCServer {
             // there's a valid team ID present we'll additionally enforce it's of the same team ID. Creating the parent
             // bundle requirement should always succeed because as part of creating an XPCServiceServer a check is
             // performance that this process is located within a Contents/XPCServices directory.
-            if let teamIDRequirement = try? XPCClientRequirement.sameTeamIdentifier {
+            if let teamIDRequirement = try? XPCServer.ClientRequirement.sameTeamIdentifier {
                 self.clientRequirement = try! .sameParentBundle && teamIDRequirement
             } else {
                 self.clientRequirement = try! .sameParentBundle

@@ -33,14 +33,14 @@ public extension XPCServer {
         /// The name of the Mach service to be retrieved.
         internal let machServiceName: String
         /// The requirement for clients in order to be allowed to communicate with this Mach service.
-        internal let clientRequirement: XPCClientRequirement
+        internal let clientRequirement: XPCServer.ClientRequirement
         
         /// Explicitly specified criteria for a Mach service.
         ///
         /// - Parameters:
         ///   - machServiceName: The name of the service to be retrieved; no validation is performed.
         ///   - clientRequirement: The requirement for clients in order to be allowed to communicate with this Mach service.
-        public init(machServiceName: String, clientRequirement: XPCClientRequirement) {
+        public init(machServiceName: String, clientRequirement: XPCServer.ClientRequirement) {
             self.machServiceName = machServiceName
             self.clientRequirement = clientRequirement
         }
@@ -76,8 +76,8 @@ public extension XPCServer {
         private static func createCriteria(
             named name: String?,
             machServices: Set<String>,
-            withClientRequirement requirement: XPCClientRequirement?,
-            defaultClientRequirementCreator: () throws -> XPCClientRequirement
+            withClientRequirement requirement: XPCServer.ClientRequirement?,
+            defaultClientRequirementCreator: () throws -> XPCServer.ClientRequirement
         ) throws -> MachServiceCriteria {
             let machServiceName: String
             if let name = name {
@@ -120,7 +120,7 @@ public extension XPCServer {
         /// - Returns: Criteria for a Mach service belonging to a helper tool installed with `SMJobBless`.
         public static func forBlessedHelperTool(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try validateThisProcessIsABlessedHelperTool().throwIfFailure()
             
@@ -129,7 +129,7 @@ public extension XPCServer {
         
         private static func _forBlessedHelperTool(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try createCriteria(named: name,
                                machServices: try blessedHelperToolMachServices(),
@@ -152,7 +152,7 @@ public extension XPCServer {
         @available(macOS 13.0, *)
         public static func forDaemon(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try validateThisProcessIsAnSMAppServiceDaemon().throwIfFailure()
             
@@ -161,7 +161,7 @@ public extension XPCServer {
         
         private static func _forDaemon(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try createCriteria(named: name,
                                machServices: try agentOrDaemonMachServices(directory: .daemon),
@@ -189,7 +189,7 @@ public extension XPCServer {
         @available(macOS 13.0, *)
         public static func forAgent(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try validateThisProcessIsAnSMAppServiceDaemon().throwIfFailure()
             
@@ -198,7 +198,7 @@ public extension XPCServer {
         
         private static func _forAgent(
             named name: String? = nil,
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try createCriteria(named: name,
                                machServices: try agentOrDaemonMachServices(directory: .agent),
@@ -223,7 +223,7 @@ public extension XPCServer {
         ///                          this login item (if this login item has a team identifier) and belong to the same parent app bundle.
         /// - Returns: Criteria for a Mach service belonging to a login item enabled with `SMLoginItemSetEnabled`.
         public static func forLoginItem(
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try validateThisProcessIsALoginItem().throwIfFailure()
             
@@ -231,7 +231,7 @@ public extension XPCServer {
         }
         
         private static func _forLoginItem(
-            withClientRequirement requirement: XPCClientRequirement? = nil
+            withClientRequirement requirement: XPCServer.ClientRequirement? = nil
         ) throws -> MachServiceCriteria {
             try throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC()
             
@@ -245,11 +245,11 @@ public extension XPCServer {
                 """)
             }
             
-            let clientRequirement: XPCClientRequirement
+            let clientRequirement: XPCServer.ClientRequirement
             if let requirement = requirement {
                 clientRequirement = requirement
             } else {
-                if let sameTeamRequirement = try? XPCClientRequirement.sameTeamIdentifier {
+                if let sameTeamRequirement = try? XPCServer.ClientRequirement.sameTeamIdentifier {
                     clientRequirement = try sameTeamRequirement && .sameParentBundle
                 } else {
                     clientRequirement = try .sameParentBundle
@@ -376,7 +376,7 @@ private func blessedHelperToolMachServices() throws -> Set<String> {
 }
 
 /// Generate client requirements from the embedded info property list's `SMAuthorizedClients`
-private func blessedHelperToolClientRequirements() throws -> XPCClientRequirement {
+private func blessedHelperToolClientRequirements() throws -> XPCServer.ClientRequirement {
     // Read authorized clients
     let data = try readEmbeddedPropertyList(sectionName: "__info_plist")
     guard let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil) as? NSDictionary else {
@@ -387,7 +387,7 @@ private func blessedHelperToolClientRequirements() throws -> XPCClientRequiremen
     }
     
     // Turn into client requirement
-    var clientRequirement: XPCClientRequirement? = nil
+    var clientRequirement: XPCServer.ClientRequirement? = nil
     for client in authorizedClients {
         var requirement: SecRequirement?
         guard SecRequirementCreateWithString(client as CFString, SecCSFlags(), &requirement) == errSecSuccess,

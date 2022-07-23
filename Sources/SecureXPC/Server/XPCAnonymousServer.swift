@@ -17,7 +17,7 @@ internal class XPCAnonymousServer: XPCServer {
     /// Connections received while the server is not started
     private var pendingConnections = [xpc_connection_t]()
     
-    internal override init(clientRequirement: XPCClientRequirement) {
+    internal override init(clientRequirement: XPCServer.ClientRequirement) {
         self.anonymousListenerConnection = xpc_connection_create(nil, listenerQueue)
         super.init(clientRequirement: clientRequirement)
         
