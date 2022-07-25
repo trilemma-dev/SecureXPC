@@ -60,7 +60,7 @@ There are multiple types of servers which can be retrieved:
      - For agents and daemons registered with `SMAppService`, `SMJobBless` helper tools, and `SMLoginItemSetEnabled`
        login items
  - `XPCServer.forMachService(withCriteria:)`
-     - For any type of Mach service including "classic" agents and daemons. See documentation for details
+     - For any type of Mach service including "classic" agents and daemons, see documentation for details
  - `XPCServer.makeAnonymous()`
      - Typically used for testing purposes
  - `XPCServer.makeAnonymous(withClientRequirements:)`
