@@ -43,7 +43,7 @@ here are a few:
 - [OSX XPC Revisited - 3rd Party Application Flaws](https://youtu.be/KPzhTqwf0bA)
 - [Abusing & Security XPC in macOS apps](https://youtu.be/ezxD5M90Mmc)
 
-# Can I share non-serializable types like `Filehandle` or `IOSurface`?
+# Can I use non-serializable types like `Filehandle` or `IOSurface`?
 Yes! While SecureXPC uses `Codable` as its data transfer protocol, it provides property wrappers that make it possible
 to send these types across an XPC connection. See `IOSurfaceForXPC`, `FileHandleForXPC`, and `FileDescriptorForXPC` for
 details.
