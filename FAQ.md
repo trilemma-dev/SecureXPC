@@ -51,7 +51,7 @@ details.
 # Is shared memory supported?
 Yes, but it's currently in an experimental state. The basic building blocks are available for you to build your own
 multi-process data structures, namely both typed and untyped shared memory as well as a cross-process semaphore. If you
-have feedback on how this part of the API can be improved, please start a Github discussion!
+have feedback on how this part of the API can be improved, please start a GitHub discussion!
 
 # What are the differences between `Codable` vs `NSSecureCoding`?
 SecureXPC uses types conforming to Swift's `Codable` protocol to serialize data across the XPC connection. Due to the
