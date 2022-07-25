@@ -15,11 +15,13 @@ let server = try createServer()
 
 server.registerRoute(SharedRoutes.echoRoute) { $0 }
 
-var latestAndGreatest = LatestAndGreatest(now: CFAbsoluteTimeGetCurrent(), latestValue: Double.random(in: 0.0...1000.0))
+var latestAndGreatest = LatestAndGreatest(now: SharedTrivial(CFAbsoluteTimeGetCurrent()),
+                                          latestValue: SharedTrivial(Double.random(in: 0.0...1000.0)))
 server.registerRoute(SharedRoutes.latestRoute) { latestAndGreatest }
 server.registerRoute(SharedRoutes.mutateLatestRoute) {
-    latestAndGreatest.now = CFAbsoluteTimeGetCurrent()
-    latestAndGreatest.latestValue += Double.random(in: 0.0...1000.0)
+    try latestAndGreatest.now.updateValue(CFAbsoluteTimeGetCurrent())
+    let nextValue = try latestAndGreatest.latestValue.retrieveValue() + Double.random(in: 0.0...1000.0)
+    try latestAndGreatest.latestValue.updateValue(nextValue)
 }
 
 server.startAndBlock()

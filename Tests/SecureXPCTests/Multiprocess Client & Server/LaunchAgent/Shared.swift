@@ -20,7 +20,7 @@ struct SharedRoutes {
     static let mutateLatestRoute = XPCRoute.named("mutate", "latest")
 }
 
-struct LatestAndGreatest: Codable {
-    @SharedTrivial var now: CFAbsoluteTime
-    @SharedTrivial var latestValue: Double
-}
+ struct LatestAndGreatest: Codable {
+     let now: SharedTrivial<CFAbsoluteTime>
+     let latestValue: SharedTrivial<Double>
+ }

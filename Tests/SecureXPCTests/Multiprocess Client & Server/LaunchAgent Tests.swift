@@ -59,12 +59,12 @@ final class LaunchAgentTests: XCTestCase {
         // calls to actually mutate the shared value, but it's an easy way to test it's working properly
         let reply = try await LaunchAgentTests.client.send(to: SharedRoutes.latestRoute)
         
-        let initialNow = reply.now
-        let initialValue = reply.latestValue
+        let initialNow = try reply.now.retrieveValue()
+        let initialValue = try reply.latestValue.retrieveValue()
         
         try await LaunchAgentTests.client.send(to: SharedRoutes.mutateLatestRoute)
-        let subsequentNow = reply.now
-        let subsequentValue = reply.latestValue
+        let subsequentNow = try reply.now.retrieveValue()
+        let subsequentValue = try reply.latestValue.retrieveValue()
         
         XCTAssertNotEqual(initialNow, subsequentNow)
         XCTAssertNotEqual(initialValue, subsequentValue)
