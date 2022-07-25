@@ -6,16 +6,21 @@ SecureXPC uses [Swift concurrency](https://docs.swift.org/swift-book/LanguageGui
 later allowing clients to make non-blocking asynchronous requests to servers. A closure-based API is also available
 providing compatibility back to OS X 10.10.
 
-This framework is ideal for communicating with helper tools installed via 
-[`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless) and login items installed
-via
-[`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled).
+This framework can be used to communicate with any type of XPC service or Mach service, with customized support for:
+- [XPC services](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html)
+- Helper tools installed using 
+  [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
+- Login items enabled with 
+  [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
+- Daemons registered via 
+  [`SMAppService.daemon(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945410-daemon)
+- Agents registered via 
+  [`SMAppService.agent(plistName:)`](https://developer.apple.com/documentation/servicemanagement/smappservice/3945409-agent)
+
 It's built with security in mind, minimizing the opportunities for 
 [exploits](https://objectivebythesea.com/v3/talks/OBTS_v3_wReguła.pdf). Server-side security checks are performed
 against the actual calling process instead of relying on PIDs which are known to be
 [insecure](https://saelo.github.io/presentations/warcon18_dont_trust_the_pid.pdf).
-
-Recommendation: If you are using `SMJobBless` helper tools, also check out [Blessed](https://github.com/trilemma-dev/Blessed).
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftrilemma-dev%2FSecureXPC%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/trilemma-dev/SecureXPC)
 
@@ -51,21 +56,14 @@ On macOS 10.15 and later `async` functions and closures can also be registered a
 There are multiple types of servers which can be retrieved:
  - `XPCServer.forThisXPCService()`
      - For an XPC service, which is a private helper tool available only to the main application that contains it
- - `XPCServer.forThisBlessedHelperTool()`
-     - For a helper tool installed via
-       [`SMJobBless`](https://developer.apple.com/documentation/servicemanagement/1431078-smjobbless)
-     - To see a sample app for this use case, check out
-       [SwiftAuthorizationSample](https://github.com/trilemma-dev/SwiftAuthorizationSample)
- - `XPCServer.forThisLoginItem()`
-     - For a login item installed with
-       [`SMLoginItemSetEnabled`](https://developer.apple.com/documentation/servicemanagement/1501557-smloginitemsetenabled)
- - `XPCServer.forThisMachService(named:clientRequirements:)`
-     - For
-       [Launch Daemons and Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
-       as well as more advanced `SMJobBless` helper tool configurations
+ - `XPCServer.forMachService()`
+     - For agents and daemons registered with `SMAppService`, `SMJobBless` helper tools, and `SMLoginItemSetEnabled`
+       login items
+ - `XPCServer.forMachService(withCriteria:)`
+     - For any type of Mach service including "classic" agents and daemons. See documentation for details
  - `XPCServer.makeAnonymous()`
      - Typically used for testing purposes
- - `XPCServer.makeAnonymous(clientRequirements:)`
+ - `XPCServer.makeAnonymous(withClientRequirements:)`
      - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details
 
 ## Client
@@ -88,20 +86,19 @@ client.sendMessage("Get Schwifty", to: route, withResponse: { result in
 })
 ```
 
-There are multiple types of clients which can be retrieved:
+There are three types of clients which can be retrieved:
  - `XPCClient.forXPCService(named:)`
      - For communicating with an XPC service
      - This corresponds to servers created with `XPCServer.forThisXPCService()`
- - `XPCClient.forMachService(named:)`
-     - For communicating with an XPC Mach service
-     - This corresponds to servers created with `XPCServer.forThisBlessedHelperTool()`,
-       `XPCServer.forThisLoginItem()`, and
-       `XPCServer.forThisMachService(named:clientRequirements:)`
- - `XPCClient.forEndpoint(_:)`
+ - `forMachService(named:withServerRequirement:)`
+     - For communicating with a Mach service
+     - This corresponds to servers created with `XPCServer.forMachService()` or
+       `XPCServer.forMachService(withCriteria:)`
+ - `forEndpoint(_:withServerRequirement:)`
     - This is the only way to communicate with an anonymous server
     - This corresponds to servers created with `XPCServer.makeAnonymous()` or
-      `XPCServer.makeAnonymous(clientRequirements:)`
-    - It can also be used with an XPC Mach service
+      `XPCServer.makeAnonymous(withClientRequirements:)`
+    - This type of client can also be used to communicate with any server via its `endpoint` property
 
 ---
 
