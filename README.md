@@ -103,4 +103,4 @@ There are three types of clients which can be retrieved:
 ---
 
 # Questions you may have
-See the [FAQ](FAQ.md) for answers to questions you may have or didn't even realize you wanted answered.
+See the [FAQ](FAQ.md) for answers to questions you may have or didn't even realize you wanted answered including topics such as using live file handles, shared memory, and working within sandbox restrictions.
