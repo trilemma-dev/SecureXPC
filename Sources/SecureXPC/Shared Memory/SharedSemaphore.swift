@@ -218,7 +218,7 @@ public class SharedSemaphore: Codable {
             // If the user provided an app group, ensure it's present in the app groups entitlement otherwise it won't
             // actually work. Note: It's perfectly valid to provide an app group when not sandboxed, for example because
             // the other process(es) are sandboxed.
-            switch try readApplicationGroupsEntitlement() {
+            switch try readAppGroupsEntitlement() {
                 case .missingEntitlement:
                     fatalError("""
                     App groups entitlement com.apple.security.application-groups is missing, but must be present \
@@ -268,7 +268,7 @@ public class SharedSemaphore: Codable {
         // com.apple.security.application-groups entitlement. If this isn't done then sem_open will fail with a rather
         // cryptic and unhelpful error code.
         var debugDescription: String?
-        switch try readApplicationGroupsEntitlement() {
+        switch try readAppGroupsEntitlement() {
             case .missingEntitlement:
                 debugDescription = """
                 In order for a sandboxed process to receive a semaphore it must belong to one or more app groups as \

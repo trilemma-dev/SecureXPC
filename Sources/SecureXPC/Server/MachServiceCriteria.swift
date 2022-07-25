@@ -437,7 +437,7 @@ private func throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC() throws {
     }
     
     let appGroups: Set<String>
-    switch try readApplicationGroupsEntitlement() {
+    switch try readAppGroupsEntitlement() {
         case .missingEntitlement:
             throw XPCError.misconfiguredServer(description: """
             App groups entitlement com.apple.security.application-groups is missing, but must be present for a \
