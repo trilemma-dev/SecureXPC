@@ -64,7 +64,7 @@ There are multiple types of servers which can be retrieved:
  - `XPCServer.makeAnonymous()`
      - Typically used for testing purposes
  - `XPCServer.makeAnonymous(withClientRequirements:)`
-     - Enables applications not managed by `launchd` to communicate with each other, see documentation for more details
+     - Enables advanced scenarios including apps directly communicating with each other, see documentation for details
 
 ## Client
 In another program retrieve a client, then send a request to a registered route:
