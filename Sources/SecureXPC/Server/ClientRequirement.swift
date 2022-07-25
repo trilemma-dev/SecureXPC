@@ -21,7 +21,7 @@ public extension XPCServer {
     /// Requirements can be combined with `||` as well as `&&`:
     /// ```swift
     /// let server = XPCServer.makeAnonymous(withClientRequirement:
-    ///     try .sameTeamIdentifier || try .teamIdentifier("Q55ZG849VX")))
+    ///     try .sameTeamIdentifier || try .teamIdentifier("Q55ZG849VX"))
     /// ```
     ///
     /// ## Topics
