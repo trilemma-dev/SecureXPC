@@ -11,8 +11,6 @@
 /// A _trivial_ type can be copied bit for bit with no indirection or reference-counting operations. Generally, native Swift types that do not contain strong or weak
 /// references or other forms of indirection are trivial, as are imported C structs and enums. A trivial type will return `true` when provided to the built-in function
 /// `_isPOD(_:)`.
-///
-/// This protocol is used to constrain the array elements supported by ``ArrayOptimizedForXPC`` and the wrapped value for a ``SharedTrivial``.
 public protocol Trivial {}
 
 // For more details see:

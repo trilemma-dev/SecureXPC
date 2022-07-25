@@ -73,7 +73,7 @@ public enum XPCError: Error, Codable {
         } else if let error = error as? EncodingError {
             return .encodingError(description: String(describing: error))
         } else {
-            return .unknown(description: "Unexpected error received: \(error)")
+            return .unknown(description: "Unexpected error received: \(type(of: error)) \(error)")
         }
     }
     

@@ -436,27 +436,20 @@ private func throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC() throws {
         return
     }
     
-    let entitlementName = "com.apple.security.application-groups"
-    let entitlement = try readEntitlement(name: entitlementName)
-    guard let entitlement = entitlement else {
-        throw XPCError.misconfiguredServer(description: """
-        Application groups entitlement \(entitlementName) is missing, but must be present for a sandboxed login item \
-        to communicate over XPC.
-        """)
-    }
-    guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
-        throw XPCError.misconfiguredServer(description: """
-        Application groups entitlement \(entitlementName) must be an array of strings.
-        """)
-    }
-    let appGroups = try entitlement.map { (element: NSArray.Element) throws -> String in
-        guard let elementAsString = element as? String else {
+    let appGroups: Set<String>
+    let applicationGroupsResult = try readApplicationGroupsEntitlement()
+    switch applicationGroupsResult {
+        case .missingEntitlement:
             throw XPCError.misconfiguredServer(description: """
-            Application groups entitlement \(entitlementName) must be an array of strings.
+            App groups entitlement com.apple.security.application-groups is missing, but must be present for a \
+            sandboxed login item to communicate over XPC.
             """)
-        }
-        
-        return elementAsString
+        case .notArrayOfStrings:
+            throw XPCError.misconfiguredServer(description: """
+            App groups entitlement com.apple.security.application-groups must be an array of strings.
+            """)
+        case .success(let groups):
+            appGroups = groups
     }
     
     guard let teamIdentifier = try teamIdentifierForThisProcess() else {
@@ -472,8 +465,8 @@ private func throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC() throws {
     // followed by a period.
     if !appGroups.contains(where: { $0.starts(with: "\(teamIdentifier).") }) {
         throw XPCError.misconfiguredServer(description: """
-        Application groups entitlement \(entitlementName) must contain at least one application group for team \
-        identifier \(teamIdentifier). Application groups:
+        App groups entitlement com.apple.security.application-groups must contain at least one app group for team \
+        identifier \(teamIdentifier). App groups:
         \(appGroups.joined(separator: "\n"))
         """)
     }

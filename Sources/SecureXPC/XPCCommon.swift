@@ -137,16 +137,44 @@ func isSandboxed() throws -> Bool {
     }
 }
 
+/// Represents an application group entitlement or a failure case.
+enum ApplicationGroupsEntitlementResult {
+    /// The entitlement does not exist.
+    case missingEntitlement
+    /// The entitlement exists, but is not composed of an array of strings.
+    case notArrayOfStrings
+    /// The entitlement exists and the associated set contains the application group names.
+    ///
+    /// The set could be empty.
+    case success(Set<String>)
+}
+
+/// Retrieves the applications group entitlement com.apple.security.application-groups for this process.
+func readApplicationGroupsEntitlement() throws -> ApplicationGroupsEntitlementResult {
+    guard let entitlement = try readEntitlement(name: "com.apple.security.application-groups") else {
+        return .missingEntitlement
+    }
+    guard CFGetTypeID(entitlement) == CFArrayGetTypeID(), let entitlement = (entitlement as? NSArray) else {
+        return .notArrayOfStrings
+    }
+    var appGroups = Set<String>()
+    for element in entitlement {
+        guard let elementAsString = element as? String else {
+            return .notArrayOfStrings
+        }
+        appGroups.insert(elementAsString)
+    }
+    
+    return .success(appGroups)
+}
+
 /// Reads an entitlement for this process.
 func readEntitlement(name: String) throws -> CFTypeRef? {
     guard let task = SecTaskCreateFromSelf(nil) else {
         throw XPCError.internalFailure(description: "SecTaskCreateFromSelf failed")
     }
-    guard let entitlement = SecTaskCopyValueForEntitlement(task, name as CFString, nil) else {
-        return nil
-    }
     
-    return entitlement
+    return SecTaskCopyValueForEntitlement(task, name as CFString, nil)
 }
 
 /// The team identifier for this process or `nil` if there isn't one.
