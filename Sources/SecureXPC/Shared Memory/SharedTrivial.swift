@@ -14,10 +14,10 @@
 // Overview of how things work:
 // - SharedTrivial<T: Trivial> has a single variable of type SharedState<T> which is an enum that's either in a shared
 //   state or not.
-//     - It starts in a .notShared state when initialized with a value to wrap.
+//     - It starts in a .notShared state when initialized with a value to box.
 //     - It starts in a .shared state when deserialized via its Decodable initializer.
 //     - It's only valid to go from .notShared -> .shared (this is assumed throughout, but not enforced).
-//     - This enum provides the backing storage for the wrapped value via associated properties.
+//     - This enum provides the backing storage for the value via associated properties.
 // - When in a not shared state, the value is stored in a completely standard variable.
 // - When in a not shared state, at any time an encode call could happen which would cause a transition to the shared
 //   state.
@@ -46,9 +46,9 @@ import Foundation
 ///
 /// ## Implementation Note
 /// There is a large range of cross-process data structures which can be built using ``SharedRawMemory`` or ``SharedMemory`` along with a signaling
-/// mechanism such as XPC sends and/or a ``SharedSemaphore``. This is perhaps _the_ most basic structure and serves as a proof of concept (although with
-/// full expectation for it to be used in production apps/services). It was implemented entirely using SecureXPC's public API via ``SharedMemory`` and
-/// ``SharedSemaphore``.
+/// mechanism such as XPC communication and/or a ``SharedSemaphore``. This is perhaps _the_ most basic structure and serves as a proof of concept
+/// (although with the expectation it can be used in production apps/services). It was implemented entirely using SecureXPC's public API via ``SharedMemory``
+/// and ``SharedSemaphore``.
 ///
 /// ## Topics
 /// ### Creation

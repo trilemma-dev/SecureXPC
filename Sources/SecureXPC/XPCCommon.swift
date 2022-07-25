@@ -137,20 +137,20 @@ func isSandboxed() throws -> Bool {
     }
 }
 
-/// Represents an application group entitlement or a failure case.
-enum ApplicationGroupsEntitlementResult {
+/// Represents an app group entitlement or a failure case.
+enum AppGroupsEntitlementResult {
     /// The entitlement does not exist.
     case missingEntitlement
     /// The entitlement exists, but is not composed of an array of strings.
     case notArrayOfStrings
-    /// The entitlement exists and the associated set contains the application group names.
+    /// The entitlement exists and the associated set contains the app groups.
     ///
     /// The set could be empty.
     case success(Set<String>)
 }
 
-/// Retrieves the applications group entitlement com.apple.security.application-groups for this process.
-func readApplicationGroupsEntitlement() throws -> ApplicationGroupsEntitlementResult {
+/// Retrieves the app group entitlement `com.apple.security.application-groups` for this process.
+func readAppGroupsEntitlement() throws -> AppGroupsEntitlementResult {
     guard let entitlement = try readEntitlement(name: "com.apple.security.application-groups") else {
         return .missingEntitlement
     }

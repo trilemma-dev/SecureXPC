@@ -11,7 +11,7 @@ import Foundation
 ///
 /// > Warning: This class is experimental, changes to it will not be considered breaking for the purposes of SemVer.
 ///
-/// While semaphores can be used in sandboxed app or service, additional configuration is required. See ``init(initialValue:appGroup:)`` for details.
+/// While semaphores can be used in a sandboxed app or service, additional configuration is required. See ``init(initialValue:appGroup:)`` for details.
 ///
 /// ## Topics
 /// ### Creation
@@ -77,7 +77,7 @@ public class SharedSemaphore: Codable {
     ///
     /// This is what's actually encoded/decoded.
     private let name: String
-    /// The underlying Darwin/POSIX semaphore.
+    /// The underlying POSIX semaphore.
     private let semaphore: Semaphore
     /// If this instance created the semaphore, as opposed to having "retrieved" it.
     ///
@@ -86,8 +86,8 @@ public class SharedSemaphore: Codable {
     
     /// Creates a semaphore which may be shared across process boundaries.
     ///
-    /// This semaphore may be shared amongst arbitrarily many processes on the system. Once the originally created semaphore has been deinitialized, decoding
-    /// of this semaphore will fail, but any semaphore instances already decoded will continue to function.
+    /// This semaphore may be shared amongst arbitrarily many processes on the system. Once the originally created semaphore has been deinitialized,
+    /// subsequent decoding of this semaphore will fail, but any semaphore instances already decoded will continue to function.
     ///
     /// ## Sandboxing
     /// Semaphores may be used in sandboxed apps and services, but to do so they must belong to the same application group. To do this, all apps and services
@@ -97,16 +97,16 @@ public class SharedSemaphore: Codable {
     /// one or more of them is not.
     ///
     /// Internally semaphores must each have a unique name in order to function. This name has a system imposed length limit which is very short and for
-    /// sandboxed apps and services the application group must be part of this name. Because of this restriction, you *must* keep the name of your application
-    /// group to 19 or fewer characters. On macOS this application group name takes the form of `<team identifier>.<group name>` where
-    /// `<team identifier>` is always 10 characters and the `.` is 1 character, thereby leaving 8 characters for `<group name>`.
+    /// sandboxed apps and services the app group must be part of this name. Because of this restriction, you *must* keep the name of your app group to 19 or
+    /// fewer characters. On macOS this app group takes the form of `<team identifier>.<group name>` where `<team identifier>` is always 10
+    /// characters and the `.` is 1 character, thereby leaving 8 characters for `<group name>`.
     ///
     /// - Parameters:
     ///   - initialValue: This semaphore's initial value. To have this semaphore behave like a mutex/lock, pass in a value of 1.
     ///   - appGroup: Required when one or more processes that will be using this semaphore are sandboxed.
     public init(initialValue: UInt32, appGroup: String? = nil) throws {
         self.name = try SharedSemaphore.createName(appGroup: appGroup)
-        // This mode allows any user on the system read/write access to the semaphore. We don't want to restrict just
+        // This mode allows any user on the system read/write access to the semaphore. We don't want to restrict to just
         // the user or group because for example a service may be running as root while an application might be running
         // as a standard user. Since the semaphore itself doesn't expose any data this isn't likely to be an entry point
         // for a security vulnerability, but in theory it could allow another process to be disruptive.
@@ -139,9 +139,8 @@ public class SharedSemaphore: Codable {
     }
     
     deinit {
-        // If this wasn't called here, it'll be automatically performed when the process terminates - but doing so
-        // earlier means more semaphores can be fully deinitialized by the system sooner (so long as they've been
-        // unlinked).
+        // If this wasn't called here, it'll be automatically performed when the process terminates, but doing so here
+        // means more semaphores can be fully deinitialized by the system sooner (so long as they've been unlinked).
         sem_close(self.semaphore)
         
         // Even if all processes that used the semaphore have since closed it (either explicitly or automatically on
@@ -150,7 +149,9 @@ public class SharedSemaphore: Codable {
         //
         // There are two reasonable places sem_unlink could be called, this is one of them and allows the semaphore to
         // be shared with any number of processes. The alternative is to have it called in the decoder init function
-        // after sem_open is called, but that won't work properly if more than 2 processes are involved.
+        // after sem_open is called, but that won't work properly if more than 2 processes are involved. The advantage
+        // of the other approach is it will allow unlinking to occur even when this deinitializer never runs due to
+        // the process terminating.
         if createdSemaphore {
             sem_unlink(self.name)
         }
@@ -237,7 +238,7 @@ public class SharedSemaphore: Codable {
                     }
             }
             
-            // Self-imposed requirement to leave room for add a randomly generated shortcode
+            // Self-imposed requirement to leave room for adding a randomly generated shortcode
             guard appGroup.count <= 19 else {
                 throw SemaphoreCreationError.appGroupNameTooLong
             }
@@ -278,7 +279,7 @@ public class SharedSemaphore: Codable {
                 App groups entitlement com.apple.security.application-groups is not an array of strings.
                 """
             case .success(let appGroups):
-                // The name created by `createName(applicationGroupName:)` is in the form of:
+                // The name created by createName(...) is in the form of:
                 //   <team identifier>.<group name>/<random ordering of 0-9, a-z, A-Z, . and _>
                 if name.contains("/"), let appGroup = name.split(separator: "/").first {
                     if !appGroups.contains(String(appGroup)) {
@@ -329,7 +330,7 @@ public class SharedSemaphore: Codable {
         
         static func fromErrno() -> SemaphoreWaitError {
             switch errno {
-                // Documentation from `man sem_wait`
+                // Documentation from `man sem_wait`:
                 // [EDEADLK] A deadlock was detected.
                 case EDEADLK: return .deadlock
                 // [EINTR]   The call was interrupted by a signal.
