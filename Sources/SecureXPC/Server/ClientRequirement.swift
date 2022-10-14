@@ -61,12 +61,10 @@ extension XPCServer.ClientRequirement {
         }
     }
 
-	/// The requesting client must have hardened runtime enabled.
-	public static var hardenedRuntime: XPCServer.ClientRequirement {
-		get {
-			return XPCServer.ClientRequirement(messageAcceptor:HardenedMessageAcceptor())
-		}
-	}
+    /// The requesting client must have Hardened Runtime enabled.
+    public static var hardenedRuntime: XPCServer.ClientRequirement {
+        XPCServer.ClientRequirement(messageAcceptor:HardenedMessageAcceptor())
+    }
     
     /// The requesting client must be within the same parent bundle as this server.
     ///
@@ -171,26 +169,26 @@ fileprivate protocol MessageAcceptor {
 }
 
 fileprivate struct HardenedMessageAcceptor: MessageAcceptor {
-	func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
-		guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: message) else {
-			return false
-		}
+    func shouldAcceptMessage(connection: xpc_connection_t, message: xpc_object_t) -> Bool {
+        guard let code = SecCodeCreateWithXPCConnection(connection, andMessage: message) else {
+            return false
+        }
 
-		var staticCode: SecStaticCode?
-		var codeSignInformation: CFDictionary?
+        var staticCode: SecStaticCode?
+        var codeSignInformation: CFDictionary?
 
-		guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess,
-			  let staticCode = staticCode,
-			  SecCodeCopySigningInformation(staticCode, [], &codeSignInformation) == errSecSuccess,
-			  let codeSignInformation = codeSignInformation as NSDictionary?,
-			  let codeFlagsInt = codeSignInformation[kSecCodeInfoFlags] as? NSNumber
-		else {
-			return false
-		}
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess,
+              let staticCode = staticCode,
+              SecCodeCopySigningInformation(staticCode, [], &codeSignInformation) == errSecSuccess,
+              let codeSignInformation = codeSignInformation as NSDictionary?,
+              let codeFlagsInt = codeSignInformation[kSecCodeInfoFlags] as? UInt32
+        else {
+            return false
+        }
 
-		let codeFlags = SecCodeSignatureFlags(rawValue: codeFlagsInt.uint32Value)
+        let codeFlags = SecCodeSignatureFlags(rawValue: codeFlagsInt)
 
-		return codeFlags.contains(.runtime)
+        return codeFlags.contains(.runtime)
 	}
 
 	func isEqual(to acceptor: MessageAcceptor) -> Bool {
