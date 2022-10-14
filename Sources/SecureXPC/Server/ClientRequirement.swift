@@ -31,6 +31,7 @@ public extension XPCServer {
     /// - ``teamIdentifier(_:)``
     /// - ``parentDesignatedRequirement``
     /// - ``secRequirement(_:)``
+	/// - ``hardenedRuntime``
     struct ClientRequirement {
         /// What actually performs the requirement validation
         private let messageAcceptor: MessageAcceptor
