@@ -90,11 +90,11 @@ There are three types of clients which can be retrieved:
  - `XPCClient.forXPCService(named:)`
      - For communicating with an XPC service
      - This corresponds to servers created with `XPCServer.forThisXPCService()`
- - `forMachService(named:withServerRequirement:)`
+ - `XPCClient.forMachService(named:withServerRequirement:)`
      - For communicating with a Mach service
      - This corresponds to servers created with `XPCServer.forMachService()` or
        `XPCServer.forMachService(withCriteria:)`
- - `forEndpoint(_:withServerRequirement:)`
+ - `XPCClient.forEndpoint(_:withServerRequirement:)`
     - This is the only way to communicate with an anonymous server
     - This corresponds to servers created with `XPCServer.makeAnonymous()` or
       `XPCServer.makeAnonymous(withClientRequirements:)`
