@@ -22,6 +22,9 @@ struct SharedRoutes {
     static let fibonacciRoute = XPCRoute.named("fibonacci")
                                         .withMessageType(UInt.self)
                                         .withSequentialReplyType(UInt.self)
+    static let selfTerminatingFibonacciRoute = XPCRoute.named("fibonacci", "self-terminating")
+                                                       .withMessageType(UInt.self)
+                                                       .withSequentialReplyType(UInt.self)
 }
 
  struct LatestAndGreatest: Codable {

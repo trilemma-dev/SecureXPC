@@ -109,4 +109,13 @@ final class LaunchAgentTests: XCTestCase {
             }
         }
     }
+    
+    func testAsyncSequenceFullyReceivedBeforeServerTermination() async throws {
+        // This test is validating that an async sequence will not be terminated due the server process terminating
+        // immediately after it finishes the sequence.
+        var expectedValues: [UInt] = [0, 1, 1, 2, 3]
+        for try await value in LaunchAgentTests.client.sendMessage(5, to: SharedRoutes.selfTerminatingFibonacciRoute) {
+            XCTAssertEqual(expectedValues.removeFirst(), value)
+        }
+    }
 }
