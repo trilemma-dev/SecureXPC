@@ -69,4 +69,44 @@ final class LaunchAgentTests: XCTestCase {
         XCTAssertNotEqual(initialNow, subsequentNow)
         XCTAssertNotEqual(initialValue, subsequentValue)
     }
+    
+    func testAsyncSequenceInterruptedByServerTermination() async throws {
+        // This test is validating that an async sequence will throw an error if the server process exits before the
+        // sequence finishes. A request is made to the server to generate the first ten values of the Fibonacci
+        // sequence, but once the fifth value (which is 3) is received, a message is sent to the server telling it to
+        // terminate.
+    
+        // This is the _minimum_ set of expected values from the server; however, it's valid for additional values to
+        // be received beyond this because the termination request is inherently racing against the server sending the
+        // next value in the sequence. (This behavior is intentional to more closely resemble real conditions, not a
+        // flaw in the test's design.)
+        var expectedValues: [UInt] = [0, 1, 1, 2, 3]
+        
+        do {
+            for try await value in LaunchAgentTests.client.sendMessage(10, to: SharedRoutes.fibonacciRoute) {
+                // Already received all of the expected values, but it's still valid to receive more due to racing
+                // against process termination
+                if expectedValues.isEmpty {
+                    continue
+                }
+                
+                XCTAssertEqual(expectedValues.removeFirst(), value)
+                if value == 3 {
+                    LaunchAgentTests.client.send(to: SharedRoutes.terminate, onCompletion: nil)
+                }
+            }
+            
+            XCTFail("No error was thrown when server process exited, \(XPCError.connectionInterrupted) was expected.")
+        } catch {
+            // Once all of the expected valeus have been received, XPCError.connectionInterrupted error is now expected
+            if !expectedValues.isEmpty {
+                XCTFail("\(error) received but one or more expected values were not received first: \(expectedValues)")
+            }
+            else if case XPCError.connectionInterrupted = error {
+                // Expected case
+            } else {
+                XCTFail("Unexpected error \(error) received. \(XPCError.connectionInterrupted) was expected.")
+            }
+        }
+    }
 }

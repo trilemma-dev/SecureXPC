@@ -69,6 +69,8 @@ struct LaunchAgent {
     }
     
     /// Compiles SecureXPC, returning the path to static library `libSecureXPC.a`
+    ///
+    /// This requires Xcode command line developer tools to be installed; this is distinct from having Xcode itself installed.
     private static func compileSecureXPC(workingDirectory: URL) throws -> URL {
         // SecureXPC's source files (which are all .swift)
         let enumerator = FileManager.default.enumerator(at: sourcesPath(), includingPropertiesForKeys: nil)!

@@ -24,6 +24,38 @@ server.registerRoute(SharedRoutes.mutateLatestRoute) {
     try latestAndGreatest.latestValue.updateValue(nextValue)
 }
 
+server.registerRoute(SharedRoutes.terminate) {
+    exit(0)
+}
+server.registerRoute(SharedRoutes.fibonacciRoute) { n, provider in
+    let artificialDelay = 0.001
+    
+    if n >= 1 {
+        provider.success(value: 0)
+        Thread.sleep(forTimeInterval: artificialDelay)
+    }
+    
+    if n >= 2 {
+        provider.success(value: 1)
+        Thread.sleep(forTimeInterval: artificialDelay)
+    }
+    
+    if n >= 3 {
+        var prev: UInt = 0
+        var current: UInt = 1
+        
+        for _ in 2..<n {
+            let lastCurrent = current
+            current = current + prev
+            prev = lastCurrent
+            provider.success(value: current)
+            Thread.sleep(forTimeInterval: artificialDelay)
+        }
+    }
+    
+    provider.finished()
+}
+
 server.startAndBlock()
 
 func createServer() throws -> XPCServer {

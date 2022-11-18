@@ -612,6 +612,7 @@ public class XPCClient {
             // there is nothing to be relaunched on-demand. The connection might technically still be alive, but
             // resending a message will *not* work.
             self.connection = nil
+            self.inProgressSequentialReplies.finishAllWithError(.connectionInterrupted)
         }
         
         // XPC_ERROR_TERMINATION_IMMINENT is not applicable to the client side of a connection
@@ -803,6 +804,7 @@ extension XPCClient {
 fileprivate protocol InternalXPCSequentialResponseHandler {
     var route: XPCRoute { get }
     func handleResponse(_ response: Response)
+    func handleError(_ error: XPCError)
 }
 
 fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: InternalXPCSequentialResponseHandler {
@@ -851,6 +853,14 @@ fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: Intern
             }
         }
     }
+    
+    /// Handles an error which occurred while this client was communicating with the server which means further sequence replies are not possible (but a new
+    /// request could be made).
+    fileprivate func handleError(_ error: XPCError) {
+        self.serialQueue.async {
+            self.handler(.failure(error))
+        }
+    }
 }
 
 /// Encapsulates all in progress requests which were made to the server that could still receive more out-of-band message sends which need to be reassociated
@@ -897,6 +907,16 @@ fileprivate class InProgressSequentialReplies {
             }
             
             handler.handleResponse(response)
+        }
+    }
+    
+    /// An error has occurred which means that communication with the server is no longer possible and so all in flight handlers need to be finished with an error.
+    func finishAllWithError(_ error: XPCError) {
+        serialQueue.async {
+            for handler in self.handlers.values {
+                handler.handleError(error)
+            }
+            self.handlers.removeAll()
         }
     }
 }
