@@ -83,11 +83,15 @@ class SequentialResultTests: XCTestCase {
                                                       .withSequentialReplyType(Int.self)
         let valuesExpected = 5
         server.registerRoute(noMessageWithReplySequenceRoute) { provider async in
-            for n in 1...valuesExpected {
-                provider.success(value: n)
-                Thread.sleep(forTimeInterval: 0.01)
+            do {
+                for n in 1...valuesExpected {
+                    try await provider.success(value: n)
+                }
+                try await provider.finished()
+            } catch {
+                XCTFail("Unexpected error thrown: \(error)")
             }
-            provider.finished()
+            
         }
         
         var valuesReceived = 0
@@ -168,11 +172,14 @@ class SequentialResultTests: XCTestCase {
         let valuesExpected = 5
         var valuesReceived = 0
         server.registerRoute(messageWithReplySequenceRoute) { upperLimit, provider async in
-            for n in 1...upperLimit {
-                provider.success(value: n)
-                Thread.sleep(forTimeInterval: 0.01)
+            do {
+                for n in 1...upperLimit {
+                    try await provider.success(value: n)
+                }
+                try await provider.finished()
+            }  catch {
+                XCTFail("Unexpected error thrown: \(error)")
             }
-            provider.finished()
         }
         
         let sequence = client.sendMessage(valuesExpected, to: messageWithReplySequenceRoute)
@@ -314,10 +321,14 @@ class SequentialResultTests: XCTestCase {
         let route = XPCRoute.named("client", "side", "issue")
                             .withSequentialReplyType(MiscContainer.self)
         
-        server.registerRoute(route) { provider in
-            provider.success(value: .noValue)
-            provider.success(value: .alwaysFailedDecode(NotActuallyDecodable()))
-            provider.success(value: .noValue)
+        server.registerRoute(route) { provider async in
+            do {
+                try await provider.success(value: .noValue)
+                try await provider.success(value: .alwaysFailedDecode(NotActuallyDecodable()))
+                try await provider.success(value: .noValue)
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
         }
         
         let sequence = client.send(to: route)

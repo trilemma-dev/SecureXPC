@@ -98,6 +98,12 @@ import Foundation
 /// server.start()
 /// ```
 ///
+/// ### Terminating a Process Containing a Server
+/// There is intentionally no way to stop an `XPCServer` once it has been started. Of course it is possible to terminate the containing process; however, it is
+/// recommend you avoid doing this as it introduces more opportunities for race conditions. For example, if the process containing the server terminates itself after
+/// handling a request from a client, there is a possibility that a subsequent request will be received by the server process before termination has completed meaning
+/// it will nearly instantly fail with an ``XPCError/connectionInterrupted`` error. Allow launchd to automatically manage the lifecycle of your service.
+///
 /// ## Topics
 /// ### Retrieving a Server
 /// - ``forThisXPCService()``
