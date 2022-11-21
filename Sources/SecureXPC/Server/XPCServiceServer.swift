@@ -120,7 +120,7 @@ internal class XPCServiceServer: XPCServer {
             // be more restrictive. We'll allow any connection from a process belongs to the same parent bundle and if
             // there's a valid team ID present we'll additionally enforce it's of the same team ID. Creating the parent
             // bundle requirement should always succeed because as part of creating an XPCServiceServer a check is
-            // performance that this process is located within a Contents/XPCServices directory. Hardened runtime should
+            // performed that this process is located within a Contents/XPCServices directory. Hardened runtime should
             // always be enforced if required.
             self.clientRequirement = try! .sameParentBundle
             if #available(macOS 10.14.0, *) {
