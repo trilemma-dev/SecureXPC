@@ -83,7 +83,7 @@ internal class XPCServiceServer: XPCServer {
     }
 
     public override var connectionDescriptor: XPCConnectionDescriptor {
-        // It's safe to force unwrap the bundle identifier because it was already checked in `forThisXPCService()`.
+        // It's safe to force unwrap the bundle identifier because it was already checked in `getXPCServiceServer()`.
         .xpcService(name: Bundle.main.bundleIdentifier!)
     }
     
@@ -120,11 +120,14 @@ internal class XPCServiceServer: XPCServer {
             // be more restrictive. We'll allow any connection from a process belongs to the same parent bundle and if
             // there's a valid team ID present we'll additionally enforce it's of the same team ID. Creating the parent
             // bundle requirement should always succeed because as part of creating an XPCServiceServer a check is
-            // performance that this process is located within a Contents/XPCServices directory.
+            // performed that this process is located within a Contents/XPCServices directory. Hardened runtime should
+            // always be enforced if required.
+            self.clientRequirement = try! .sameParentBundle
+            if #available(macOS 10.14.0, *) {
+                self.clientRequirement = self.clientRequirement && .hardenedRuntime
+            }
             if let teamIDRequirement = try? XPCServer.ClientRequirement.sameTeamIdentifier {
-                self.clientRequirement = try! .sameParentBundle && teamIDRequirement
-            } else {
-                self.clientRequirement = try! .sameParentBundle
+                self.clientRequirement = self.clientRequirement && teamIDRequirement
             }
             
             return XPCServerEndpoint(connectionDescriptor: self.connectionDescriptor,
