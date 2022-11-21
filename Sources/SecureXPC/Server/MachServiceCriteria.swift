@@ -116,7 +116,8 @@ public extension XPCServer {
         ///                  creatable by
         ///     [`SecRequirementCreateWithString`](https://developer.apple.com/documentation/security/1394522-secrequirementcreatewithstring).
         ///                  The resulting client requirement accept incoming requests from clients that meet _any_ of the `SMAuthorizedClients`
-        ///                  requirements.
+        ///                  requirements. Additionally if running on macOS 10.14 or later, the client is required to have
+        ///                  [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime) enabled.
         /// - Returns: Criteria for a Mach service belonging to a helper tool installed with `SMJobBless`.
         public static func forBlessedHelperTool(
             named name: String? = nil,
@@ -147,7 +148,9 @@ public extension XPCServer {
         ///           reference the `BundleProgram` corresponding to this executable then the name does not need to be provided and can be
         ///           automatically inferred.
         ///   - requirement: The requirement for the client. If no requirement is provided, one will be automatically generated to meet the designated
-        ///                  requirement of the containing app (meaning in most cases only the containing app's requests will be accepted).
+        ///                  requirement of the containing app (meaning in most cases only the containing app's requests will be accepted). Additionally if
+        ///                  running on macOS 10.14 or later, clients are required to have
+        ///                  [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime) enabled.
         /// - Returns: Criteria for a Mach service belonging to a daemon registered via `SMAppService.daemon(plistName:)`.
         @available(macOS 13.0, *)
         public static func forDaemon(
@@ -169,7 +172,11 @@ public extension XPCServer {
                 // Use the parent's designated requirement as the client criteria. Considering the considerable
                 // privilege escalation potential this intentionally takes a more restricted approach than what is taken
                 // for a login item or agent.
-                try .parentDesignatedRequirement
+                if #available(macOS 10.14.0, *) {
+                    return try .parentDesignatedRequirement && .hardenedRuntime
+                } else {
+                    return try .parentDesignatedRequirement
+                }
             }
         }
         
@@ -184,7 +191,9 @@ public extension XPCServer {
         ///           reference the `BundleProgram` corresponding to this executable then the name does not need to be provided and can be
         ///           automatically inferred.
         ///   - requirement: The requirement for the client.  If none is provided then clients will be trusted if they have the same team identifier as
-        ///                  this agent; if this agent has no team identifier an error will be thrown.
+        ///                  this agent; if this agent has no team identifier an error will be thrown. Additionally if running on macOS 10.14 or later, clients are
+        ///                  required to have
+        ///                  [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime) enabled.
         /// - Returns: Criteria for a Mach service belonging to a daemon registered via `SMAppService.agent(plistName:)`.
         @available(macOS 13.0, *)
         public static func forAgent(
@@ -208,7 +217,11 @@ public extension XPCServer {
                 // desired use case for this launch agent then in most cases an XPC service would be a better fit. If a
                 // launch agent is being used it's reasonable to default to allowing requests from outside of the app
                 // bundle as long as it's from the same team identifier.
-                try .sameTeamIdentifier
+                if #available(macOS 10.14.0, *) {
+                    return try .sameTeamIdentifier && .hardenedRuntime
+                } else {
+                    return try .sameTeamIdentifier
+                }
             }
         }
         
@@ -220,7 +233,10 @@ public extension XPCServer {
         /// entitlement must be present and one of the application groups must have the same team identifier as this login item.
         ///
         /// - Parameter requirement: The requirement for the client. If none is provided then clients will be trusted if they have the same team identifier as
-        ///                          this login item (if this login item has a team identifier) and belong to the same parent app bundle.
+        ///                          this login item (if this login item has a team identifier) and belong to the same parent app bundle. Additionally if
+        ///                          running on macOS 10.14 or later, clients are required to have
+        ///                          [Hardened Runtime](https://developer.apple.com/documentation/security/hardened_runtime)
+        ///                          enabled.
         /// - Returns: Criteria for a Mach service belonging to a login item enabled with `SMLoginItemSetEnabled`.
         public static func forLoginItem(
             withClientRequirement requirement: XPCServer.ClientRequirement? = nil
@@ -245,7 +261,7 @@ public extension XPCServer {
                 """)
             }
             
-            let clientRequirement: XPCServer.ClientRequirement
+            var clientRequirement: XPCServer.ClientRequirement
             if let requirement = requirement {
                 clientRequirement = requirement
             } else {
@@ -253,6 +269,10 @@ public extension XPCServer {
                     clientRequirement = try sameTeamRequirement && .sameParentBundle
                 } else {
                     clientRequirement = try .sameParentBundle
+                }
+                
+                if #available(macOS 10.14.0, *) {
+                    clientRequirement = clientRequirement && .hardenedRuntime
                 }
             }
             
@@ -401,8 +421,13 @@ private func blessedHelperToolClientRequirements() throws -> XPCServer.ClientReq
             clientRequirement = .secRequirement(requirement)
         }
     }
-    guard let clientRequirement = clientRequirement else {
+    guard var clientRequirement = clientRequirement else {
         throw XPCError.misconfiguredServer(description: "No requirements were generated from SMAuthorizedClients")
+    }
+    
+    // Add hardened runtime requirement
+    if #available(macOS 10.14.0, *) {
+        clientRequirement = clientRequirement && .hardenedRuntime
     }
     
     return clientRequirement

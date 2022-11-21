@@ -542,7 +542,8 @@ extension XPCServer {
     /// across an existing XPC connection. Because other processes on the system can talk to an anonymous server, when making a server it is required that you
     /// specify the ``XPCServer/ClientRequirement`` for any connecting clients:
     /// ```swift
-    /// let server = XPCServer.makeAnonymous(withRequirement: .sameTeamIdentifier)
+    /// let server = XPCServer.makeAnonymous(withClientRequirement:
+    ///     try .sameTeamIdentifier && .hardenedRuntime)
     /// ```
     ///
     /// > Important: No requests will be processed until ``XPCNonBlockingServer/start()`` or ``startAndBlock()`` is called.
