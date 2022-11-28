@@ -376,4 +376,33 @@ class SequentialResultTests: XCTestCase {
         
         await self.waitForExpectations(timeout: 1)
     }
+    
+    // MARK: Race conditions
+    
+    // This test is adapted from the discussion in https://github.com/trilemma-dev/SecureXPC/pull/123 where deinit of
+    // the provider would not happen consistently (it was a race condition) resulting in interrupted connections on the
+    // client side.
+    func testProviderFinishOnDeinit() async throws {
+        let route = XPCRoute.named("sequentialRoute").withMessageType(Int.self).withSequentialReplyType(Int.self)
+
+        for maxValue in 100 ..< 200 {
+             let server = XPCServer.makeAnonymous()
+             let client = XPCClient.forEndpoint(server.endpoint)
+             
+             server.registerRoute(route) { maxValue, resultProvider in
+                 do {
+                     for value in 0 ..< maxValue {
+                         try await resultProvider.success(value: value)
+                     }
+                 }
+                 catch {
+                     XCTFail("Failed with error: \(error)")
+                 }
+             }
+             server.start()
+             
+             let asyncStream = client.sendMessage(maxValue, to: route)
+             _ = try await asyncStream.first { _ in false }
+         }
+    }
 }

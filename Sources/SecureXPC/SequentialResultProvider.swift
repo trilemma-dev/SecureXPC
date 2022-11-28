@@ -15,7 +15,8 @@ import Foundation
 /// - Synchronous without a message — ``XPCServer/registerRoute(_:handler:)-7r1hv``
 /// - Synchronous with a message — ``XPCServer/registerRoute(_:handler:)-qcox``
 ///
-/// It is valid to use an instance of this class outside of the closure it was provided to. Responses will be sent so long as the client remains connected.
+/// It is valid to use an instance of this class outside of the closure it was provided to. Responses will be sent so long as the client remains connected and the
+/// sequence has not already been finished.
 ///
 /// Any errors generated while using this provider will be passed to the ``XPCServer``'s error handler.
 ///
@@ -94,6 +95,8 @@ public class SequentialResultProvider<S: Encodable> {
                 // There's no point trying to send the encoding error to the client because encoding the requestID
                 // failed and that's needed by the client in order to properly reassociate the error with the request
             }
+            
+            self.endTransaction()
         }
     }
     
@@ -202,7 +205,6 @@ public class SequentialResultProvider<S: Encodable> {
     ///
     /// This is equivalent to ``finished(onDelivery:)`` and providing a ``SequentialResultDeliveryHandler`` meaning that awaiting this
     /// function call will wait on the client to have handled the sequence finishing.
-    ///
     @available(macOS 10.15, *)
     public func finished() async throws {
         try await withUnsafeThrowingContinuation { continuation in

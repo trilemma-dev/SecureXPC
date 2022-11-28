@@ -541,7 +541,6 @@ public class XPCClient {
                 } else {
                     continuation.finish(throwing: error)
                 }
-                continuation.finish(throwing: error)
             case .finished:
                 continuation.finish(throwing: nil)
         }
