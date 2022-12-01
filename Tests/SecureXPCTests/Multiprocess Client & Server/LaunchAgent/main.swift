@@ -8,7 +8,7 @@
 import Foundation
 import SecureXPC
 
-// This code run as a launch agent, which is created by LaunchAgent.swift.
+// This code runs as a launch agent, which is created by LaunchAgent.swift.
 // Make sure to only reference SecureXPC and Shared.swift; anything else will fail when compiling.
 
 let server = try createServer()
@@ -22,6 +22,21 @@ server.registerRoute(SharedRoutes.mutateLatestRoute) {
     try latestAndGreatest.now.updateValue(CFAbsoluteTimeGetCurrent())
     let nextValue = try latestAndGreatest.latestValue.retrieveValue() + Double.random(in: 0.0...1000.0)
     try latestAndGreatest.latestValue.updateValue(nextValue)
+}
+
+server.registerRoute(SharedRoutes.terminate) {
+    exit(0)
+}
+server.registerRoute(SharedRoutes.fibonacciRoute) { n, provider in
+    fibonacciSequence(n: n, provider: provider)
+    provider.finished()
+}
+
+server.registerRoute(SharedRoutes.selfTerminatingFibonacciRoute) { n, provider in
+    fibonacciSequence(n: n, provider: provider)
+    provider.finished { _ in
+        exit(0)
+    }
 }
 
 server.startAndBlock()
@@ -38,4 +53,31 @@ func createServer() throws -> XPCServer {
                                                  clientRequirement: .secRequirement(requirement!))
 
     return try XPCServer.forMachService(withCriteria: criteria)
+}
+
+func fibonacciSequence(n: UInt, provider: SequentialResultProvider<UInt>) {
+    let artificialDelay = 0.001
+    
+    if n >= 1 {
+        provider.success(value: 0)
+        Thread.sleep(forTimeInterval: artificialDelay)
+    }
+    
+    if n >= 2 {
+        provider.success(value: 1)
+        Thread.sleep(forTimeInterval: artificialDelay)
+    }
+    
+    if n >= 3 {
+        var prev: UInt = 0
+        var current: UInt = 1
+        
+        for _ in 2..<n {
+            let lastCurrent = current
+            current = current + prev
+            prev = lastCurrent
+            provider.success(value: current)
+            Thread.sleep(forTimeInterval: artificialDelay)
+        }
+    }
 }

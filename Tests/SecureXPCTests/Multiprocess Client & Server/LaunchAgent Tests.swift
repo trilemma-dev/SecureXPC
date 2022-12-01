@@ -69,4 +69,57 @@ final class LaunchAgentTests: XCTestCase {
         XCTAssertNotEqual(initialNow, subsequentNow)
         XCTAssertNotEqual(initialValue, subsequentValue)
     }
+    
+    // This test is validating that an async sequence will throw an error if the server process exits before the
+    // sequence finishes. A request is made to the server to generate the first ten values of the Fibonacci sequence,
+    // but once the fifth value (which is 3) is received, a message is sent to the server telling it to terminate.
+    func testAsyncSequenceInterruptedByServerProcessTermination() async throws {
+        // This is the _minimum_ set of expected values from the server; however, it's valid for additional values to
+        // be received beyond this because the termination request is inherently racing against the server sending the
+        // next value in the sequence. (This behavior is intentional to more closely resemble real conditions, not a
+        // flaw in the test's design.)
+        var expectedValues: [UInt] = [0, 1, 1, 2, 3]
+        
+        do {
+            for try await value in LaunchAgentTests.client.sendMessage(10, to: SharedRoutes.fibonacciRoute) {
+                if expectedValues.isEmpty {
+                    continue
+                }
+                XCTAssertEqual(expectedValues.removeFirst(), value)
+                
+                if value == 3 {
+                    LaunchAgentTests.client.send(to: SharedRoutes.terminate, onCompletion: nil)
+                }
+            }
+            
+            XCTFail("No error was thrown when server process exited, \(XPCError.connectionInterrupted) was expected.")
+        } catch {
+            // Once all of the expected values have been received, XPCError.connectionInterrupted error is now expected
+            if !expectedValues.isEmpty {
+                XCTFail("\(error) received but one or more expected values were not received first: \(expectedValues)")
+            }
+            else if case XPCError.connectionInterrupted = error {
+                // Expected case
+            } else {
+                XCTFail("Unexpected error \(error) received. \(XPCError.connectionInterrupted) was expected.")
+            }
+        }
+    }
+    
+    // This test is validating that an async sequence will not be terminated due to the server's process terminating
+    // immediately after it finishes the sequence.
+    func testAsyncSequenceFullyReceivedBeforeServerProcessTermination() async throws {
+        // Note: It's not valid to run the following code multiple times in a row (such as in a loop) unless it can
+        // first be confirmed that the server proces has actually terminated. (This can be done by checking if server
+        // identity's SecCode is still valid with SecCodeCheckValidity; it is then the corresponding process still
+        // exists.) Otherwise, what can occur is that a subsequent loop connects to the server after it has finished
+        // the requested portion of Fibonacci sequence, but right before the process exits. This will then result in the
+        // subsquent loop's request almost immediately failing with an interrupted connection. This is a race condition
+        // that's not too rare; emperically running in a loop 100 times has replicated this behavior.
+        
+        var expectedValues: [UInt] = [0, 1, 1, 2, 3]
+        for try await value in LaunchAgentTests.client.sendMessage(5, to: SharedRoutes.selfTerminatingFibonacciRoute) {
+            XCTAssertEqual(expectedValues.removeFirst(), value)
+        }
+    }
 }

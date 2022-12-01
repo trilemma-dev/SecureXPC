@@ -446,7 +446,7 @@ public class XPCClient {
                         } else {
                             result = .failure(XPCError.fromXPCObject(reply))
                         }
-                        self.handleError(event: reply)
+                        self.handleError(event: reply, forConnection: connection)
                         handler(result)
                     }
                 case .failure(let error):
@@ -491,7 +491,9 @@ public class XPCClient {
         self.withConnection { connectionResult in
             switch connectionResult {
                 case .success(let connection):
-                    let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request, handler: handler)
+                    let internalHandler = InternalXPCSequentialResponseHandlerImpl(request: request,
+                                                                                   connection: connection,
+                                                                                   handler: handler)
                     self.inProgressSequentialReplies.registerHandler(internalHandler, forRequest: request)
                     
                     // Sending with reply means the server ought to be kept alive until the reply is sent back
@@ -510,10 +512,10 @@ public class XPCClient {
                         // out-of-band sends from the server to client are received. (This was attempted and it caused
                         // unit tests to fail non-deterministically.)
                         //
-                        // But if this is an internal XPC error (for example because the server shut down), we can use
-                        // this to update the connection's state.
+                        // But if this is an internal XPC error (for example because the server shut down), we can
+                        // handle this error to update the connection state and error out sequential responses.
                         if xpc_get_type(reply) == XPC_TYPE_ERROR {
-                            self.handleError(event: reply)
+                            self.handleError(event: reply, forConnection: connection)
                         }
                     }
                 case .failure(let error):
@@ -539,7 +541,6 @@ public class XPCClient {
                 } else {
                     continuation.finish(throwing: error)
                 }
-                continuation.finish(throwing: error)
             case .finished:
                 continuation.finish(throwing: nil)
         }
@@ -556,7 +557,9 @@ public class XPCClient {
         
         // The connection needs to be started (resumed) so that we can retrieve the server's identity
         let connection = self.createConnection()
-        xpc_connection_set_event_handler(connection, self.handleEvent(event:))
+        xpc_connection_set_event_handler(connection) { event in
+            self.handleEvent(event, forConnection: connection)
+        }
         xpc_connection_resume(connection)
         
         self.serverIdentity(connection: connection) { response in
@@ -577,15 +580,22 @@ public class XPCClient {
     
     // MARK: Incoming event handling
     
-    private func handleEvent(event: xpc_object_t) {
+    private func handleEvent(_ event: xpc_object_t, forConnection connection: xpc_connection_t) {
         if xpc_get_type(event) == XPC_TYPE_DICTIONARY {
             self.inProgressSequentialReplies.handleMessage(event)
         } else if xpc_get_type(event) == XPC_TYPE_ERROR {
-            self.handleError(event: event)
+            self.handleError(event: event, forConnection: connection)
         }
     }
 
-    private func handleError(event: xpc_object_t) {
+    private func handleError(event: xpc_object_t, forConnection connection: xpc_connection_t) {
+        func nilConnectionIfSameAsCurrentConnection(connection: xpc_connection_t) {
+            guard let currentConnection = self.connection, xpc_equal(connection, currentConnection) else {
+                return
+            }
+            self.connection = nil
+        }
+        
         if xpc_equal(event, XPC_ERROR_CONNECTION_INVALID) {
             // Paraphrasing from Apple documentation:
             //   If the named service provided could not be found in the XPC service namespace. The connection is
@@ -598,7 +608,8 @@ public class XPCClient {
             //  - `XPCError.connectionInvalid` is thrown
             //  - Error is handled by installing the helper tool
             //  - Using the same client instance successfully sends a message to the now installed helper tool
-            self.connection = nil
+            nilConnectionIfSameAsCurrentConnection(connection: connection)
+            inProgressSequentialReplies.handleError(.connectionInvalid, forConnection: connection)
         } else if xpc_equal(event, XPC_ERROR_CONNECTION_INTERRUPTED) {
             // Apple documentation:
             //   Will be delivered to the connection’s event handler if the remote service exited. The connection is
@@ -611,7 +622,8 @@ public class XPCClient {
             // Additionally, in the case of an anonymous connection there is no service. Because there is no service,
             // there is nothing to be relaunched on-demand. The connection might technically still be alive, but
             // resending a message will *not* work.
-            self.connection = nil
+            nilConnectionIfSameAsCurrentConnection(connection: connection)
+            inProgressSequentialReplies.handleError(.connectionInterrupted, forConnection: connection)
         }
         
         // XPC_ERROR_TERMINATION_IMMINENT is not applicable to the client side of a connection
@@ -802,11 +814,15 @@ extension XPCClient {
 /// This allows for type erasure
 fileprivate protocol InternalXPCSequentialResponseHandler {
     var route: XPCRoute { get }
+    /// The result of calling `xpc_hash(...)` on the connection that the initiating request was sent over.
+    var connectionHash: Int { get }
     func handleResponse(_ response: Response)
+    func handleError(_ error: XPCError)
 }
 
 fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: InternalXPCSequentialResponseHandler {
     let route: XPCRoute
+    let connectionHash: Int
     private var failedToDecode = false
     private let handler: XPCClient.XPCSequentialResponseHandler<S>
     
@@ -814,8 +830,13 @@ fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: Intern
     /// block anything else from happening.
     private let serialQueue: DispatchQueue
     
-    fileprivate init(request: Request, handler: @escaping XPCClient.XPCSequentialResponseHandler<S>) {
+    fileprivate init(
+        request: Request,
+        connection: xpc_connection_t,
+        handler: @escaping XPCClient.XPCSequentialResponseHandler<S>
+    ) {
         self.route = request.route
+        self.connectionHash = xpc_hash(connection)
         self.handler = handler
         self.serialQueue = DispatchQueue(label: "response-handler-\(request.requestID)")
     }
@@ -849,6 +870,21 @@ fileprivate class InternalXPCSequentialResponseHandlerImpl<S: Decodable>: Intern
                 self.handler(.failure(XPCError.asXPCError(error: error)))
                 self.failedToDecode = true
             }
+            
+            // If the response from the server expected a reply that means the server is using this to determine the
+            // sequential reply has been received and handled; there is no need for the reply to contain encoded data.
+            if let reply = xpc_dictionary_create_reply(response.dictionary),
+               let connection = xpc_dictionary_get_remote_connection(response.dictionary) {
+                xpc_connection_send_message(connection, reply)
+            }
+        }
+    }
+    
+    /// Handles an error which occurred while this client was communicating with the server which means further sequence replies are not possible (but a new
+    /// request could be made).
+    fileprivate func handleError(_ error: XPCError) {
+        self.serialQueue.async {
+            self.handler(.failure(error))
         }
     }
 }
@@ -897,6 +933,18 @@ fileprivate class InProgressSequentialReplies {
             }
             
             handler.handleResponse(response)
+        }
+    }
+    
+    func handleError(_ error: XPCError, forConnection connection: xpc_connection_t) {
+        serialQueue.async {
+            // An error has occurred which means that communication with the server is no longer possible and so all in
+            // flight handlers for the provided connection need to be finished with an error.
+            let filteredEntries = self.handlers.filter { $0.value.connectionHash == xpc_hash(connection) }
+            for (key, handler) in filteredEntries {
+                handler.handleError(error)
+                self.handlers.removeValue(forKey: key)
+            }
         }
     }
 }

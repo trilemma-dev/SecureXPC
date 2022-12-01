@@ -18,6 +18,13 @@ struct SharedRoutes {
     static let latestRoute = XPCRoute.named("retrieve", "latest")
                                      .withReplyType(LatestAndGreatest.self)
     static let mutateLatestRoute = XPCRoute.named("mutate", "latest")
+    static let terminate = XPCRoute.named("terminate")
+    static let fibonacciRoute = XPCRoute.named("fibonacci")
+                                        .withMessageType(UInt.self)
+                                        .withSequentialReplyType(UInt.self)
+    static let selfTerminatingFibonacciRoute = XPCRoute.named("fibonacci", "self-terminating")
+                                                       .withMessageType(UInt.self)
+                                                       .withSequentialReplyType(UInt.self)
 }
 
  struct LatestAndGreatest: Codable {
