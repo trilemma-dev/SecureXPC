@@ -499,16 +499,14 @@ private func throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC() throws {
 // MARK: SMAppService daemon & agent
 
 private func parentAppURL() throws -> URL {
-    let components = Bundle.main.bundleURL.pathComponents
-    guard let contentsIndex = components.lastIndex(of: "Contents"),
-          components[components.index(before: contentsIndex)].hasSuffix(".app") else {
+    let bundleURL = Bundle.main.bundleURL
+    guard bundleURL.pathComponents.last?.hasSuffix(".app") == true else {
         throw XPCError.misconfiguredServer(description: """
         Parent bundle could not be found.
-        Path:\(Bundle.main.bundleURL)
+        Path:\(bundleURL)
         """)
     }
-    
-    return URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))
+    return bundleURL
 }
 
 private enum LibraryDirectory: String {
