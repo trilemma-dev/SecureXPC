@@ -20,6 +20,61 @@ func const(_ input: UnsafePointer<CChar>!) -> UnsafePointer<CChar>! {
 	return UnsafePointer(mutableCopy) // The result should never actually be mutated
 }
 
+
+/// If this running code is the main executable of an app bundle, the URL to the app bundle will be returned, otherwise the URL to the currently running executable
+/// will be returned.
+///
+/// Some servers (such as `SMAppService` daemons & agents) can be either command line tools (single file executables) or app bundles. Distinguishing between
+/// these cases is necessary in order to properly identify a parent app bundle and/or whether one exists.
+///
+/// See https://github.com/trilemma-dev/SecureXPC/issues/128 for why this is needed.
+func currentExecutableOrAppBundleURL() -> URL {
+    // To determine if this currently running executable is the main executable for an app bundle:
+    // - located in a Contents/MacOS/ directory
+    // - parent directory of Contents/MacOS/ directory is for an app bundle
+    // - its name matches the CFBundleExecutable info dictionary value
+    // Just being in Contents/MacOS/ is insufficient as it's valid for a command line tool to be located there.
+    let executablePath = currentExecutableURL()
+    if executablePath.deletingLastPathComponent().pathComponents.suffix(2) == ["Contents", "MacOS"],
+       executablePath.deletingLastPathComponent()
+                     .deletingLastPathComponent()
+                     .deletingLastPathComponent().pathExtension == "app",
+       executablePath.lastPathComponent == Bundle.main.infoDictionary?["CFBundleExecutable"] as? String {
+        return Bundle.main.bundleURL
+    } else {
+        return executablePath
+    }
+}
+
+/// The path of the currently running executable.
+///
+/// This works consistently whether or not the executable is part of a bundle. The returned value is not affected by its location within a bundle (if applicable).
+private func currentExecutableURL() -> URL {
+    // Adapted from https://developer.apple.com/forums/thread/709577
+    var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+    var bufferSize = UInt32(buffer.count)
+    let result = _NSGetExecutablePath(&buffer, &bufferSize)
+    
+    // From _NSGetExecutablePath's documentation:
+    //   The function returns 0 if the path was successfully copied, and *bufsize is left unchanged. It returns -1 if
+    //   the buffer is not large enough, and *bufsize is set to the size required.
+    if result == -1 {
+        buffer = [CChar](repeating: 0, count: Int(bufferSize))
+        let result2 = _NSGetExecutablePath(&buffer, &bufferSize)
+        guard result2 == 0 else {
+            fatalError("_NSGetExecutablePath failed (\(result2)) after increasing buffer size to \(bufferSize)")
+        }
+    } else if result != 0 {
+        fatalError("_NSGetExecutablePath failed (\(result)) with undocumented result code")
+    }
+    
+    // From _NSGetExecutablePath's documentation:
+    //   Note that _NSGetExecutablePath will return "a path" to the executable not a "real path" to the executable. That
+    //   is the path may be a symbolic link and not the real file.
+    return URL(fileURLWithFileSystemRepresentation: buffer, isDirectory: false, relativeTo: nil)
+        .resolvingSymlinksInPath()
+}
+
 /// Creates the static code representation for this running process.
 ///
 /// This is a convenience wrapper around `SecCodeCopySelf` and `SecCodeCopyStaticCode`.
