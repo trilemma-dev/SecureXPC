@@ -142,10 +142,10 @@ extension XPCServer.ClientRequirement {
     
     private static var parentBundleURL: URL {
         get throws {
-            let components = Bundle.main.bundleURL.pathComponents
+            let components = currentExecutableOrAppBundleURL().pathComponents
             guard let contentsIndex = components.lastIndex(of: "Contents") else {
                 throw XPCError.misconfiguredServer(description: "This server does not have a parent bundle.\n" +
-                                                                "Path components: \(components)")
+                                                                "Components: \(components)")
             }
             
             return URL(fileURLWithPath: "/" + components[1..<contentsIndex].joined(separator: "/"))

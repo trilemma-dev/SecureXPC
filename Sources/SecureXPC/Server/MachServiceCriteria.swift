@@ -499,12 +499,12 @@ private func throwIfSandboxedAndThisLoginItemCannotCommunicateOverXPC() throws {
 // MARK: SMAppService daemon & agent
 
 private func parentAppURL() throws -> URL {
-    let components = Bundle.main.bundleURL.pathComponents
+    let components = currentExecutableOrAppBundleURL().pathComponents
     guard let contentsIndex = components.lastIndex(of: "Contents"),
           components[components.index(before: contentsIndex)].hasSuffix(".app") else {
         throw XPCError.misconfiguredServer(description: """
         Parent bundle could not be found.
-        Path:\(Bundle.main.bundleURL)
+        Components: \(components)
         """)
     }
     
@@ -565,6 +565,7 @@ private func validateThisProcessIsAnSMAppServiceDaemon() -> ValidationResult {
         return .failure("""
         An SMAppService daemon must have a property list within its parent bundle's Contents/Library/LaunchDaemons /
         directory.
+        Parent bundle: \(try! parentAppURL())
         """)
     }
     
