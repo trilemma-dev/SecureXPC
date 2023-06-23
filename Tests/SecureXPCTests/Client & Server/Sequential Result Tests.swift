@@ -313,7 +313,8 @@ class SequentialResultTests: XCTestCase {
             }
         }
         
-        let expectation = self.expectation(description: "The second sequence value won't be decodable")
+        let secondSequenceValueNotDecodableExpectation = self.expectation(description: "The second sequence value won't be decodable")
+		let thirdSequenceValueSentExpectation = self.expectation(description: "Attempted to send third sequence value")
         enum ExampleError: Error, Codable {
             case didNotWork
         }
@@ -325,10 +326,19 @@ class SequentialResultTests: XCTestCase {
             do {
                 try await provider.success(value: .noValue)
                 try await provider.success(value: .alwaysFailedDecode(NotActuallyDecodable()))
-                try await provider.success(value: .noValue)
             } catch {
                 XCTFail("Unexpected error: \(error)")
             }
+			do {
+				try await provider.success(value: .noValue)
+				XCTFail("Sending the third reply should fail with an XPCError.connectionInterrupted error")
+			}
+			catch XPCError.connectionInterrupted {
+				// Expected error
+			} catch {
+				XCTFail("Unexpected error: \(error)")
+			}
+			thirdSequenceValueSentExpectation.fulfill()
         }
         
         let sequence = client.send(to: route)
@@ -340,10 +350,10 @@ class SequentialResultTests: XCTestCase {
             _ = try await iterator.next()
         } catch {
             if case XPCError.decodingError(_) = error {
-                expectation.fulfill()
+				secondSequenceValueNotDecodableExpectation.fulfill()
             }
         }
-        
+
         await self.waitForExpectations(timeout: 1)
     }
     

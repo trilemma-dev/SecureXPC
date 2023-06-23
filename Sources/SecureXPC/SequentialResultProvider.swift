@@ -239,8 +239,12 @@ public class SequentialResultProvider<S: Encodable> {
                 do {
                     try encodingWork(&response)
                     if let deliveryHandler = deliveryHandler {
-                        xpc_connection_send_message_with_reply(connection, response, nil) { _ in
-                            deliveryHandler(.success(()))
+                        xpc_connection_send_message_with_reply(connection, response, nil) { result in
+							if xpc_get_type(result) == XPC_TYPE_ERROR {
+								deliveryHandler(.failure(XPCError.fromXPCObject(result)))
+							} else {
+								deliveryHandler(.success(()))
+							}
                         }
                     } else {
                         xpc_connection_send_message(connection, response)
